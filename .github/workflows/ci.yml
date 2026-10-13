@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, nightly]
   pull_request:
-    branches: [main]
+    branches: [main, nightly]
   workflow_dispatch:
 
 # Cancel in-flight runs on the same ref when a new push lands. Keeps the
@@ -36,6 +36,26 @@ jobs:
 
       - name: bun install (frozen)
         run: bun install --frozen-lockfile
+
+      # The server's program includes NeoPi's sources (tsconfig.neopi.json), and its tests load a
+      # real NeoPi backend. scripts/neopi-setup.ts prepares the tree pinned in neopi.pin: frozen
+      # install, a native addon built from the tree's own sources and verified against the version
+      # sentinel, backend registration in NPI_DECK_HOME, and tsconfig.neopi.json. The source clone
+      # and NPI_DECK_HOME live under RUNNER_TEMP so `bun test` never discovers NeoPi's own tests.
+      - name: fetch NeoPi at neopi.pin
+        shell: bash
+        run: |
+          pin="$(tr -d '[:space:]' < neopi.pin)"
+          src="$RUNNER_TEMP/neopi-source"
+          git init -q "$src"
+          git -C "$src" remote add origin https://github.com/PsychedelicShayna/neopi.git
+          git -C "$src" fetch -q --depth 1 origin "$pin"
+          git -C "$src" checkout -q --detach FETCH_HEAD
+          echo "NPI_DECK_NEOPI_SOURCE=$src" >> "$GITHUB_ENV"
+          echo "NPI_DECK_HOME=$RUNNER_TEMP/npi-deck-home" >> "$GITHUB_ENV"
+
+      - name: prepare NeoPi backend (install, native addon, tsconfig)
+        run: bun scripts/neopi-setup.ts --build-native
 
       - name: typecheck (all workspaces)
         run: bun run typecheck
