@@ -184,6 +184,7 @@ test("aborting a call in flight reports aborted and stops the server process", a
 });
 
 // Through the runner: `steps.<id>` feeds the next step, and the step timeout ends a stuck call.
+const savedHome = process.env.NPI_DECK_HOME;
 let home = "";
 let runner: RoutinesRunner | undefined;
 function routineIn(cwd: string, steps: RoutineSpec["steps"]) {
@@ -198,12 +199,17 @@ function routineIn(cwd: string, steps: RoutineSpec["steps"]) {
 	return created;
 }
 afterEach(async () => {
-	if (!runner) return;
-	await runner.dispose();
-	await stopOwnedProcesses();
-	closeDb();
-	delete process.env.NPI_DECK_HOME;
-	runner = undefined;
+	if (!home) return;
+	try {
+		await runner?.dispose();
+		await stopOwnedProcesses();
+	} finally {
+		closeDb();
+		if (savedHome === undefined) delete process.env.NPI_DECK_HOME;
+		else process.env.NPI_DECK_HOME = savedHome;
+		home = "";
+		runner = undefined;
+	}
 });
 
 test("a routine run records the call and hands its result to the next step", async () => {
