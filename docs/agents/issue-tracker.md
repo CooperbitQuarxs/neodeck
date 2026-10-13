@@ -1,131 +1,100 @@
 # Issue tracker: GitHub
 
-Issues and specs for this repo live as GitHub issues on `PsychedelicShayna/npi-deck`. Use the `gh` CLI for all operations.
-
-## Repository targeting
-
-This clone has two remotes: `origin` (`PsychedelicShayna/npi-deck`) and `upstream` (`bjb2/omp-deck`). Without a pinned default, `gh` resolves to the **upstream** fork parent. Pass `-R PsychedelicShayna/npi-deck` on every `gh issue`/`gh pr`/`gh label` call, or confirm `gh repo set-default --view` prints `PsychedelicShayna/npi-deck` in the clone you are using. Never file, comment on, or label anything on `bjb2/omp-deck`.
+Issues and specs live in `PsychedelicShayna/neodeck`. Use `gh` and pass
+`--repo PsychedelicShayna/neodeck` on every issue, PR, and label operation:
+fork discovery may otherwise resolve to `Shreyans13/omp-deck`.
 
 ## Conventions
 
-- **Create an issue**: `gh issue create -R PsychedelicShayna/npi-deck --title "..." --body "..."`. Use a heredoc for multi-line bodies. The title format is set by [Sizing](#sizing).
-- **Read an issue**: `gh issue view <number> --comments`, filtering comments by `jq` and also fetching labels.
-- **List issues**: `gh issue list --state open --json number,title,body,labels,comments --jq '[.[] | {number, title, body, labels: [.labels[].name], comments: [.comments[].body]}]'` with appropriate `--label` and `--state` filters.
-- **Comment on an issue**: `gh issue comment <number> --body "..."`
-- **Apply / remove labels**: `gh issue edit <number> --add-label "..."` / `--remove-label "..."`
-- **Close**: `gh issue close <number> --comment "..."`
+- Create: `gh issue create --repo PsychedelicShayna/neodeck --title "..." --body-file <path>`.
+- Read: `gh issue view <number> --repo PsychedelicShayna/neodeck --comments`, including labels.
+- List: `gh issue list --repo PsychedelicShayna/neodeck --state <state> --json number,title,body,labels,comments` with task-specific filters.
+- Apply or remove existing labels: `gh issue edit <number> --repo PsychedelicShayna/neodeck --add-label "..."` or `--remove-label "..."`.
+- Close when the fix merged (`Fixes #<n>`), when verified duplicate, or when the owner ordered it. Explain why in the closing comment. The Issue Funnel's narrower publication authority is defined in `docs/agents/issue-funnel.md`.
+- Posting follows workspace policy. Every GitHub comment and PR body opens with `> [!NOTE]` and `> <actual Model Name> on behalf of PsychedelicShayna`; Codex trigger comments use only the trigger phrase.
+- Use existing labels only; creating or changing label definitions requires a Captain decision.
 
-## Labels
+## Pull requests as a triage surface
 
-Four orthogonal layers. An issue carries labels from every layer that applies; no layer replaces another.
+**PRs as a request surface: no.** GitHub shares one number space across issues
+and PRs; resolve an ambiguous number before acting.
+
+## Skill meanings
+
+- "Publish to the issue tracker" means create a GitHub issue.
+- "Fetch the relevant ticket" means read the issue, comments, and labels.
+
+## Dual taxonomy
+
+House labels and readiness are orthogonal layers, not replacements. Keep both.
 
 | Layer | Labels | Rule |
 | --- | --- | --- |
-| Type | `bug`, `enhancement`, `documentation`, `question` | At least one. |
-| Triage | see `docs/agents/triage-labels.md` | Exactly one state. |
-| Priority | `priority: p0` … `priority: p3` | Exactly one once triaged. |
-| Sizing | one `difficulty: …` bucket and one `frame: …` | Exactly one of each once triaged. See [Sizing](#sizing). |
+| Type | `bug`, `enhancement`, `documentation`, `question` | At least one appropriate type |
+| Effort | `effort: tiny`, `effort: small`, `effort: medium`, `effort: large`, `effort: very large` | Exactly one |
+| Priority | `priority: p0` … `priority: p3` | Exactly one once triaged |
+| Readiness | `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix` | Meanings in `docs/agents/triage-labels.md` |
 
-Other labels:
-
-- `neopi-upstream`: the issue cannot be finished without a change in `PsychedelicShayna/neopi`. Link the NeoPi issue in the body. See [Upstream requests](#upstream-requests-neopi).
-- `entangled`: alternative implementations of one idea; shipping any one supersedes the siblings. Only for true alternative clusters.
-- `wayfinder:*`: used only by `/wayfinder`.
+`entangled` applies only to true alternative clusters: shipping one supersedes
+the others. `neopi-upstream` marks a dependency on a NeoPi issue. The publication
+contract is `docs/agents/issue-funnel.md`.
 
 ### Priority
 
 | Label | Meaning |
 | --- | --- |
 | `priority: p0` | Blocks current work or handles an active incident |
-| `priority: p1` | High value, or a prerequisite for several issues |
+| `priority: p1` | High value or prerequisite for several issues |
 | `priority: p2` | Useful planned work |
 | `priority: p3` | Backlog or opportunistic work |
 
-## Sizing
+## Effort and legacy sizing migration
 
-Sizing has two independent measurements: **difficulty** (how hard) and **frame** (how long). Both measure an AI agent doing the work, never a human.
+Estimate for a competent AI agent with tools and subagents, not a human.
+`effort:*` replaces `difficulty:*` and `frame:*` as the house sizing taxonomy.
+New titles describe the work without the legacy difficulty-float prefix.
 
-### Estimate in agent time
-
-Assume an AI agent implements the issue, and that it works far faster than a human would. Do not estimate in human hours, sprints, or developer-days. Estimates in training data (issue trackers, Stack Overflow, team chats) were written by and for humans before capable coding agents existed; that reference point is wrong here. Estimate what a competent agent with a plan, tools, and subagents needs.
-
-### Difficulty
-
-Difficulty is a float in `[0, 1]`: `0` is a mechanical one-line change; `1` is the hardest work the project will attempt (novel architecture, deep cross-cutting change, high regression risk, heavy unknowns). Weigh complexity, uncertainty, blast radius, and coordination with other repos. It does not measure time.
-
-The float goes at the start of the issue and PR title, followed by ` - `:
-
-```
-0.35 - Route plan-mode approvals through setPlanProposalHandler
-```
-
-Use two decimal places by default. Use up to four when two cannot place an issue relative to its neighbours (`0.3725`). Keep the title float current when re-sizing.
-
-The float also maps to exactly one bucket label. Buckets are half-open `[low, high)`, except the last, which includes `1`:
-
-| Label | Range |
+| Legacy agent-time frame | Effort mapping |
 | --- | --- |
-| `difficulty: 0.000-0.125` | `0.000 ≤ d < 0.125` |
-| `difficulty: 0.125-0.250` | `0.125 ≤ d < 0.250` |
-| `difficulty: 0.250-0.375` | `0.250 ≤ d < 0.375` |
-| `difficulty: 0.375-0.500` | `0.375 ≤ d < 0.500` |
-| `difficulty: 0.500-0.625` | `0.500 ≤ d < 0.625` |
-| `difficulty: 0.625-0.750` | `0.625 ≤ d < 0.750` |
-| `difficulty: 0.750-0.875` | `0.750 ≤ d < 0.875` |
-| `difficulty: 0.875-1.000` | `0.875 ≤ d ≤ 1.000` |
+| `frame: hours` | `effort: tiny` or `effort: small`, according to scope and uncertainty |
+| `frame: days` | `effort: medium` |
+| `frame: weeks` | `effort: large` |
+| `frame: months`, `frame: years` | `effort: very large` |
 
-A two-decimal title float that sits on a boundary in the table (`0.12` vs `0.125`) takes the bucket its exact value falls in: `0.12` is in the first bucket, `0.13` in the second.
+Difficulty `0.000–0.250` maps to tiny/small according to the frame. For larger
+difficulty buckets, use the frame mapping as the starting point and judge
+complexity, uncertainty, regression risk, and cross-repo coordination; a
+complexity float is not a duration. Large and very-large issues are candidates
+for splitting into independently deliverable tickets.
 
-### Frame
-
-Frame is the agent-time unit the work lands in. Pick the unit first, before any number: would an agent finish this in hours, days, weeks, months, or years?
-
-| Label | Meaning |
-| --- | --- |
-| `frame: hours` | Done within hours of agent work |
-| `frame: days` | Needs days |
-| `frame: weeks` | Needs weeks |
-| `frame: months` | Needs months |
-| `frame: years` | Needs years |
-
-A `frame: weeks` or larger issue is usually a map or epic; consider splitting it with `/to-tickets` or `/wayfinder`.
+All eight existing difficulty buckets (`0.000-0.125` through `0.875-1.000`)
+and all five frame labels remain unchanged in GitHub. Mars relabels open issues
+first. Keep their legacy labels during that migration; deleting or editing
+label definitions is a later Captain decision, not part of this docs change.
 
 ## Upstream requests (NeoPi)
 
-NPI deck consumes NeoPi (`PsychedelicShayna/neopi`) in-process. When NPI deck needs a NeoPi change (a new SDK export, RPC field, memory API, event shape, anything), the NPI deck lead files an issue on `PsychedelicShayna/neopi` and the NeoPi-side agent implements it there.
+NPI deck consumes NeoPi (`PsychedelicShayna/neopi`) in-process. When the deck
+needs a new SDK export, RPC field, memory API, or event shape, the deck lead
+files a NeoPi issue and the NeoPi-side agent implements it there.
 
-- The NeoPi issue text is the contract: exact field names, capability strings, types, and event shapes.
-- Either side amends the contract by commenting on the NeoPi issue before merging a change to it.
-- The consuming NPI deck issue carries `neopi-upstream` and links the NeoPi issue.
-- Disagreements that the two agents cannot resolve go to the operator.
-
-## Pull requests as a triage surface
-
-**PRs as a request surface: no.** _(Set to `yes` if this repo treats external PRs as feature requests; `/triage` reads this flag.)_
-
-When set to `yes`, PRs run through the same labels and states as issues, using the `gh pr` equivalents:
-
-- **Read a PR**: `gh pr view <number> --comments` and `gh pr diff <number>` for the diff.
-- **List external PRs for triage**: `gh pr list --state open --json number,title,body,labels,author,authorAssociation,comments` then keep only `authorAssociation` of `CONTRIBUTOR`, `FIRST_TIME_CONTRIBUTOR`, or `NONE` (drop `OWNER`/`MEMBER`/`COLLABORATOR`).
-- **Comment / label / close**: `gh pr comment`, `gh pr edit --add-label`/`--remove-label`, `gh pr close`.
-
-GitHub shares one number space across issues and PRs, so a bare `#42` may be either: resolve with `gh pr view 42` and fall back to `gh issue view 42`.
-
-## When a skill says "publish to the issue tracker"
-
-Create a GitHub issue on `PsychedelicShayna/npi-deck` with the sizing title prefix and the labels above.
-
-## When a skill says "fetch the relevant ticket"
-
-Run `gh issue view <number> --comments`.
+- That issue is the contract: exact field names, capabilities, types, and events.
+- Amend the contract by commenting on the NeoPi issue before merging a change to it.
+- The consuming deck issue carries `neopi-upstream` and links the NeoPi issue.
+- Unresolved disagreements go to the operator. Cross-project ADRs and product decisions remain owned by their project.
 
 ## Wayfinding operations
 
-Used by `/wayfinder`. The **map** is a single issue with **child** issues as tickets.
+`/wayfinder` uses an issue labelled `wayfinder:map`, with child issues linked
+as native sub-issues (or a task list plus `Part of #<map>` when unavailable).
+Children use the existing `wayfinder:research`, `wayfinder:prototype`,
+`wayfinder:grilling`, or `wayfinder:task` label in addition to house labels.
 
-- **Map**: a single issue labelled `wayfinder:map`, holding the Notes / Decisions-so-far / Fog body. `gh issue create --label wayfinder:map`.
-- **Child ticket**: an issue linked to the map as a GitHub sub-issue (`gh api` on the sub-issues endpoint). Where sub-issues aren't enabled, add the child to a task list in the map body and put `Part of #<map>` at the top of the child body. Labels: `wayfinder:<type>` (`research`/`prototype`/`grilling`/`task`). Once claimed, the ticket is assigned to the driving dev.
-- **Blocking**: GitHub's **native issue dependencies**, the canonical, UI-visible representation. Add an edge with `gh api --method POST repos/<owner>/<repo>/issues/<child>/dependencies/blocked_by -F issue_id=<blocker-db-id>`, where `<blocker-db-id>` is the blocker's numeric **database id** (`gh api repos/<owner>/<repo>/issues/<n> --jq .id`, _not_ the `#number` or `node_id`). GitHub reports `issue_dependencies_summary.blocked_by` (open blockers only, the live gate). Where dependencies aren't available, fall back to a `Blocked by: #<n>, #<n>` line at the top of the child body. A ticket is unblocked when every blocker is closed.
-- **Frontier query**: list the map's open children (`gh issue list --state open`, scoped to the map's sub-issues / task list), drop any with an open blocker (`issue_dependencies_summary.blocked_by > 0`, or an open issue in the `Blocked by` line) or an assignee; first in map order wins.
-- **Claim**: `gh issue edit <n> --add-assignee @me`, the session's first write.
-- **Resolve**: `gh issue comment <n> --body "<answer>"`, then `gh issue close <n>`, then append a context pointer (gist + link) to the map's Decisions-so-far.
+Dependencies use GitHub's native issue dependencies: POST
+`repos/PsychedelicShayna/neodeck/issues/<child>/dependencies/blocked_by` with
+`issue_id=<blocker database id>` (not the issue number or node ID). If native
+dependencies are unavailable, use `Blocked by: #<n>` in the body. An issue is
+unblocked when all blockers are closed. Claim the first unassigned, unblocked
+child in map order with `gh issue edit <n> --repo PsychedelicShayna/neodeck --add-assignee @me`.
+Resolve with an answer comment, close only when authorized, and append the
+answer link to the map's Decisions-so-far.

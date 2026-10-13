@@ -65,8 +65,8 @@ NPI deck runs one way: from a git checkout, with a NeoPi source tree prepared by
 **Prerequisites:** [Bun](https://bun.sh) ≥ 1.3.14 and Git on your `PATH`; a NeoPi checkout that contains the commit in `neopi.pin`; a prebuilt `pi_natives` addon matching that commit's `packages/natives` version (or a Rust toolchain for `--build-native`); and a systemd user manager (or run the launcher with `--no-systemd`). See [docs/install.md](./docs/install.md#prerequisites).
 
 ```sh
-git clone https://github.com/PsychedelicShayna/npi-deck.git
-cd npi-deck
+git clone https://github.com/PsychedelicShayna/neodeck.git
+cd neodeck
 bun install --frozen-lockfile --ignore-scripts
 # prepare the pinned NeoPi tree and register it in ~/.npi-deck/config.yml
 bun scripts/neopi-setup.ts --source /path/to/neopi --native-dir /path/to/prebuilt-natives
@@ -132,4 +132,4 @@ The short version: **Claude Code** is the polished vendor experience for Claude.
 
 ## License
 
-MIT. See [LICENSE](./LICENSE). NPI deck is a fork of [bjb2/omp-deck](https://github.com/bjb2/omp-deck) by Bryan Bartley.
+MIT. See [LICENSE](./LICENSE). NPI deck is a fork of [Shreyans13/omp-deck](https://github.com/Shreyans13/omp-deck), originally by Bryan Bartley. The old `bjb2/omp-deck` repository no longer exists; the local upstream remote awaits the Captain's decision. Branches, promotion, releases, and contribution workflow are documented in [Repository policy](./docs/policy/README.md).
