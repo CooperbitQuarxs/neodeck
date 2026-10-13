@@ -5,7 +5,7 @@
 	"description": "Cockpit web UI for the omp (oh-my-pi) coding agent — multi-session chat, kanban, cron routines, inbox, messaging bridges, and a marketplace browser. Designed to be served loopback-only behind a Tailscale gate or SSH tunnel.",
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/PsychedelicShayna/npi-deck.git"
+		"url": "https://github.com/PsychedelicShayna/neodeck.git"
 	},
 	"author": "Bryan Bartley",
 	"license": "MIT",

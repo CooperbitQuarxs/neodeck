@@ -10,8 +10,8 @@ package, Docker image, or Windows launcher, and the deck does not check for or
 install updates.
 
 ```sh
-git clone https://github.com/PsychedelicShayna/npi-deck.git
-cd npi-deck
+git clone https://github.com/PsychedelicShayna/neodeck.git
+cd neodeck
 bun install --frozen-lockfile --ignore-scripts
 # prepare the pinned NeoPi tree and register it in ~/.npi-deck/config.yml
 bun scripts/neopi-setup.ts --source /path/to/neopi --native-dir /path/to/prebuilt-natives
