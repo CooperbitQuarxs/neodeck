@@ -12,6 +12,7 @@
  */
 
 import type { RoutineStep } from "@npi-deck/protocol";
+import { Field } from "./form-primitives";
 
 import {
 	AgentStepForm,
@@ -64,6 +65,11 @@ export function renderStepForm(
 	onChange: (next: RoutineStep) => void,
 	advanced = true,
 ): JSX.Element {
+	if (!advanced && ["write", "http", "mcp", "transform", "set_state"].includes(step.type)) {
+		return <Field label="Action settings">
+			<p className="text-2xs text-ink-3">Turn on Advanced to edit this action's settings.</p>
+		</Field>;
+	}
 	switch (step.type) {
 		case "run":
 			return <RunStepForm step={step} onChange={onChange} advanced={advanced} />;
@@ -74,7 +80,7 @@ export function renderStepForm(
 		case "http":
 			return <HttpStepForm step={step} onChange={onChange} />;
 		case "deck":
-			return <DeckStepForm step={step} onChange={onChange} />;
+			return <DeckStepForm step={step} onChange={onChange} advanced={advanced} />;
 		case "mcp":
 			return <McpStepForm step={step} onChange={onChange} />;
 		case "transform":

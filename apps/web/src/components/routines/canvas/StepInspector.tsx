@@ -134,7 +134,7 @@ export function StepInspector({
 			</header>
 			<div className="flex-1 space-y-2 overflow-y-auto p-2.5">
 				{advanced ? <StepCommonFields step={step} onChange={onChange} existingIds={idsExcludingSelf} /> : null}
-				{isIfNode && step.type === "transform" ? (
+				{advanced && isIfNode && step.type === "transform" ? (
 					<BranchConditionForm step={step} onChange={onChange} />
 				) : (
 					renderStepForm(step, onChange, advanced)

@@ -90,6 +90,7 @@ export function RoutineBuilder({ routine, onSaved, onError }: Props) {
 	}
 
 	const [spec, setSpec] = useState<RoutineSpec>(initialSpec);
+	const persistedSpec = useRef(initialSpec);
 	const [stepKeys, setStepKeys] = useState<string[]>(() => makeStepKeys(initialSpec.steps.length));
 	const [yamlBuffer, setYamlBuffer] = useState<string>(() =>
 		routine?.specYaml ?? stringifySpec(initialSpec),
@@ -120,6 +121,7 @@ export function RoutineBuilder({ routine, onSaved, onError }: Props) {
 		lastRoutineId.current = routine?.id;
 		setStepKeys(makeStepKeys(initialSpec.steps.length));
 		setSpec(initialSpec);
+		persistedSpec.current = initialSpec;
 		setYamlBuffer(routine?.specYaml ?? stringifySpec(initialSpec));
 		setYamlDirty(false);
 		setYamlError(undefined);
@@ -218,6 +220,12 @@ export function RoutineBuilder({ routine, onSaved, onError }: Props) {
 			onError(`Cannot save: ${summarizeRoutineValidationErrors(validation.errors, currentSpec)[0]?.message ?? "Routine is invalid"}`);
 			return;
 		}
+		// An untouched loaded routine keeps its exact authored source and step
+		// order; opening the canvas is not an implicit migration or graph edit.
+		if (routine?.specYaml && !yamlDirty && currentSpec === persistedSpec.current) {
+			await commitSave(currentSpec, routine.specYaml);
+			return;
+		}
 		const finalCompile = compileGraph(currentSpec);
 		if (finalCompile.errors.length > 0) {
 			const first = finalCompile.errors[0]!;
@@ -282,6 +290,7 @@ export function RoutineBuilder({ routine, onSaved, onError }: Props) {
 				onSaved(created);
 			}
 			setPendingSave(null);
+			persistedSpec.current = specToSave;
 		} catch (e) {
 			onError(String(e));
 		} finally {

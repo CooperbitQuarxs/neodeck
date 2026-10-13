@@ -21,6 +21,24 @@ routines keep their original storage and execution behavior; their command or
 prompt is editable on the canvas, with schedule, action kind and working
 directory under **Advanced → Options**. They remain single-action routines.
 
+New agent prompts and card bodies start without reference expressions. Plain
+prompts, titles and body text are editable directly. Existing expressions stay
+intact but are hidden in basic mode, including node previews; choose
+**Advanced** to edit them. Card body text remains editable separately from
+its frontmatter. Saving an untouched loaded routine keeps its original source
+bytes, step order and execution settings, without a graph migration.
+
+Open **Card properties** in the Create card inspector for **Read-only research**,
+**Linked worktree** and named custom properties. Choose **Advanced** to reveal
+its destination column, working directory and the arbitrary YAML property editor.
+The controls compose leading body frontmatter without replacing unrelated
+properties or body text. They are also available on Create inbox item, so its
+properties can travel with a later promotion. For **Make a card from inbox**,
+edit the source item's body/properties in Inbox
+before promotion; promotion keeps that content unchanged. Advanced also
+reveals actions that require card/inbox identifiers, their destination
+references and the settings of existing technical actions.
+
 ## Deliberate advanced access
 
 Choose **Advanced** to reveal the steps list, triggers, execution options,

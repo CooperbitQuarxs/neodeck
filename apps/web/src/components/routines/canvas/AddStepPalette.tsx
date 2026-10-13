@@ -98,7 +98,10 @@ export function AddStepPalette({ onAdd, advanced = false }: AddStepPaletteProps)
 								{advanced ? <div className="text-2xs text-ink-4">{cat.tagline}</div> : null}
 							</div>
 							<div className="py-1">
-								{cat.entries.filter((entry) => advanced || !["transform", "if", "set_state"].includes(entry.key)).map((entry) => (
+								{cat.entries.filter((entry) => advanced || (
+									!["transform", "if", "set_state"].includes(entry.key) &&
+									!["move_task", "get_task", "get_inbox_item", "promote_inbox_item_to_task"].includes(entry.presetAction ?? "")
+								)).map((entry) => (
 									<button
 										key={entry.key}
 										type="button"
