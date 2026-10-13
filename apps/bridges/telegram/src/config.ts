@@ -6,6 +6,8 @@ import { getDataDir, loadManagedEnvIntoProcess } from "../../../server/src/env-s
 export interface TelegramBridgeConfig {
 	botToken: string;
 	allowedUserIds: Set<string>;
+	allowedChatIds: Set<string>;
+	requireMention: boolean;
 	deckApiBase: string;
 	deckWsUrl: string;
 	defaultCwd: string;
@@ -32,6 +34,8 @@ export function loadTelegramBridgeConfig(): TelegramBridgeConfig {
 	return {
 		botToken,
 		allowedUserIds,
+		allowedChatIds: parseAllowedChats(process.env.TELEGRAM_GROUP_ALLOWED_CHATS),
+		requireMention: !["0", "false", "no", "off"].includes(process.env.TELEGRAM_REQUIRE_MENTION?.trim().toLowerCase() ?? ""),
 		deckApiBase,
 		deckWsUrl,
 		defaultCwd: deck.defaultCwd,
@@ -51,6 +55,12 @@ function parseAllowedUsers(raw: string | undefined): Set<string> {
 		out.add(trimmed);
 	}
 	return out;
+}
+
+export function parseAllowedChats(raw: string | undefined): Set<string> {
+	const values = raw?.split(/[\s,]+/).filter(Boolean) ?? [];
+	if (values.some((value) => !/^-\d+$/.test(value))) throw new Error("TELEGRAM_GROUP_ALLOWED_CHATS requires negative numeric chat IDs.");
+	return new Set(values);
 }
 
 function normalizeBaseUrl(raw: string): string {
