@@ -23,8 +23,9 @@ if (!existsSync(tsconfig)) die(`${tsconfig} is missing; run \`bun scripts/neopi-
 const match = /"extends"\s*:\s*("(?:[^"\\]|\\.)*")/.exec(readFileSync(tsconfig, "utf8"));
 const extended = match ? (JSON.parse(match[1]!) as string) : "";
 if (path.basename(extended) !== "tsconfig.base.json") die(`${tsconfig} does not extend a NeoPi tree's tsconfig.base.json`);
-const tsgo = path.join(path.dirname(extended), "node_modules/.bin/tsgo");
-if (!existsSync(tsgo)) die(`${tsgo} not found; re-run \`bun scripts/neopi-setup.ts\` for that tree`);
+const binDir = path.join(path.dirname(extended), "node_modules/.bin");
+const tsgo = Bun.which("tsgo", { PATH: binDir });
+if (!tsgo) die(`tsgo not found in ${binDir}; re-run \`bun scripts/neopi-setup.ts\` for that tree`);
 
 const proc = Bun.spawnSync([tsgo, ...process.argv.slice(2)], { stdio: ["inherit", "inherit", "inherit"] });
 process.exit(proc.exitCode ?? 1);
