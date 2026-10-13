@@ -190,8 +190,18 @@ export const ENV_SCHEMA: EnvSchemaEntry[] = [
 		restartRequired: true,
 		restartTarget: "telegram-bridge",
 		hotApply: false,
-		description: "Default true: group tasks require a bot mention, reply to this bot, or command. False admits every message from allowed senders in allowed groups.",
+		description: "Default true: groups require a mention, reply, command or configured wake pattern. Free-response chats/topics override it, never sender/chat authorization or topic exclusions.",
 	},
+	...[
+		["TELEGRAM_MENTION_PATTERNS", "Optional case-insensitive JavaScript regex wake patterns: JSON string array or one per line. Invokes allowed senders in allowed groups; text/captions are preserved."],
+		["TELEGRAM_FREE_RESPONSE_CHATS", "Comma-separated negative group chat IDs that bypass mention gating, but never sender/chat allowlists or topic filters."],
+		["TELEGRAM_FREE_RESPONSE_TOPICS", "Comma-separated negative-chat-ID:positive-topic-ID pairs that bypass mention gating in just those topics."],
+		["TELEGRAM_ALLOWED_TOPICS", "Optional comma-separated positive topic IDs or negative-chat-ID:topic-ID pairs. When set, other group topics are ignored, including commands. Missing topic is General 1; DMs are not filtered."],
+		["TELEGRAM_IGNORED_THREADS", "Comma-separated topic IDs or negative-chat-ID:topic-ID pairs to ignore in groups. Takes precedence over allowed topics and free response; DMs are not filtered."],
+	].map(([key, description]): EnvSchemaEntry => ({
+		key: key!, description: description!, valueType: "string", sensitive: false,
+		restartRequired: true, restartTarget: "telegram-bridge", hotApply: false,
+	})),
 	...[
 		"ANTHROPIC_API_KEY",
 		"OPENAI_API_KEY",

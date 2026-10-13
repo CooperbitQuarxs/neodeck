@@ -1,6 +1,8 @@
 import { parseDocument, stringify } from "yaml";
 import type { TelegramMessage } from "./telegram.ts";
 import type { TelegramBridgeConfig } from "./config.ts";
+import type { SessionSummary } from "@npi-deck/protocol";
+import type { ChatSessionMapping } from "./store.ts";
 
 export interface BotIdentity { id: number; username: string }
 export interface Command { name: string; args: string }
@@ -11,11 +13,15 @@ export function parseCommand(text: string, username: string): Command | undefine
 	return { name: match[1]!.toLowerCase(), args: (match[3] ?? "").trim() };
 }
 
+export function effectiveThreadId(message: TelegramMessage): number | undefined {
+	if (message.chat.is_forum) return message.message_thread_id ?? 1;
+	return message.is_topic_message ? message.message_thread_id : undefined;
+}
+
 export function conversationKey(message: TelegramMessage): string {
 	if (message.direct_messages_topic) return `${message.chat.id}:dm:${message.direct_messages_topic.topic_id}`;
-	if (message.chat.is_forum) return `${message.chat.id}:${message.is_topic_message ? message.message_thread_id ?? 1 : 1}`;
-	if (message.chat.type === "private" && message.is_topic_message && message.message_thread_id !== undefined) return `${message.chat.id}:${message.message_thread_id}`;
-	return String(message.chat.id);
+	const thread = effectiveThreadId(message);
+	return thread === undefined ? String(message.chat.id) : `${message.chat.id}:${thread}`;
 }
 
 /** Authorization precedes invocation, attachment downloads and session access. */
@@ -27,12 +33,45 @@ export function invokedText(message: TelegramMessage, config: TelegramBridgeConf
 		return text;
 	}
 	if (!["group", "supergroup"].includes(message.chat.type) || !config.allowedChatIds.has(String(message.chat.id))) return undefined;
+	const thread = effectiveThreadId(message);
+	const topic = String(thread ?? 1);
+	const scopedTopic = `${message.chat.id}:${topic}`;
+	const matchesTopic = (topics: Set<string>) => topics.has(topic) || topics.has(scopedTopic);
+	if ((thread !== undefined && matchesTopic(config.ignoredTopics)) || (config.allowedTopics.size && !matchesTopic(config.allowedTopics))) return undefined;
 	if (/^\//.test(text)) return parseCommand(text, bot.username) ? text : undefined;
 	const mention = new RegExp(`@${bot.username}(?![a-z0-9_])`, "ig");
 	const mentioned = mention.test(text);
 	mention.lastIndex = 0;
-	if (config.requireMention && !mentioned && message.reply_to_message?.from?.id !== bot.id) return undefined;
+	const freeResponse = config.freeResponseChatIds.has(String(message.chat.id)) || config.freeResponseTopics.has(scopedTopic);
+	const wakeWord = config.mentionPatterns.some((pattern) => pattern.test(text));
+	if (config.requireMention && !freeResponse && !wakeWord && !mentioned && message.reply_to_message?.from?.id !== bot.id) return undefined;
 	return text.replace(mention, "").trim();
+}
+
+export interface RetainedSession { mapping: ChatSessionMapping; title?: string }
+
+/** Enrich only this lane's retained history, never enumerate another lane's sessions. */
+export function retainedSessions(mappings: ChatSessionMapping[], sessions: SessionSummary[]): RetainedSession[] {
+	const titles = new Map(sessions.map((session) => [session.id, session.title]));
+	return mappings.map((mapping) => ({ mapping, title: titles.get(mapping.sessionId) }));
+}
+
+export function selectRetainedSession(sessions: RetainedSession[], selector: string): ChatSessionMapping {
+	const exactId = sessions.find((session) => session.mapping.sessionId === selector);
+	if (exactId) return exactId.mapping;
+	if (/^[1-9]\d*$/.test(selector)) {
+		const numbered = sessions[Number(selector) - 1];
+		if (numbered) return numbered.mapping;
+	}
+	const named = sessions.filter((session) => session.title?.toLowerCase() === selector.toLowerCase());
+	if (named.length === 1) return named[0]!.mapping;
+	if (named.length > 1) throw new Error("More than one retained session has that title. Use /sessions and select a number or exact ID.");
+	throw new Error("Select a retained session by ID, exact title or number from this conversation's /sessions.");
+}
+
+export function unsupportedAttachments(message: TelegramMessage): string[] {
+	return ["document", "audio", "voice", "video", "video_note", "animation", "sticker", "contact", "poll", "dice", "paid_media"]
+		.filter((kind) => message[kind as keyof TelegramMessage] !== undefined);
 }
 
 export interface IntakeCard { title: string; body: string; cwd?: string; stateId?: string }
@@ -86,12 +125,12 @@ Send a task, or a numbered/checklist list for multiple cards.
 /properties <YAML> — set this chat/topic's default card front matter; /properties clear removes defaults
 /chat <text> — explicitly chat with the bound persistent NeoPi session (photos supported)
 /session or /status — show binding
-/sessions — list this conversation's retained sessions
+/sessions [search <query>] — list/search this conversation's retained sessions; /sessions <ID|title|number> resumes
 /bind <session ID> — bind an existing deck session
-/resume <session ID> — resume one of this conversation's retained sessions
+/resume <ID|title|number> — resume from this conversation's latest session listing
 /new or /reset — fresh binding, retaining old transcript
 /stop — abort the current NeoPi turn
-/title <name> — rename session
+/title [name] — show or rename the current session title
 /model <provider/model> — select session model; /model lists models
 /compact [focus] — compact session context
 /help or /commands — this help

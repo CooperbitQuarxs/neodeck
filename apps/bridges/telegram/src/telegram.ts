@@ -16,6 +16,17 @@ export interface TelegramMessage {
 	text?: string;
 	caption?: string;
 	photo?: TelegramPhotoSize[];
+	document?: { file_id: string };
+	audio?: { file_id: string };
+	voice?: { file_id: string };
+	video?: { file_id: string };
+	video_note?: { file_id: string };
+	animation?: { file_id: string };
+	sticker?: { file_id: string };
+	contact?: object;
+	poll?: object;
+	dice?: object;
+	paid_media?: object;
 }
 
 export interface TelegramPhotoSize {
@@ -79,6 +90,10 @@ export class TelegramApi {
 			...(replyToMessageId !== undefined ? { reply_to_message_id: replyToMessageId } : {}),
 			...thread,
 		});
+	}
+
+	sendTyping(chatId: number | string, thread?: { message_thread_id?: number; direct_messages_topic_id?: number }): Promise<boolean> {
+		return this.call("sendChatAction", { chat_id: chatId, action: "typing", ...thread });
 	}
 
 	editMessageText(chatId: number | string, messageId: number, text: string): Promise<TelegramSentMessage> {

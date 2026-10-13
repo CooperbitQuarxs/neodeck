@@ -4,7 +4,7 @@ import { loadTelegramBridgeConfig, type TelegramBridgeConfig } from "./config.ts
 import { DeckClient, SessionNotActiveError } from "./deck.ts";
 import { nowIso, TelegramBridgeStore, type ChatSessionMapping } from "./store.ts";
 import { TelegramApi, type TelegramMessage, type TelegramUpdate } from "./telegram.ts";
-import { conversationKey, decomposeTask, HELP, invokedText, parseCommand, parseProperties, type BotIdentity } from "./commands.ts";
+import { conversationKey, decomposeTask, effectiveThreadId, HELP, invokedText, parseCommand, parseProperties, retainedSessions, selectRetainedSession, unsupportedAttachments, type BotIdentity, type RetainedSession } from "./commands.ts";
 import { stringify } from "yaml";
 
 const TELEGRAM_TEXT_LIMIT = 3900;
@@ -14,6 +14,7 @@ export class TelegramBridge {
 	private readonly deck: DeckClient;
 	private readonly store: TelegramBridgeStore;
 	private readonly queues = new Map<string, Promise<void>>();
+	private readonly sessionChoices = new Map<string, RetainedSession[]>();
 	private offset: number | undefined;
 	private stopping = false;
 	private bot: BotIdentity | undefined;
@@ -83,6 +84,11 @@ export class TelegramBridge {
 		const key = conversationKey(message);
 		const command = parseCommand(text, this.bot!.username);
 		const args = command?.args ?? text;
+		const unsupported = unsupportedAttachments(message);
+		if (unsupported.length && (!command || ["chat", "task", "capture"].includes(command.name))) {
+			await this.say(message, `${unsupported.join(", ")} attachment not downloaded or processed.${args ? " Only the caption text will be used." : " Send task text, or /chat with a photo for image analysis."}`);
+			if (!args && !message.photo?.length) return;
+		}
 		switch (command?.name) {
 			case "start": case "help": case "commands": return this.say(message, HELP);
 			case "new": case "reset":
@@ -90,11 +96,17 @@ export class TelegramBridge {
 				return this.say(message, "Binding cleared. /chat starts fresh; /resume can restore a retained session.");
 			case "session": case "status": {
 				const mapping = this.store.get(key);
-				return this.say(message, mapping ? `Conversation ${key}\nSession ${mapping.sessionId}\nWorkspace ${mapping.cwd}` : `Conversation ${key} has no binding. Use /bind or /chat.`);
+				const title = mapping ? (await this.deck.listSessions()).find((session) => session.id === mapping.sessionId)?.title : undefined;
+				return this.say(message, mapping ? `Conversation ${key}\nSession ${mapping.sessionId}\nTitle ${title ?? "Untitled"}\nWorkspace ${mapping.cwd}` : `Conversation ${key} has no binding. Use /bind or /chat.`);
 			}
 			case "sessions": {
-				const mappings = this.store.list(key);
-				return this.say(message, mappings.map((entry) => `${entry.sessionId} · ${entry.cwd}`).join("\n") || "No retained sessions in this conversation.");
+				if (args && !/^search(?:\s|$)/i.test(args)) return this.resumeSelected(message, key, args);
+				const query = args ? args.replace(/^search/i, "").trim().toLowerCase() : undefined;
+				if (query === "") throw new Error("Usage: /sessions search <query>");
+				let sessions = await this.retained(key);
+				if (query) sessions = sessions.filter((session) => [session.title, session.mapping.sessionId].some((value) => value?.toLowerCase().includes(query)));
+				this.sessionChoices.set(key, sessions);
+				return this.say(message, sessions.map((entry, i) => `${i + 1}. ${entry.title ?? "Untitled"} · ${entry.mapping.sessionId} · ${entry.mapping.cwd}`).join("\n") || (query ? "No matching retained sessions in this conversation." : "No retained sessions in this conversation."));
 			}
 			case "bind": {
 				if (!args) throw new Error("Usage: /bind <existing deck session ID>");
@@ -104,12 +116,7 @@ export class TelegramBridge {
 				this.saveMapping(key, await this.deck.createSession({ cwd: session.cwd, resumeFromPath: session.path }));
 				return this.say(message, `Bound ${args} to conversation ${key}.`);
 			}
-			case "resume": {
-				const retained = this.store.list(key).find((entry) => entry.sessionId === args);
-				if (!retained) throw new Error("Usage: /resume <session ID from this conversation's /sessions>");
-				const resumed = await this.resumeMapping(retained);
-				return this.say(message, `Resumed session ${resumed.sessionId} in conversation ${key}.`);
-			}
+			case "resume": return this.resumeSelected(message, key, args);
 			case "properties":
 				if (args) {
 					const properties = args === "clear" ? {} : parseProperties(args);
@@ -130,9 +137,15 @@ export class TelegramBridge {
 				return this.say(message, mapping ? "Abort requested for the bound session." : "No bound session to stop.");
 			}
 			case "title": case "model": case "compact": {
+				if (command.name === "title" && !args) {
+					const current = this.store.get(key);
+					if (!current) return this.say(message, "No bound session. Use /bind or /chat.");
+					const title = (await this.deck.listSessions()).find((session) => session.id === current.sessionId)?.title;
+					return this.say(message, `Current title: ${title ?? "Untitled"}`);
+				}
 				const mapping = await this.ensureActiveMapping(key);
 				if (command.name === "title") {
-					if (!args) throw new Error("Usage: /title <name>");
+					// The no-argument form above only reads; renaming may resume the binding.
 					await this.deck.updateSession(mapping.sessionId, { name: args });
 				} else if (command.name === "compact") await this.deck.sessionAction(mapping.sessionId, "compact", args ? { focus: args } : {});
 				else {
@@ -159,20 +172,49 @@ export class TelegramBridge {
 	private async chat(message: TelegramMessage, text: string): Promise<void> {
 		const photos = message.photo ?? [];
 		if (!text && !photos.length) throw new Error("Usage: /chat <text>, or a photo captioned /chat");
-		const images: ImageAttachment[] = [];
-		const largest = photos[photos.length - 1];
-		if (largest) images.push({ type: "image", ...await this.telegram.downloadPhoto(largest) });
-		const key = conversationKey(message);
-		let mapping = await this.ensureMapping(key);
-		const reply = new TelegramReply(this.telegram, message.chat.id, message.message_id, this.config.editIntervalMs, threadRouting(message));
-		const prompt = () => this.deck.promptSession({ sessionId: mapping.sessionId, text: text || "Please analyze this image.", ...(images.length ? { images } : {}), onText: (next) => reply.update(next) });
+		let typingPending: Promise<void> | undefined;
+		const typing = () => {
+			typingPending ??= this.telegram.sendTyping(message.chat.id, threadRouting(message, true))
+				.then(() => undefined, () => { console.warn("telegram typing indicator failed"); })
+				.finally(() => { typingPending = undefined; });
+			return typingPending;
+		};
+		await typing();
+		const typingTimer = setInterval(() => { void typing(); }, 4000);
 		try {
-			await reply.finish(await prompt());
-		} catch (err) {
-			if (!(err instanceof SessionNotActiveError)) { await reply.finish(`Bridge error: ${this.safeError(err)}`); return; }
-			mapping = await this.resumeMapping(mapping);
-			await reply.finish(await prompt());
+			const images: ImageAttachment[] = [];
+			const largest = photos[photos.length - 1];
+			if (largest) images.push({ type: "image", ...await this.telegram.downloadPhoto(largest) });
+			const key = conversationKey(message);
+			let mapping = await this.ensureMapping(key);
+			const reply = new TelegramReply(this.telegram, message.chat.id, message.message_id, this.config.editIntervalMs, threadRouting(message));
+			const prompt = () => this.deck.promptSession({ sessionId: mapping.sessionId, text: text || "Please analyze this image.", ...(images.length ? { images } : {}), onText: (next) => reply.update(next) });
+			try {
+				await reply.finish(await prompt());
+			} catch (err) {
+				if (!(err instanceof SessionNotActiveError)) { await reply.finish(`Bridge error: ${this.safeError(err)}`); return; }
+				mapping = await this.resumeMapping(mapping);
+				await reply.finish(await prompt());
+			}
+		} finally {
+			clearInterval(typingTimer);
+			await typingPending;
 		}
+	}
+
+	private async retained(key: string): Promise<RetainedSession[]> {
+		const mappings = this.store.list(key);
+		return mappings.length ? retainedSessions(mappings, await this.deck.listSessions()) : [];
+	}
+
+	private async resumeSelected(message: TelegramMessage, key: string, selector: string): Promise<void> {
+		const sessions = await this.retained(key);
+		// Numbers refer to exactly the latest displayed list, including search results.
+		const choices = /^[1-9]\d*$/.test(selector) ? this.sessionChoices.get(key) ?? sessions : sessions;
+		const selected = selectRetainedSession(choices, selector);
+		if (!sessions.some((session) => session.mapping.sessionId === selected.sessionId)) throw new Error("That session is no longer retained. Refresh /sessions.");
+		const resumed = await this.resumeMapping(selected);
+		return this.say(message, `Resumed session ${resumed.sessionId} in conversation ${key}.`);
 	}
 
 	private saveMapping(key: string, created: { sessionId: string; sessionFile?: string; cwd: string }): ChatSessionMapping {
@@ -197,9 +239,10 @@ export class TelegramBridge {
 	}
 }
 
-function threadRouting(message: TelegramMessage): { message_thread_id?: number; direct_messages_topic_id?: number } {
+function threadRouting(message: TelegramMessage, typing = false): { message_thread_id?: number; direct_messages_topic_id?: number } {
 	if (message.direct_messages_topic) return { direct_messages_topic_id: message.direct_messages_topic.topic_id };
-	return message.is_topic_message && message.message_thread_id !== undefined && message.message_thread_id !== 1 ? { message_thread_id: message.message_thread_id } : {};
+	const thread = effectiveThreadId(message);
+	return thread !== undefined && (typing || thread !== 1) ? { message_thread_id: thread } : {};
 }
 
 class TelegramReply {
