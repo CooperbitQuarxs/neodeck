@@ -39,16 +39,36 @@ export const STEP_TYPE_BG: Record<RoutineStep["type"], string> = {
 	set_state: "bg-paper-3",
 };
 
+/** User-facing action names, independent of the persisted type identifiers. */
+export function actionLabel(step: Pick<RoutineStep, "type"> & { action?: string }): string {
+	if (step.type === "deck") {
+		const names: Record<string, string> = {
+			create_inbox_item: "Create inbox item", create_task: "Create card",
+			move_task: "Move card", promote_inbox_item_to_task: "Make a card from inbox",
+			list_tasks: "Find cards", list_inbox: "Read inbox", get_task: "Read card",
+			get_inbox_item: "Read inbox item", kb_orphan_census: "Find unlinked notes",
+		};
+		return names[step.action ?? ""] ?? "Deck action";
+	}
+	const names: Record<RoutineStep["type"], string> = {
+		run: "Run command", agent: "Ask an agent", write: "Write file",
+		http: "Send request", mcp: "Use integration", transform: "Transform data",
+		wait: "Wait", set_state: "Remember values", deck: "Deck action",
+	};
+	return names[step.type];
+}
+
 /** Dispatch to the right per-type form for `step`. */
 export function renderStepForm(
 	step: RoutineStep,
 	onChange: (next: RoutineStep) => void,
+	advanced = true,
 ): JSX.Element {
 	switch (step.type) {
 		case "run":
-			return <RunStepForm step={step} onChange={onChange} />;
+			return <RunStepForm step={step} onChange={onChange} advanced={advanced} />;
 		case "agent":
-			return <AgentStepForm step={step} onChange={onChange} />;
+			return <AgentStepForm step={step} onChange={onChange} advanced={advanced} />;
 		case "write":
 			return <WriteStepForm step={step} onChange={onChange} />;
 		case "http":

@@ -14,11 +14,12 @@ type Extract2<T extends RoutineStep["type"]> = Extract<RoutineStep, { type: T }>
 interface FormProps<T extends RoutineStep["type"]> {
 	step: Extract2<T>;
 	onChange: (next: Extract2<T>) => void;
+	advanced?: boolean;
 }
 
 // ─── run ──────────────────────────────────────────────────────────────────
 
-export function RunStepForm({ step, onChange }: FormProps<"run">) {
+export function RunStepForm({ step, onChange, advanced = true }: FormProps<"run">) {
 	return (
 		<div className="space-y-2">
 			<Field label="command">
@@ -29,7 +30,7 @@ export function RunStepForm({ step, onChange }: FormProps<"run">) {
 					placeholder="echo hello"
 				/>
 			</Field>
-			<Field label="cwd (optional)">
+			{advanced ? <Field label="Working directory (optional)">
 				<TextInput
 					value={step.cwd ?? ""}
 					onChange={(v) => {
@@ -41,7 +42,7 @@ export function RunStepForm({ step, onChange }: FormProps<"run">) {
 					placeholder="C:/path/to/repo"
 					mono
 				/>
-			</Field>
+			</Field> : null}
 		</div>
 	);
 }
@@ -75,7 +76,7 @@ function AllowlistField({ label, allLabel, placeholder, values, onChange }: {
 	);
 }
 
-export function AgentStepForm({ step, onChange }: FormProps<"agent">) {
+export function AgentStepForm({ step, onChange, advanced = true }: FormProps<"agent">) {
 	function patch(p: Partial<Extract2<"agent">>): void {
 		onChange({ ...step, ...p });
 	}
@@ -92,9 +93,10 @@ export function AgentStepForm({ step, onChange }: FormProps<"agent">) {
 					value={step.prompt}
 					onChange={(v) => patch({ prompt: v })}
 					rows={6}
-					placeholder="Summarize {{ steps.fetch_tasks.json }} in 2 sentences."
+					placeholder="Describe what you want the agent to do."
 				/>
 			</Field>
+			{advanced ? <>
 			<Field label="model (optional)">
 				<TextInput
 					value={step.model ?? ""}
@@ -124,6 +126,7 @@ export function AgentStepForm({ step, onChange }: FormProps<"agent">) {
 					onChange={(names) => updateAllowlist("mcp_servers_allowed", names)}
 				/>
 			</div>
+			</> : null}
 		</div>
 	);
 }

@@ -14,6 +14,7 @@ import { memo } from "react";
 import type { RoutineStep, RoutineStepRun, RoutineStepStatus } from "@npi-deck/protocol";
 
 import type { StepNode as StepNodeType } from "../graph-types";
+import { actionLabel } from "../../step-form-render";
 
 /**
  * Type → background-tint class. Same palette as `StepCard.TYPE_BG` so a step
@@ -46,7 +47,7 @@ function summarize(step: RoutineStep): string {
 		case "run":
 			return step.command ?? "";
 		case "deck":
-			return step.action;
+			return "title" in step ? step.title : actionLabel(step);
 		case "mcp":
 			return `${step.server}.${step.tool}`;
 		case "transform":
@@ -64,7 +65,7 @@ export const StepNode = memo(function StepNode({
 	data,
 	selected,
 }: NodeProps<StepNodeType>) {
-	const { step, compileError, isIfNode, stepRun } = data;
+	const { step, compileError, isIfNode, stepRun, advanced } = data;
 	const summary = summarize(step);
 	const tint = TYPE_TINT[step.type] ?? "bg-paper-2 border-line";
 
@@ -100,7 +101,7 @@ export const StepNode = memo(function StepNode({
 			/>
 			<div className="flex items-center gap-2 border-b border-line/60 px-2 py-1">
 				<span className="font-mono text-2xs uppercase tracking-meta text-ink-3">
-					{step.type}
+					{actionLabel(step)}
 				</span>
 				{compileError ? (
 					<span
@@ -111,7 +112,7 @@ export const StepNode = memo(function StepNode({
 					</span>
 				) : null}
 				{stepRun && !compileError ? <StatusBadge run={stepRun} /> : null}
-				<span className="ml-auto font-mono text-2xs text-ink-2">{step.id}</span>
+				{advanced ? <span className="ml-auto font-mono text-2xs text-ink-2">{step.id}</span> : null}
 			</div>
 			{summary ? (
 				<div className="px-2 py-1.5 font-mono text-2xs leading-snug text-ink-2 line-clamp-2">
@@ -122,7 +123,7 @@ export const StepNode = memo(function StepNode({
 					(empty)
 				</div>
 			)}
-			{step.when ? (
+			{advanced && step.when ? (
 				<div
 					className="border-t border-line/60 px-2 py-1 font-mono text-2xs text-ink-3"
 					title={step.when}
