@@ -1,5 +1,6 @@
 import { afterEach, expect, test } from "bun:test";
 import * as fs from "node:fs";
+import * as os from "node:os";
 import * as path from "node:path";
 import type { RoutineSpec } from "@npi-deck/protocol";
 import { openDb, closeDb, getDb } from "../db/index.ts";
@@ -8,7 +9,7 @@ import { createRoutine, createV1Routine, getRoutine, listRuns, updateV1Routine }
 import { RoutinesRunner } from "../routines-runner.ts";
 import { initializeOwnedGeneration, stopOwnedProcesses } from "../owned-process.ts";
 
-const root = "/home/shayna/tmp";
+const root = os.tmpdir();
 let home = "";
 let runner: RoutinesRunner | undefined;
 function setup(agentCommand?: () => string[]): void {
