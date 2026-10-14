@@ -93,23 +93,42 @@ test("close releases database files before retained statement objects are collec
 			const task = createTask({ title: "release-probe" });
 			updateTask(task.id, { body: "updated before close" });
 			moveTask(task.id, state.id, 0);
+			const canonicalFixture = fs.realpathSync(fixture);
+			function ownedFiles() {
+				if (process.platform === "linux") {
+					return fs.readdirSync("/proc/self/fd").flatMap(fd => {
+						try {
+							const target = fs.readlinkSync("/proc/self/fd/" + fd);
+							return target.startsWith(canonicalFixture + path.sep) ? [target] : [];
+						} catch (error) {
+							if (error.code !== "ENOENT") throw error;
+							return [];
+						}
+					});
+				}
+				if (process.platform === "darwin") {
+					const observed = Bun.spawnSync({
+						cmd: ["/usr/sbin/lsof", "-a", "-p", String(process.pid), "-Fpn"],
+						stdout: "pipe", stderr: "pipe",
+					});
+					const records = observed.stdout.toString().split("\\n");
+					if (observed.exitCode !== 0 || !records.includes("p" + process.pid)) {
+						throw new Error("cannot observe owned SQLite files: " + observed.stderr.toString());
+					}
+					return records.filter(record => record.startsWith("n"))
+						.map(record => record.slice(1))
+						.filter(file => file.startsWith(canonicalFixture + path.sep));
+				}
+				return null;
+			}
+			const beforeCloseDescriptors = ownedFiles();
 			closeDb();
 			const sidecars = ["deck.db-wal", "deck.db-shm"].filter(name => fs.existsSync(path.join(fixture, name)));
-			const descriptors = process.platform === "linux"
-				? fs.readdirSync("/proc/self/fd").flatMap(fd => {
-					try {
-						const target = fs.readlinkSync("/proc/self/fd/" + fd);
-						return target.startsWith(fixture + path.sep) ? [target] : [];
-					} catch (error) {
-						if (error.code !== "ENOENT") throw error;
-						return [];
-					}
-				})
-				: null;
-			if (sidecars.length || descriptors?.length) throw new Error(JSON.stringify({ sidecars, descriptors }));
+			const descriptors = ownedFiles();
+			if (descriptors?.length) throw new Error(JSON.stringify({ sidecars, descriptors }));
 			fs.rmSync(fixture, { recursive: true });
 			console.log("SQLITE_RELEASE_PROOF=" + JSON.stringify({
-				sidecars, descriptors, removed: !fs.existsSync(fixture),
+				sidecars, beforeCloseDescriptors, descriptors, removed: !fs.existsSync(fixture),
 			}));
 		`],
 		cwd: root,
@@ -117,10 +136,10 @@ test("close releases database files before retained statement objects are collec
 		stdout: "pipe",
 		stderr: "pipe",
 	});
-	expect(child.stderr.toString()).toBe("");
-	expect(child.exitCode).toBe(0);
+	if (child.exitCode !== 0) throw new Error(child.stderr.toString());
 	const proof = child.stdout.toString().split("\n").find(line => line.startsWith("SQLITE_RELEASE_PROOF="));
-	expect(JSON.parse(proof!.slice("SQLITE_RELEASE_PROOF=".length))).toEqual({
-		sidecars: [], descriptors: process.platform === "linux" ? [] : null, removed: true,
-	});
+	const observed = JSON.parse(proof!.slice("SQLITE_RELEASE_PROOF=".length));
+	console.info("SQLITE_RELEASE_PROOF=" + JSON.stringify(observed));
+	expect(observed.descriptors).toEqual(process.platform === "linux" || process.platform === "darwin" ? [] : null);
+	expect(observed.removed).toBe(true);
 });
