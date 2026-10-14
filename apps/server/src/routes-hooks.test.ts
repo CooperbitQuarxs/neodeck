@@ -54,7 +54,7 @@ function registerBeforeUpgrade(dbPath: string, routineId: string, hookPath: stri
 		ALTER TABLE routine_webhook_secrets DROP COLUMN last_bare_secret_at;
 		DELETE FROM schema_migrations WHERE name = '006-webhook-hmac.sql';
 	`);
-	db.prepare<unknown, [string, string, string, string]>(
+	db.query<unknown, [string, string, string, string]>(
 		"INSERT INTO routine_webhook_secrets (routine_id, path, secret_hash, created_at) VALUES (?, ?, ?, ?)",
 	).run(routineId, hookPath, hashSecretForStorage(SECRET), new Date().toISOString());
 	closeDb();

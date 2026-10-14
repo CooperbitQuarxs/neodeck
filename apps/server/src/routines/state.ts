@@ -38,7 +38,7 @@ export function saveState(routineId: string, kv: Record<string, unknown>): void 
 	const entries = Object.entries(kv);
 	if (entries.length === 0) return;
 	const db = getDb();
-	const stmt = db.prepare<unknown, [string, string, string, string]>(
+	const stmt = db.query<unknown, [string, string, string, string]>(
 		`INSERT INTO routine_state (routine_id, key, value_json, updated_at)
 		 VALUES (?, ?, ?, ?)
 		 ON CONFLICT(routine_id, key) DO UPDATE SET
@@ -56,7 +56,7 @@ export function saveState(routineId: string, kv: Record<string, unknown>): void 
 /** Drop a single state key. */
 export function clearStateKey(routineId: string, key: string): boolean {
 	const r = getDb()
-		.prepare<unknown, [string, string]>(
+		.query<unknown, [string, string]>(
 			"DELETE FROM routine_state WHERE routine_id = ? AND key = ?",
 		)
 		.run(routineId, key);
@@ -66,6 +66,6 @@ export function clearStateKey(routineId: string, key: string): boolean {
 /** Drop all state for a routine. Useful on routine delete. */
 export function clearAllState(routineId: string): void {
 	getDb()
-		.prepare<unknown, [string]>("DELETE FROM routine_state WHERE routine_id = ?")
+		.query<unknown, [string]>("DELETE FROM routine_state WHERE routine_id = ?")
 		.run(routineId);
 }
