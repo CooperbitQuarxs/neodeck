@@ -73,7 +73,7 @@ export function createInbox(input: {
 	const itemId = `i_${id().toLowerCase().slice(0, 18)}`;
 	const now = nowIso();
 	getDb()
-		.prepare<unknown, [string, string, string, string, string | null, string]>(
+		.query<unknown, [string, string, string, string, string | null, string]>(
 			`INSERT INTO inbox_items (id, kind, title, body, source, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
 		)
 		.run(itemId, input.kind, input.title, input.body ?? "", input.source ?? null, now);
@@ -97,7 +97,7 @@ export function updateInbox(
 				? null
 				: existing.processedAt ?? null;
 	getDb()
-		.prepare<unknown, [string, string, string, string | null, string | null, string]>(
+		.query<unknown, [string, string, string, string | null, string | null, string]>(
 			`UPDATE inbox_items SET kind = ?, title = ?, body = ?, source = ?, processed_at = ? WHERE id = ?`,
 		)
 		.run(next.kind, next.title, next.body, next.source ?? null, processedAt, itemId);
@@ -105,6 +105,6 @@ export function updateInbox(
 }
 
 export function deleteInbox(itemId: string): boolean {
-	const r = getDb().prepare<unknown, [string]>("DELETE FROM inbox_items WHERE id = ?").run(itemId);
+	const r = getDb().query<unknown, [string]>("DELETE FROM inbox_items WHERE id = ?").run(itemId);
 	return Number(r.changes ?? 0) > 0;
 }

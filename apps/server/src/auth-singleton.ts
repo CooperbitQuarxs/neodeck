@@ -35,7 +35,10 @@ export function getDeckModelRegistry(): Promise<ModelRegistry> {
 		registry.refreshInBackground("online");
 		log.info("model registry ready");
 		return registry;
-	})();
+	})().catch(error => {
+		registryPromise = undefined;
+		throw error;
+	});
 	return registryPromise;
 }
 
