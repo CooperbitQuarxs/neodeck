@@ -44,6 +44,7 @@
             "action": { "const": "create_task" },
             "title": { "type": "string", "minLength": 1, "maxLength": 500 },
             "body": { "type": "string" },
+            "properties": { "type": "object", "additionalProperties": true },
             "state_ref": { "type": "string", "minLength": 1, "maxLength": 120 },
             "cwd": { "type": "string", "minLength": 1, "maxLength": 1000 }
           }
@@ -63,7 +64,10 @@
             "action": { "const": "promote_inbox_item_to_task" },
             "inbox_ref": { "type": "string", "minLength": 1, "maxLength": 120 },
             "state_ref": { "type": "string", "minLength": 1, "maxLength": 120 },
-            "mark_processed": { "type": "boolean", "default": true }
+            "mark_processed": { "type": "boolean", "default": true },
+            "properties": { "type": "object", "additionalProperties": true },
+            "body": { "type": "string" },
+            "cwd": { "type": "string", "minLength": 1, "maxLength": 1000 }
           }
         },
         {

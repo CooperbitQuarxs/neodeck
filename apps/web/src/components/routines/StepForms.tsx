@@ -444,8 +444,8 @@ export function DeckStepForm({ step, onChange }: FormProps<"deck">) {
 					<Field label="title">
 						<TextInput value={step.title} onChange={(v) => onChange({ ...step, title: v })} placeholder="Follow up on {{ run.date }}" mono />
 					</Field>
-					<Field label="body (optional)">
-						<TextArea value={step.body ?? ""} onChange={(v) => onChange({ ...step, body: v === "" ? undefined : v })} rows={4} placeholder="{{ steps.digest.stdout }}" />
+					<Field label="body / leading YAML properties (optional)">
+						<TextArea value={step.body ?? ""} onChange={(v) => onChange({ ...step, body: v === "" ? undefined : v })} rows={5} placeholder={"---\nread-only: true\nworktree: /path/to/worktree\n---\n{{ steps.digest.stdout }}"} />
 					</Field>
 					<Field label="state_ref (optional)">
 						<TextInput value={step.state_ref ?? ""} onChange={(v) => onChange({ ...step, state_ref: v === "" ? undefined : v })} placeholder="backlog or s_backlog" mono />
@@ -475,6 +475,12 @@ export function DeckStepForm({ step, onChange }: FormProps<"deck">) {
 					</Field>
 					<Field label="state_ref (optional)">
 						<TextInput value={step.state_ref ?? ""} onChange={(v) => onChange({ ...step, state_ref: v === "" ? undefined : v })} placeholder="backlog or s_backlog" mono />
+					</Field>
+					<Field label="body / leading YAML properties override (optional)">
+						<TextArea value={step.body ?? ""} onChange={(v) => onChange({ ...step, body: v === "" ? undefined : v })} rows={5} placeholder={"---\nread-only: true\n---\nResearch this capture"} />
+					</Field>
+					<Field label="cwd / project routing (optional)">
+						<TextInput value={step.cwd ?? ""} onChange={(v) => onChange({ ...step, cwd: v === "" ? undefined : v })} placeholder="Unassigned when omitted" mono />
 					</Field>
 					<label className="flex items-center gap-2 font-mono text-2xs text-ink-2">
 						<input

@@ -38,7 +38,7 @@ NPI deck is the cockpit that holds all of that. The chat surface stays at parity
 
 ## What you get
 
-**A kanban that's actually yours.** Backlog → Active → Done columns with drag-and-drop. Tasks get `T-N` display IDs you can refer to in conversation (`/task done T-32`). The agent can mutate the board too — its work becomes visible without you doing the bookkeeping.
+**A kanban that's actually yours.** Backlog → Active → Done columns with drag-and-drop. Tasks get `T-N` display IDs you can refer to in conversation (`/task done T-32`). Assign an agent directly from a card: it starts automatically, queues behind the configurable global limit (12 by default), and reports its outcome on the card. Each run gets a temporary git worktree that is removed afterward, unless leading YAML links an existing `worktree`. Set `read-only: true` for mechanically restricted research; linked worktrees are never removed. UI, chat, inbox/capture promotion, API, routines and messaging bridges preserve arbitrary leading YAML properties; [configuration](docs/configuration.md#card-agents) documents execution and routing.
 
 **Plan mode** — Shift+Tab in the composer enters NeoPi's read-only planning mode. The agent writes a `local://<slug>-plan.md` artifact and submits it through `xd://propose`; the plan appears in the chat for approval, in-place editing, or rejection with feedback. Approval returns the agent to full tools to execute; rejection lets it revise and resubmit. A resumed planning session restores its plan artifact.
 
