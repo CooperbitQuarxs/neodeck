@@ -24,12 +24,7 @@ let dbDir: string | null = null;
 afterEach(() => {
 	closeDb();
 	if (dbDir) {
-		try {
-			fs.rmSync(dbDir, { recursive: true, force: true });
-		} catch {
-			// Windows SQLite handles can lag past close(); leaking a temp dir is
-			// fine, failing the suite is not.
-		}
+		fs.rmSync(dbDir, { recursive: true, force: true });
 		dbDir = null;
 	}
 });

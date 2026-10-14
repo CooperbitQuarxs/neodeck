@@ -16,12 +16,7 @@ let dbDir: string | null = null;
 afterEach(() => {
 	closeDb();
 	if (dbDir) {
-		try {
-			fs.rmSync(dbDir, { recursive: true, force: true });
-		} catch {
-			// SQLite handles can lag after close on some platforms; leaking a temp dir
-			// is better than making an unrelated test fail.
-		}
+		fs.rmSync(dbDir, { recursive: true, force: true });
 		dbDir = null;
 	}
 });
@@ -34,7 +29,7 @@ function bootDb(): void {
 function insertRoutine(id: string): void {
 	const now = new Date().toISOString();
 	getDb()
-		.prepare<unknown, [string, string, string, string]>(
+		.query<unknown, [string, string, string, string]>(
 			`INSERT INTO routines (id, name, description, cron, action_kind, action_body, created_at, updated_at)
 			 VALUES (?, ?, '', '', 'bash', '', ?, ?)`,
 		)
