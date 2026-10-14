@@ -69,7 +69,7 @@ export function startStepRun(input: {
 	const stepRunId = `srun_${id().toLowerCase().slice(0, 18)}`;
 	const startedAt = nowIso();
 	getDb()
-		.prepare<unknown, [string, string, string, number, string, string, number]>(
+		.query<unknown, [string, string, string, number, string, string, number]>(
 			`INSERT INTO routine_step_runs (id, run_id, step_id, step_index, step_type, started_at, status, attempt)
 			 VALUES (?, ?, ?, ?, ?, ?, 'running', ?)`,
 		)
@@ -95,7 +95,7 @@ export function insertSkippedStepRun(input: {
 	const stepRunId = `srun_${id().toLowerCase().slice(0, 18)}`;
 	const now = nowIso();
 	getDb()
-		.prepare<unknown, [string, string, string, number, string, string, string]>(
+		.query<unknown, [string, string, string, number, string, string, string]>(
 			`INSERT INTO routine_step_runs (id, run_id, step_id, step_index, step_type, started_at, ended_at, status, duration_ms)
 			 VALUES (?, ?, ?, ?, ?, ?, ?, 'skipped', 0)`,
 		)
@@ -120,7 +120,7 @@ export function finishStepRun(
 	},
 ): void {
 	getDb()
-		.prepare<
+		.query<
 			unknown,
 			[
 				string,
@@ -212,7 +212,7 @@ export function upsertWebhookSecret(input: {
 
 	const now = nowIso();
 	getDb()
-		.prepare<unknown, [string, string, string, string, string]>(
+		.query<unknown, [string, string, string, string, string]>(
 			`INSERT INTO routine_webhook_secrets (routine_id, path, secret_hash, signing_key, accept_bare_secret, created_at)
 			 VALUES (?, ?, ?, ?, 0, ?)
 			 ON CONFLICT(routine_id) DO UPDATE SET
@@ -238,7 +238,7 @@ export function ensureWebhookSecret(input: {
 	if (existing) {
 		if (existing.path !== input.path) {
 			getDb()
-				.prepare<unknown, [string, string]>(
+				.query<unknown, [string, string]>(
 					"UPDATE routine_webhook_secrets SET path = ? WHERE routine_id = ?",
 				)
 				.run(input.path, input.routineId);
@@ -248,7 +248,7 @@ export function ensureWebhookSecret(input: {
 
 	const now = nowIso();
 	getDb()
-		.prepare<unknown, [string, string, string, string, string]>(
+		.query<unknown, [string, string, string, string, string]>(
 			`INSERT INTO routine_webhook_secrets (routine_id, path, secret_hash, signing_key, accept_bare_secret, created_at)
 			 VALUES (?, ?, ?, ?, 0, ?)`,
 		)
@@ -258,7 +258,7 @@ export function ensureWebhookSecret(input: {
 
 export function deleteWebhookSecret(routineId: string): void {
 	getDb()
-		.prepare<unknown, [string]>("DELETE FROM routine_webhook_secrets WHERE routine_id = ?")
+		.query<unknown, [string]>("DELETE FROM routine_webhook_secrets WHERE routine_id = ?")
 		.run(routineId);
 }
 
@@ -291,7 +291,7 @@ function isWebhookPathClaimedByAnotherRoutine(path: string, routineId: string): 
  */
 export function refuseWebhookBareSecret(routineId: string): void {
 	getDb()
-		.prepare<unknown, [string]>(
+		.query<unknown, [string]>(
 			"UPDATE routine_webhook_secrets SET accept_bare_secret = 0 WHERE routine_id = ?",
 		)
 		.run(routineId);
@@ -307,14 +307,14 @@ export function recordWebhookDelivery(routineId: string, bareSecret?: string): v
 	const now = nowIso();
 	if (bareSecret === undefined) {
 		getDb()
-			.prepare<unknown, [string, string]>(
+			.query<unknown, [string, string]>(
 				"UPDATE routine_webhook_secrets SET last_used_at = ? WHERE routine_id = ?",
 			)
 			.run(now, routineId);
 		return;
 	}
 	getDb()
-		.prepare<unknown, [string, string, string, string]>(
+		.query<unknown, [string, string, string, string]>(
 			`UPDATE routine_webhook_secrets
 			 SET last_used_at = ?, last_bare_secret_at = ?, signing_key = COALESCE(signing_key, ?)
 			 WHERE routine_id = ?`,
@@ -342,7 +342,7 @@ export function finalizeRun(
 	},
 ): void {
 	getDb()
-		.prepare<
+		.query<
 			unknown,
 			[
 				string,
@@ -395,7 +395,7 @@ export function insertAbortedRun(input: {
 	const runId = `run_${id().toLowerCase().slice(0, 18)}`;
 	const now = nowIso();
 	getDb()
-		.prepare<
+		.query<
 			unknown,
 			[string, string, string, string, string | null, string, string, string | null]
 		>(

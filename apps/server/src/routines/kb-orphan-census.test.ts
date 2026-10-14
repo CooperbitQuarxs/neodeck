@@ -15,6 +15,8 @@ import { RoutinesRunner } from "../routines-runner.ts";
 import { loadTemplate } from "./templates.ts";
 
 const savedRoot = process.env.NPI_DECK_KB_ROOT;
+const savedHome = process.env.NPI_DECK_HOME;
+const savedDbPath = process.env.NPI_DECK_DB_PATH;
 let home = "";
 let runner: RoutinesRunner | undefined;
 
@@ -43,15 +45,20 @@ function setup(kb: Record<string, string>): string {
 }
 
 afterEach(async () => {
-	await runner?.dispose();
-	closeDb();
-	delete process.env.NPI_DECK_HOME;
-	delete process.env.NPI_DECK_DB_PATH;
-	if (savedRoot === undefined) delete process.env.NPI_DECK_KB_ROOT;
-	else process.env.NPI_DECK_KB_ROOT = savedRoot;
-	if (home) fs.rmSync(home, { recursive: true, force: true });
-	home = "";
-	runner = undefined;
+	try {
+		await runner?.dispose();
+	} finally {
+		closeDb();
+		if (savedHome === undefined) delete process.env.NPI_DECK_HOME;
+		else process.env.NPI_DECK_HOME = savedHome;
+		if (savedDbPath === undefined) delete process.env.NPI_DECK_DB_PATH;
+		else process.env.NPI_DECK_DB_PATH = savedDbPath;
+		if (savedRoot === undefined) delete process.env.NPI_DECK_KB_ROOT;
+		else process.env.NPI_DECK_KB_ROOT = savedRoot;
+		if (home) fs.rmSync(home, { recursive: true, force: true });
+		home = "";
+		runner = undefined;
+	}
 });
 
 const reports = () => listInbox({}).filter((i) => i.source === "routine:kb-orphan-census");
