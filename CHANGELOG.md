@@ -45,6 +45,7 @@ All notable changes to NPI deck (a fork of bjb2/omp-deck; entries before the for
 
 ### Fixed
 
+- Models configuration tests compare the backup's canonical path when the temporary directory is symlinked, including macOS `/var` paths (#146). Verified by GPT-6.1 Sol.
 - Routine tests restore inherited backend-home and database overrides after teardown, including failed setup, so later tests retain the configured NeoPi backend (#151).
 - The pinned NeoPi compiler launcher decodes the generated config's JSON-escaped path and resolves the compiler inside that tree's executable directory, including Windows executable shims (#145). Implemented by Claude Sonnet 5.5 and GPT-6.1 Sol.
 - Routine foundations tests use the operating system's temporary directory instead of `/home/shayna/tmp`, so setup does not depend on the developer's home being writable (#144). Implemented by Claude Sonnet 5.5; verified by GPT-6.1 Sol.
