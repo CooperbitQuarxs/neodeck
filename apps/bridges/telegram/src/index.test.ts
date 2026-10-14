@@ -5,7 +5,7 @@ import { DeckClient } from "./deck.ts";
 import { TelegramApi, type TelegramMessage } from "./telegram.ts";
 import { TelegramBridgeStore } from "./store.ts";
 import type { TelegramBridgeConfig } from "./config.ts";
-import type { IntakeCard } from "./commands.ts";
+import { parseProperties, type IntakeCard } from "./commands.ts";
 
 const config: TelegramBridgeConfig = {
 	botToken: "offline", allowedUserIds: new Set(["7"]), allowedChatIds: new Set(["-10"]), requireMention: true,
@@ -18,6 +18,7 @@ function harness(policy: TelegramBridgeConfig = config) {
 	const events: string[] = [];
 	const replies: string[] = [];
 	const typingThreads: (number | undefined)[] = [];
+	const filedCards: IntakeCard[] = [];
 	let downloads = 0;
 	let promptError = false;
 	class Transport extends TelegramApi {
@@ -45,13 +46,14 @@ function harness(policy: TelegramBridgeConfig = config) {
 		override async promptSession() { events.push("prompt"); if (promptError) throw new Error("turn failed"); return "Finished"; }
 		override async fileCards(cards: IntakeCard[]) {
 			events.push("file");
+			filedCards.push(...cards);
 			return cards.map((card, index) => ({ ...card, displayId: index + 1 })) as Task[];
 		}
 	}
 	const store = new TelegramBridgeStore(":memory:");
 	const deck = new Deck(config.deckApiBase, config.deckWsUrl);
 	const bridge = new TelegramBridge(policy, { telegram: new Transport("offline"), deck, store, identity: { id: 99, username: "deck_bot" } });
-	return { events, replies, typingThreads, deck, store, bridge, downloads: () => downloads, failPrompt: () => { promptError = true; }, send: (input: TelegramMessage) => bridge.dispatch({ update_id: input.message_id, message: input }) };
+	return { events, replies, typingThreads, filedCards, deck, store, bridge, downloads: () => downloads, failPrompt: () => { promptError = true; }, send: (input: TelegramMessage) => bridge.dispatch({ update_id: input.message_id, message: input }) };
 }
 
 describe("attachment intake boundaries", () => {
@@ -99,6 +101,24 @@ describe("attachment intake boundaries", () => {
 			await h.send({ ...message, chat: { id: 7, type: "private" }, document: { file_id: "not-downloaded" } });
 			expect(h.replies[0]).toContain("not downloaded or processed");
 			expect(h.events).toEqual(["reply"]);
+		} finally { h.bridge.close(); }
+	});
+});
+
+describe("mention-gated task contents", () => {
+	test("quoted usernames survive text and caption intake, including card ownership", async () => {
+		const h = harness();
+		try {
+			const prose = "Investigate the literal '@deck_bot' without editing it";
+			await h.send({ ...message, text: prose });
+			await h.send({ ...message, message_id: 2, caption: "---\nread-only: true\nowner: '@deck_bot'\n---\nResearch the '@deck_bot' identifier", reply_to_message: { from: { id: 99 } } });
+			expect(h.filedCards[0]).toEqual({ title: prose, body: prose });
+			const body = h.filedCards[1]!.body!;
+			const properties = parseProperties(body.slice(4, body.indexOf("\n---", 4)));
+			expect(properties.owner).toBe("@deck_bot");
+			expect(properties["read-only"]).toBe(true);
+			expect(h.filedCards[1]!.title).toBe("Research the '@deck_bot' identifier");
+			expect(body).toContain("Research the '@deck_bot' identifier");
 		} finally { h.bridge.close(); }
 	});
 });

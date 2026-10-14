@@ -12,6 +12,8 @@ The standalone supervised Bun bridge connects a separate Telegram bot to the alw
 
 Long polling requires outbound HTTPS, not a public inbound port. Telegram failure remains isolated in the bridge process. Settings provides running/crashed status and logs. The bot identity is fetched from Telegram at bridge startup; command suffixes for another bot are ignored. Commands are registered in the bot's menu.
 
+Bot mentions are admission signals, not content edits. Accepted task text and captions retain bot usernames, including quoted identifiers and values inside card front matter.
+
 **Allowed topics** (`TELEGRAM_ALLOWED_TOPICS`) and **Ignored topics** (`TELEGRAM_IGNORED_THREADS`) accept comma-separated positive topic IDs or scoped `negative-chat-ID:topic-ID` pairs. A bare ID applies across allowed groups. Nonempty allowed-topics restricts groups to those topics; ignored-topics always wins for routable topics, even over commands, wake patterns and free response. Forum General is `1`. Allowed-topics also treats an absent thread in a plain group as `1`, but ignored-topics does not filter plain groups' absent/reply-anchor threads. These filters do not apply to DMs. No invocation option bypasses sender AND group authorization. Non-invoking conversation is dropped, not stored as context.
 
 ## Inbox and kanban

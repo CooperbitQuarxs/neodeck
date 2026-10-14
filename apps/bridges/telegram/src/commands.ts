@@ -39,13 +39,12 @@ export function invokedText(message: TelegramMessage, config: TelegramBridgeConf
 	const matchesTopic = (topics: Set<string>) => topics.has(topic) || topics.has(scopedTopic);
 	if ((thread !== undefined && matchesTopic(config.ignoredTopics)) || (config.allowedTopics.size && !matchesTopic(config.allowedTopics))) return undefined;
 	if (/^\//.test(text)) return parseCommand(text, bot.username) ? text : undefined;
-	const mention = new RegExp(`@${bot.username}(?![a-z0-9_])`, "ig");
+	const mention = new RegExp(`@${bot.username}(?![a-z0-9_])`, "i");
 	const mentioned = mention.test(text);
-	mention.lastIndex = 0;
 	const freeResponse = config.freeResponseChatIds.has(String(message.chat.id)) || config.freeResponseTopics.has(scopedTopic);
 	const wakeWord = config.mentionPatterns.some((pattern) => pattern.test(text));
 	if (config.requireMention && !freeResponse && !wakeWord && !mentioned && message.reply_to_message?.from?.id !== bot.id) return undefined;
-	return text.replace(mention, "").trim();
+	return text;
 }
 
 export interface RetainedSession { mapping: ChatSessionMapping; title?: string }

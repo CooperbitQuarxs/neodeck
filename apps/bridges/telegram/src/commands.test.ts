@@ -27,7 +27,6 @@ describe("command parsing and authorization", () => {
 	});
 	test("drops ambient conversation and admits only mentions or replies by default", () => {
 		expect(invokedText({ ...group, text: "ordinary chat" }, config, bot)).toBeUndefined();
-		expect(invokedText({ ...group, text: "@deck_bot investigate @deck_bot" }, config, bot)).toBe("investigate");
 		expect(invokedText({ ...group, text: "@deck_bot_other investigate" }, config, bot)).toBeUndefined();
 		expect(invokedText({ ...group, text: "follow up", reply_to_message: { from: { id: 99 } } }, config, bot)).toBe("follow up");
 		expect(invokedText({ ...group, text: "follow up", reply_to_message: { from: { id: 100 } } }, config, bot)).toBeUndefined();

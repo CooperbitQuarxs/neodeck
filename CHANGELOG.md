@@ -46,6 +46,7 @@ All notable changes to NPI deck (a fork of bjb2/omp-deck; entries before the for
 
 ### Fixed
 
+- Telegram mention gating preserves bot usernames in task text, captions and card metadata instead of deleting quoted identifiers or ownership values (#103).
 - Unsupported Telegram attachments now receive their explanation for every captioned command, including `/help`; commands without arguments still run after the notice (#103).
 - **Telegram invocation and session parity** (#103). Add regex wake patterns, per-chat/topic free response and topic allow/ignore controls; sender and group authorization still run first. Retained sessions support title/ID search and number/title selection, and explicit chat refreshes topic-aware typing. Unsupported attachments now receive an explanation before their captions are processed. The Hermes capability matrix states the remaining exclusions without claiming unverified native session or web-approval equivalents.
 - **The Skills list shows a skill's new description after SKILL.md changes, and the first skill in a fresh agent dir appears live** (#32). NeoPi caches every SKILL.md it reads, so after an edit on disk the listing kept the old frontmatter until the deck restarted; the skills watcher now drops that cache before each `skills_changed` broadcast. A watched root that did not exist at launch (a fresh `~/.omp/agent/skills/`) used to be skipped for good; it is now watched through its nearest existing parent and armed when it appears, and a root that is deleted goes back to waiting.
