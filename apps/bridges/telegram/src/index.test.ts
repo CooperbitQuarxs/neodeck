@@ -73,6 +73,17 @@ describe("attachment intake boundaries", () => {
 			expect(h.downloads()).toBe(0);
 		} finally { h.bridge.close(); }
 	});
+	test("a video captioned /help receives the attachment notice and still shows help", async () => {
+		const h = harness();
+		try {
+			await h.send({ ...message, chat: { id: 7, type: "private" }, caption: "/help", video: { file_id: "not-downloaded" } });
+			expect(h.replies[0]).toContain("video attachment not downloaded or processed");
+			expect(h.replies[0]).toContain("Only the caption text");
+			expect(h.replies[1]).toContain("/help or /commands");
+			expect(h.events).toEqual(["reply", "reply"]);
+			expect(h.downloads()).toBe(0);
+		} finally { h.bridge.close(); }
+	});
 	test("unauthorized, ambient and ignored captions have no transport, session or card effects", async () => {
 		const h = harness({ ...config, ignoredTopics: new Set(["-10:43"]) });
 		try {

@@ -85,9 +85,9 @@ export class TelegramBridge {
 		const command = parseCommand(text, this.bot!.username);
 		const args = command?.args ?? text;
 		const unsupported = unsupportedAttachments(message);
-		if (unsupported.length && (!command || ["chat", "task", "capture"].includes(command.name))) {
-			await this.say(message, `${unsupported.join(", ")} attachment not downloaded or processed.${args ? " Only the caption text will be used." : " Send task text, or /chat with a photo for image analysis."}`);
-			if (!args && !message.photo?.length) return;
+		if (unsupported.length) {
+			await this.say(message, `${unsupported.join(", ")} attachment not downloaded or processed.${text ? " Only the caption text will be used." : " Send task text, or /chat with a photo for image analysis."}`);
+			if (!text && !message.photo?.length) return;
 		}
 		switch (command?.name) {
 			case "start": case "help": case "commands": return this.say(message, HELP);
