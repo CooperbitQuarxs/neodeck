@@ -114,7 +114,7 @@ if (!fixtureRoot) {
 
  test("linked worktree runs there and survives completion; readonly SDK rejects actual file/exec/subagent calls", async () => {
   const writable = await create("WRITE linked", { worktree: linked }); await post(`/tasks/${writable.id}/assign`); const complete = await finish(writable);
-  expect(complete.run?.error).toBeUndefined(); expect(complete.run?.status).toBe("completed"); expect(complete.run?.cwd).toBe(realpathSync(linked)); expect(complete.run?.ownedWorktree).toBe(false); expect(readFileSync(path.join(linked, "result.txt"), "utf8")).toBe("Actual agent-created result");
+  expect(complete.run?.error).toBeUndefined(); expect(complete.run?.status).toBe("completed"); expect(realpathSync.native(complete.run!.cwd!)).toBe(realpathSync.native(linked)); expect(complete.run?.ownedWorktree).toBe(false); expect(readFileSync(path.join(linked, "result.txt"), "utf8")).toBe("Actual agent-created result");
   const readonly = await create("DENIAL", { "read-only": true, worktree: linked }); await post(`/tasks/${readonly.id}/assign`); const research = await finish(readonly);
   expect(research.run?.status).toBe("completed"); expect(existsSync(linked)).toBe(true); expect(existsSync(path.join(linked, "forbidden.txt"))).toBe(false); expect(readFileSync(path.join(linked, "source.txt"))).toEqual(linkedSource);
   for (const name of forbiddenNames.filter(name => /read|grep|glob/.test(name))) expect(denied.get(`call_${name}`)).not.toContain("Original fixture source");

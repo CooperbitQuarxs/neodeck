@@ -20,14 +20,14 @@ export async function cardGit(cwd: string, args: string[], signal?: AbortSignal)
 
 export async function validateLinkedWorktree(linked: string, signal?: AbortSignal): Promise<string> {
 	if (!path.isAbsolute(linked)) throw new Error("linked worktree must be an absolute path");
-	const cwd = realpathSync(linked);
-	const root = realpathSync(await cardGit(cwd, ["rev-parse", "--show-toplevel"], signal));
+	const cwd = realpathSync.native(linked);
+	const root = realpathSync.native(await cardGit(cwd, ["rev-parse", "--show-toplevel"], signal));
 	if (root !== cwd) throw new Error("linked worktree must name the git worktree root");
 	const registered = await cardGit(cwd, ["worktree", "list", "--porcelain", "-z"], signal);
 	for (const entry of registered.split("\0")) {
 		if (!entry.startsWith("worktree ")) continue;
 		const directory = entry.slice("worktree ".length);
-		if (existsSync(directory) && realpathSync(directory) === cwd) return cwd;
+		if (existsSync(directory) && realpathSync.native(directory) === cwd) return cwd;
 	}
 	throw new Error("linked worktree is not registered with git");
 }
