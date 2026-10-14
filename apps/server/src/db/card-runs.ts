@@ -5,7 +5,7 @@ import { broadcastBus } from "../broadcast-bus.ts";
 export interface CardRunOwnership { repository?: string; ownedWorktreePath?: string; runtimePath?: string }
 function notify(): void { broadcastBus.broadcast({ type: "tasks_changed" }); }
 export function saveCardRun(run: CardRun, ownership?: CardRunOwnership): void {
-	getDb().prepare("INSERT INTO card_runs (id, task_id, payload, repository, owned_worktree_path, runtime_path) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET payload=excluded.payload, repository=CASE WHEN ? THEN excluded.repository ELSE card_runs.repository END, owned_worktree_path=CASE WHEN ? THEN excluded.owned_worktree_path ELSE card_runs.owned_worktree_path END, runtime_path=CASE WHEN ? THEN excluded.runtime_path ELSE card_runs.runtime_path END")
+	getDb().query("INSERT INTO card_runs (id, task_id, payload, repository, owned_worktree_path, runtime_path) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET payload=excluded.payload, repository=CASE WHEN ? THEN excluded.repository ELSE card_runs.repository END, owned_worktree_path=CASE WHEN ? THEN excluded.owned_worktree_path ELSE card_runs.owned_worktree_path END, runtime_path=CASE WHEN ? THEN excluded.runtime_path ELSE card_runs.runtime_path END")
 		.run(run.id, run.taskId, JSON.stringify(run), ownership?.repository ?? null, ownership?.ownedWorktreePath ?? null, ownership?.runtimePath ?? null, ownership === undefined ? 0 : 1, ownership === undefined ? 0 : 1, ownership === undefined ? 0 : 1);
 	afterCommit(notify);
 }

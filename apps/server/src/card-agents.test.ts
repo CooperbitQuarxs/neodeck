@@ -1,5 +1,5 @@
 import { afterAll, expect, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -40,6 +40,7 @@ if (!fixtureRoot) {
   if (result.exitCode !== 0) throw new Error(result.stderr.toString()); return result.stdout.toString().trim();
  }
  git("init"); writeFileSync(path.join(project, "source.txt"), "Original fixture source\n"); git("add", "."); git("-c", "user.name=Card Fixture", "-c", "user.email=fixture@localhost", "-c", "commit.gpgsign=false", "commit", "-m", "fixture"); git("worktree", "add", "--detach", linked, "HEAD");
+ const linkedSource = readFileSync(path.join(linked, "source.txt"));
  const requests: Array<Record<string, any>> = []; const denied = new Map<string, string>(); const observedWrites = new Map<string, string>(); let held = false;
  const tokenGates = new Map<string, { reached: boolean; fail: boolean; release: () => void; promise: Promise<void> }>();
  function tokenGate(title: string) {
@@ -113,9 +114,9 @@ if (!fixtureRoot) {
 
  test("linked worktree runs there and survives completion; readonly SDK rejects actual file/exec/subagent calls", async () => {
   const writable = await create("WRITE linked", { worktree: linked }); await post(`/tasks/${writable.id}/assign`); const complete = await finish(writable);
-  expect(complete.run?.status).toBe("completed"); expect(complete.run?.cwd).toBe(linked); expect(complete.run?.ownedWorktree).toBe(false); expect(readFileSync(path.join(linked, "result.txt"), "utf8")).toBe("Actual agent-created result");
+  expect(complete.run?.error).toBeUndefined(); expect(complete.run?.status).toBe("completed"); expect(complete.run?.cwd).toBe(realpathSync(linked)); expect(complete.run?.ownedWorktree).toBe(false); expect(readFileSync(path.join(linked, "result.txt"), "utf8")).toBe("Actual agent-created result");
   const readonly = await create("DENIAL", { "read-only": true, worktree: linked }); await post(`/tasks/${readonly.id}/assign`); const research = await finish(readonly);
-  expect(research.run?.status).toBe("completed"); expect(existsSync(linked)).toBe(true); expect(existsSync(path.join(linked, "forbidden.txt"))).toBe(false); expect(readFileSync(path.join(linked, "source.txt"), "utf8")).toBe("Original fixture source\n");
+  expect(research.run?.status).toBe("completed"); expect(existsSync(linked)).toBe(true); expect(existsSync(path.join(linked, "forbidden.txt"))).toBe(false); expect(readFileSync(path.join(linked, "source.txt"))).toEqual(linkedSource);
   for (const name of forbiddenNames.filter(name => /read|grep|glob/.test(name))) expect(denied.get(`call_${name}`)).not.toContain("Original fixture source");
   expect(denied.get("call_card_read")).toContain("Original fixture source");
  }, 80_000);
@@ -133,7 +134,7 @@ if (!fixtureRoot) {
    for (const name of forbiddenNames) expect(ends.find(event => event.toolName === name)?.isError).toBe(true);
    const read = ends.find(event => event.toolName === "card_read");
    expect(read?.isError).toBe(false); expect(JSON.stringify(read.result)).toContain("Original fixture source");
-   expect(existsSync(path.join(linked, "forbidden.txt"))).toBe(false); expect(readFileSync(path.join(linked, "source.txt"), "utf8")).toBe("Original fixture source\n");
+   expect(existsSync(path.join(linked, "forbidden.txt"))).toBe(false); expect(readFileSync(path.join(linked, "source.txt"))).toEqual(linkedSource);
   } finally { clearTimeout(timeout); await terminateOwned(proc, 0); }
  }, 50_000);
 

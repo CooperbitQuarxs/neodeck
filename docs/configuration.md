@@ -131,8 +131,10 @@ Research the linked source and report the result.
 
 `read-only` must be a boolean. `worktree`, `model` and `role` must be nonempty
 strings; a linked worktree must be an existing absolute registered git-worktree
-root. A card's explicit `model` or `role` overrides the default selector. Other
-properties, including nested mappings and arrays, remain part of its body.
+root; the run records its canonical directory, including when the supplied path
+uses a filesystem alias or Git's platform-specific path spelling. A card's
+explicit `model` or `role` overrides the default selector. Other properties,
+including nested mappings and arrays, remain part of its body.
 
 Without `worktree`, execution creates a fresh detached temporary worktree from
 the card's explicit project `cwd`, or the configured default working directory
