@@ -155,6 +155,8 @@ interface GraphCache {
 	backlinks: Map<string, KbBacklink[]>;
 	unresolvedCount: number;
 	byPath: Map<string, KbGraphNode>;
+	/** Literal substring candidate index; stores note paths, never note bodies. */
+	bodyPostings: Map<string, Set<string>>;
 }
 interface FileRecord {
 	relPath: string; // forward-slash kb-relative
@@ -475,9 +477,8 @@ export class KbService {
 
 	/**
 	 * Full wiki-link graph + frontmatter-tag aggregation. Built lazily on
-	 * first request and cached until the watcher invalidates the index. For
-	 * the v1 scale (~600 visible nodes) the build cost is dominated by file
-	 * reads — runs in under a second even cold.
+	 * first request and cached until the watcher invalidates the index.
+	 * Initialization reads visible bodies once, also building search postings.
 	 *
 	 * Caps the response at GRAPH_MAX_NODES; sets `truncated: true` when the
 	 * cap fires so the UI can warn the user.
@@ -526,101 +527,109 @@ export class KbService {
 	}
 
 	/**
-	 * Hybrid scored search across the indexed kb. Cheap enough at v1 scale
-	 * (~1k files) to run end-to-end on every request; we don't pre-build an
-	 * inverted index yet. Scoring layers:
+	 * Hybrid scored search across cached metadata and literal body candidates.
+	 * Scoring layers:
 	 *
 	 *   stem   filename matches the query (100 exact, 80 prefix, 60 contains)
 	 *   title  frontmatter `name` matches (60 exact, 40 prefix, 25 contains)
 	 *   tag    one of `frontmatter.tags` matches (50 exact, 20 contains)
 	 *   body   substring hit in the body (10 base + 1 per extra hit, capped)
 	 *
-	 * Body matches read each file once (this can grow expensive — at 1k
-	 * files of 9KB avg that's 9MB which still runs in ~50ms cold; we'll
-	 * revisit if the kb grows past 5k or queries get hammered). The first
-	 * body hit is centered into a 160-char snippet.
+	 * Body candidates come from a generation-scoped 1/2/3-code-unit inverted
+	 * index built during graph initialization. Only candidates are reopened
+	 * to verify literal hits and produce the original 160-char snippet.
 	 */
 	async search(query: string, limit: number, entryOnly = false): Promise<KbSearchResponse> {
-		await this.ensureIndex();
-		const q = query.trim().toLowerCase();
-		if (!q) return { query, results: [], totalMatches: 0, truncated: false };
-		const cap = Math.max(1, Math.min(limit | 0 || 20, 100));
+		for (;;) {
+			await this.ensureIndex();
+			const q = query.trim().toLowerCase();
+			if (!q) return { query, results: [], totalMatches: 0, truncated: false };
+			const cap = Math.max(1, Math.min(limit | 0 || 20, 100));
+			// Full-text and reverse navigation share one single-flight initialization.
+			const graph = entryOnly ? this.graphCache : await this.indexedGraph();
+			const generation = this.generation;
+			if (graph && graph.generation !== generation) continue;
 
-		type Acc = { score: number; matchKind: KbSearchMatchKind; snippet: string };
-		const scored = new Map<string, Acc>();
+			type Acc = { score: number; matchKind: KbSearchMatchKind; snippet: string };
+			const scored = new Map<string, Acc>();
 
-		const bump = (relPath: string, score: number, kind: KbSearchMatchKind, snippet: string): void => {
-			const prev = scored.get(relPath);
-			if (!prev) {
-				scored.set(relPath, { score, matchKind: kind, snippet });
-				return;
+			const bump = (relPath: string, score: number, kind: KbSearchMatchKind, snippet: string): void => {
+				const prev = scored.get(relPath);
+				if (!prev) {
+					scored.set(relPath, { score, matchKind: kind, snippet });
+					return;
+				}
+				prev.score += score;
+				// Promote to a stronger match kind if this one outranks the existing.
+				if (KIND_RANK[kind] < KIND_RANK[prev.matchKind]) {
+					prev.matchKind = kind;
+				}
+				if (!prev.snippet && snippet) prev.snippet = snippet;
+			};
+
+			// Pass 1 — stem / title / tag against the cached index. No disk reads.
+			for (const r of this.records) {
+				const stem = r.stem; // already lowercased
+				if (stem === q) bump(r.relPath, 100, "stem", "");
+				else if (stem.startsWith(q)) bump(r.relPath, 80, "stem", "");
+				else if (stem.includes(q)) bump(r.relPath, 60, "stem", "");
 			}
-			prev.score += score;
-			// Promote to a stronger match kind if this one outranks the existing.
-			if (KIND_RANK[kind] < KIND_RANK[prev.matchKind]) {
-				prev.matchKind = kind;
+
+			// Header metadata is indexed once; entry searches never open note bodies.
+			for (const node of this.records) {
+				const title = node.title.toLowerCase();
+				if (title === q) bump(node.relPath, 60, "title", "");
+				else if (title.startsWith(q)) bump(node.relPath, 40, "title", "");
+				else if (title.includes(q)) bump(node.relPath, 25, "title", "");
+				for (const tag of node.tags) {
+					const t = tag.toLowerCase();
+					if (t === q) bump(node.relPath, 50, "tag", "");
+					else if (t.includes(q)) bump(node.relPath, 20, "tag", "");
+				}
 			}
-			if (!prev.snippet && snippet) prev.snippet = snippet;
-		};
 
-		// Pass 1 — stem / title / tag against the cached index. No disk reads.
-		for (const r of this.records) {
-			const stem = r.stem; // already lowercased
-			if (stem === q) bump(r.relPath, 100, "stem", "");
-			else if (stem.startsWith(q)) bump(r.relPath, 80, "stem", "");
-			else if (stem.includes(q)) bump(r.relPath, 60, "stem", "");
-		}
-
-		// Header metadata is indexed once; entry searches never open note bodies.
-		const graph = entryOnly ? this.graphCache : await this.indexedGraph();
-		for (const node of this.records) {
-			const title = node.title.toLowerCase();
-			if (title === q) bump(node.relPath, 60, "title", "");
-			else if (title.startsWith(q)) bump(node.relPath, 40, "title", "");
-			else if (title.includes(q)) bump(node.relPath, 25, "title", "");
-			for (const tag of node.tags) {
-				const t = tag.toLowerCase();
-				if (t === q) bump(node.relPath, 50, "tag", "");
-				else if (t.includes(q)) bump(node.relPath, 20, "tag", "");
+			// Intersect postings, not every body. Short queries use exact 1/2-unit
+			// postings; longer queries verify trigram candidates against the file.
+			for (const relPath of entryOnly ? [] : bodyCandidates(graph!.bodyPostings, q)) {
+				const r = this.byRelPath.get(relPath);
+				if (!r || !(await this.safeExisting(r.absPath))) continue;
+				let raw: string;
+				try { raw = await readFile(r.absPath, "utf8"); } catch { continue; }
+				const lc = raw.toLowerCase();
+				const first = lc.indexOf(q);
+				if (first < 0) continue;
+				let extra = 0;
+				let cursor = lc.indexOf(q, first + q.length);
+				while (cursor >= 0 && extra < 20) {
+					extra += 1;
+					cursor = lc.indexOf(q, cursor + q.length);
+				}
+				bump(r.relPath, 10 + extra, "body", makeSnippet(raw, first, q.length));
 			}
-		}
 
-		// Graph traversal searches entry metadata only; the cockpit's full-text mode is explicit.
-		for (const r of entryOnly ? [] : this.records) {
-			let raw: string;
-			try { raw = await readFile(r.absPath, "utf8"); } catch { continue; }
-			const lc = raw.toLowerCase();
-			const first = lc.indexOf(q);
-			if (first < 0) continue;
-			let extra = 0;
-			let cursor = lc.indexOf(q, first + q.length);
-			while (cursor >= 0 && extra < 20) {
-				extra += 1;
-				cursor = lc.indexOf(q, cursor + q.length);
+			// Materialize results sorted by score desc, then path asc for stability.
+			const all: KbSearchResult[] = [];
+			for (const [relPath, acc] of scored) {
+				const record = this.byRelPath.get(relPath);
+				if (!record) continue;
+				const node = graph?.byPath.get(relPath);
+				const dir = record.dir.split("/")[0] ?? "";
+				all.push({
+					path: relPath,
+					title: node?.title ?? record.title,
+					dir,
+					score: acc.score,
+					matchKind: acc.matchKind,
+					snippet: acc.snippet,
+				});
 			}
-			bump(r.relPath, 10 + extra, "body", makeSnippet(raw, first, q.length));
+			all.sort((a, b) => b.score - a.score || a.path.localeCompare(b.path));
+			// A watcher event during candidate reads must not publish mixed generations.
+			if (generation !== this.generation) continue;
+			const truncated = all.length > cap;
+			const results = truncated ? all.slice(0, cap) : all;
+			return { query, results, totalMatches: all.length, truncated };
 		}
-
-		// Materialize results sorted by score desc, then path asc for stability.
-		const all: KbSearchResult[] = [];
-		for (const [relPath, acc] of scored) {
-			const record = this.byRelPath.get(relPath);
-			if (!record) continue;
-			const node = graph?.byPath.get(relPath);
-			const dir = record.dir.split("/")[0] ?? "";
-			all.push({
-				path: relPath,
-				title: node?.title ?? record.stem,
-				dir,
-				score: acc.score,
-				matchKind: acc.matchKind,
-				snippet: acc.snippet,
-			});
-		}
-		all.sort((a, b) => b.score - a.score || a.path.localeCompare(b.path));
-		const truncated = all.length > cap;
-		const results = truncated ? all.slice(0, cap) : all;
-		return { query, results, totalMatches: all.length, truncated };
 	}
 
 	/**
@@ -631,6 +640,9 @@ export class KbService {
 	 *
 	 * Unresolved wikilinks bump the global counter only; they don't get a
 	 * placeholder node (the UI can prompt-create via the existing flow).
+	 * Complete reverse navigation necessarily reads all visible bodies once
+	 * per generation: an inbound link can occur in any note. The same pass
+	 * builds search postings; subsequent hops reuse edges, not body content.
 	 */
 	private async buildGraph(): Promise<GraphCache> {
 		const t0 = performance.now();
@@ -640,6 +652,7 @@ export class KbService {
 		const edges: KbGraphEdge[] = [];
 		const backlinks = new Map<string, KbBacklink[]>();
 		const edgeSeen = new Set<string>();
+		const bodyPostings = new Map<string, Set<string>>();
 		let unresolvedCount = 0;
 
 		// Pass 1: seed nodes (so unreached files still appear as orphans).
@@ -656,10 +669,9 @@ export class KbService {
 			});
 		}
 
-		// Pass 2: read each file in parallel batches, parse frontmatter (for
-		// tags + title), extract wikilinks. Chunked at 32 to avoid opening
-		// too many fds on Windows where ENFILE shows up around 200+. At v1
-		// scale (805 files) this brings cold build from ~10s down to ~1s.
+		// Read each file in parallel batches; parse metadata and wikilinks and
+		// index literal search candidates. Limit concurrent full-body reads to
+		// 32 rather than opening an unbounded number of files.
 		const CHUNK = 32;
 		for (let i = 0; i < records.length; i += CHUNK) {
 			const chunk = records.slice(i, i + CHUNK);
@@ -673,6 +685,7 @@ export class KbService {
 			);
 			for (const { r, raw } of reads) {
 				if (raw === undefined) continue;
+				indexBody(bodyPostings, r.relPath, raw.toLowerCase());
 			const { frontmatter, body } = parseFrontmatter(raw);
 			const node = nodes.get(r.relPath);
 			if (!node) continue;
@@ -718,6 +731,7 @@ export class KbService {
 			backlinks,
 			unresolvedCount,
 			byPath: nodes,
+			bodyPostings,
 		};
 	}
 	// ─── internals ───────────────────────────────────────────────────────
@@ -1042,6 +1056,49 @@ export class KbService {
 }
 
 // ─── helpers ───────────────────────────────────────────────────────────────
+
+/**
+ * At most 3L posting memberships for L lowercased UTF-16 units across the
+ * corpus (duplicates collapse per note). No bodies or per-query results are
+ * retained. Indexing is O(L), alongside the required reverse-edge body pass.
+ */
+function indexBody(postings: Map<string, Set<string>>, relPath: string, text: string): void {
+	for (let i = 0; i < text.length; i++) {
+		for (let length = 1; length <= 3 && i + length <= text.length; length++) {
+			const gram = text.slice(i, i + length);
+			let paths = postings.get(gram);
+			if (!paths) {
+				paths = new Set<string>();
+				postings.set(gram, paths);
+			}
+			paths.add(relPath);
+		}
+	}
+}
+
+function bodyCandidates(postings: Map<string, Set<string>>, query: string): string[] {
+	const length = Math.min(3, query.length);
+	const grams = new Set<string>();
+	const lists: Set<string>[] = [];
+	for (let i = 0; i + length <= query.length; i++) {
+		const gram = query.slice(i, i + length);
+		if (grams.has(gram)) continue;
+		grams.add(gram);
+		const paths = postings.get(gram);
+		if (!paths) return [];
+		lists.push(paths);
+	}
+	// Enumerate the smallest posting, not the inventory; retain only paths
+	// present in every posting. Ordering/occurrences are verified on disk.
+	lists.sort((a, b) => a.size - b.size);
+	const smallest = lists[0];
+	if (!smallest) return [];
+	const candidates: string[] = [];
+	for (const relPath of smallest) {
+		if (lists.every((paths) => paths.has(relPath))) candidates.push(relPath);
+	}
+	return candidates;
+}
 
 function normalizeRel(p: string): string {
 	if (!p) return "";

@@ -48,6 +48,20 @@ server-bound project identity; read-only agent capabilities cannot write.
 First-run setup selects the vault location without populating it. Direct file and
 starter-scaffold HTTP writes are disabled; ask a project agent to create notes.
 
+The current authority is a server-resolved Git project, shared by its linked
+worktrees. A subject-only agent without a Git project has no write authority:
+it cannot choose a subject namespace in request data. This deliberately fails
+closed because no trusted subject-assignment registry exists yet; it does not
+claim support for independently assigned non-project subject areas.
+
+Native card-agent bearers are produced and revoked by the CardAgentRunner
+consumer in #101, not by the KB producer in #102. The consumer must mount the
+KB router with its live token resolver. Its actual native-worker regression
+checks distinct concurrent/run/reassignment tokens and server denial after
+completion, provider failure, cancellation, shutdown and a new in-process
+runner's recovery. The provider is a local fixture; process-crash recovery is
+not simulated.
+
 ### `/task add <title>`
 
 Files a new backlog task in the current workspace. Output: `Created T-32:

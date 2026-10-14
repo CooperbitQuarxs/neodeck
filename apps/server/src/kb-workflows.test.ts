@@ -52,7 +52,10 @@ afterEach(async () => {
 test("multi-hop traversal reuses entry and reverse-edge indexes until explicit invalidation", async () => {
 	const entry = await readKb(kb, { operation: "search", query: "Broad topic" }) as any;
 	expect(entry.results[0].path).toBe("broad.md");
+	expect(entry.results[0].title).toBe("Broad topic");
 	await kb.getBacklinks("broad.md");
+	const warmEntry = await readKb(kb, { operation: "search", query: "Broad topic" }) as any;
+	expect(warmEntry.results).toEqual(entry.results);
 	await note("projects/neodeck/learned.md", "# Changed learning\n[[target]]\n");
 	const first = await readKb(kb, { operation: "links", path: entry.results[0].path }) as any;
 	const second = await readKb(kb, { operation: "links", path: first.links[0].resolved }) as any;
