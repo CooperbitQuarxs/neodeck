@@ -7,6 +7,7 @@ import { routineAgentCommand, routineAgentSupportsMcpAllowlist } from "../agent-
 import { renderString } from "../template.ts";
 import { checkStructuredOutput, isAnswerFault } from "./structured-output.ts";
 import type { RunContext, StepResult } from "../types.ts";
+import { kbPrompt } from "../../kb-workflows.ts";
 
 const MAX_EXCERPT = 8 * 1024;
 const MAX_PROMPT_CHARS = 30 * 1024;
@@ -208,6 +209,7 @@ export async function executeAgentStep(
 		};
 	};
 	try {
+		prompt = await kbPrompt(prompt, step.kb_inputs?.map(value => renderString(value, context as unknown as Record<string, unknown>)));
 		const command = pinnedCommand ?? routineAgentCommand([]);
 		const args = ["-p", "--mode", "json", "--no-session", ...(step.model ? ["--model", step.model] : []),
 			...skillsFlags(step),

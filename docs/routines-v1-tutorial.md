@@ -64,7 +64,7 @@ templating).
 | `agent`     | prompt the omp SDK; costs LLM tokens                                                     |
 | `write`     | write a templated string to a file (overwrite or append)                                 |
 | `http`      | GET / POST / PUT / PATCH / DELETE against a URL; internal calls get an HMAC bearer token |
-| `deck`      | read or mutate deck-native state without hand-rolling API calls (`create_inbox_item`, `create_task`, `move_task`, `promote_inbox_item_to_task`, `list_tasks`, `list_inbox`, `get_task`, `get_inbox_item`, `kb_orphan_census`) |
+| `deck`      | read or mutate deck-native state without hand-rolling API calls (`create_inbox_item`, `create_task`, `move_task`, `promote_inbox_item_to_task`, `list_tasks`, `list_inbox`, `get_task`, `get_inbox_item`, `kb_orphan_census`, `kb_read`) |
 | `transform` | JS expression in a quickjs sandbox; sets `steps.<id>.json`                               |
 | `set_state` | UPSERT key/value pairs into the routine's persistent state                               |
 | `wait`      | sleep N seconds (useful between polling steps)                                           |
@@ -78,6 +78,29 @@ Every step type has the shared fields:
 - `on_failure` — `abort` (default), `continue`, `retry`
 - `retry` — `{ times, backoff: linear | exponential, max_delay_secs?, after_retry? }`
 - `timeout_secs` — per-step wall-clock cap
+
+## Explicit KB inputs
+
+No routine receives KB content automatically. An agent step can opt in with
+`kb_inputs: [projects/neodeck/overview.md]`; only those notes are appended to
+its prompt. Alternatively, add a **read KB note** deck step:
+
+```yaml
+- id: knowledge
+  type: deck
+  action: kb_read
+  path: projects/neodeck/overview.md
+- id: use_knowledge
+  type: agent
+  prompt: "Use this requested section: {{ steps.knowledge.json.body }}"
+```
+
+Wire the read step into its consumer on the canvas. KB outputs remain in the
+existing upstream-only step context; unrelated branches cannot access them.
+This is also explicit agent memory: knowledge is read only when the agent is
+told to consult a section or the routine wires it into a prompt. Entry search
+indexes filenames and leading YAML title/tags without loading note bodies;
+backlinks build a shared, chunked reverse-edge index once per vault invalidation.
 
 ## Templating
 
