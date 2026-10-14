@@ -99,8 +99,29 @@ Wire the read step into its consumer on the canvas. KB outputs remain in the
 existing upstream-only step context; unrelated branches cannot access them.
 This is also explicit agent memory: knowledge is read only when the agent is
 told to consult a section or the routine wires it into a prompt. Entry search
-indexes filenames and leading YAML title/tags without loading note bodies;
-backlinks build a shared, chunked reverse-edge index once per vault invalidation.
+indexes filenames and leading YAML title/tags; cold and warm results retain
+the same human title.
+
+Complete backlinks require a one-time server-side read of every visible note
+body per vault invalidation: an inbound link can appear anywhere. That shared,
+single-flight pass builds reverse edges and literal substring postings; warm
+backlinks reuse the index without reopening notes. Agents receive only the
+requested node or edges, never the whole vault. This is an initialization
+interpretation, not a claim that cold traversal performs zero whole-vault I/O.
+
+Different full-text queries intersect generation-owned postings and reopen
+only candidate notes to verify exact substrings, scores and snippets. No note
+bodies or per-query results are retained. Common short queries or adversarial
+texts can still make all notes candidates. Metadata scoring still visits the
+inventory; initialization and invalidation rebuilds are corpus-linear, and
+32 concurrent note reads bound concurrency, not total bytes.
+
+A bounded Linux implementation probe under syscall tracing used 2,000 notes
+totalling 8,192,000 bytes: cold metadata/reverse/postings initialization took
+3.36 seconds, and two different sparse queries took 3.15 and 1.95 milliseconds,
+each reopening only its matching note. Process-wide RSS changed from 87.7 to
+165.9 MiB. These are synthetic, traced measurements, not a massive-vault
+latency or memory guarantee.
 
 ## Templating
 
