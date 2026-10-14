@@ -45,6 +45,7 @@ All notable changes to NPI deck (a fork of bjb2/omp-deck; entries before the for
 
 ### Fixed
 
+- Model registry initialization recovers after a failed probe before NeoPi loads, while concurrent probes and successful initialization still share one registry (#148).
 - Database queries are owned by their connection and finalized before strict close, including migration, welcome-task and DAO writes (#171). A per-connection SQL cache covers Bun's uncached overflow beyond 20 distinct statements without evicting statements still held by callers. Test teardown no longer ignores database-file removal failures; no forced GC or removal retries are used. The retained-statement regression checks owned handles on Linux and Darwin and removes the fixture before process exit, rather than requiring WAL sidecar files to disappear on close.
 - Models configuration tests compare the backup's canonical path when the temporary directory is symlinked, including macOS `/var` paths (#146). Verified by GPT-6.1 Sol.
 - Routine tests restore inherited backend-home and database overrides after teardown, including failed setup, so later tests retain the configured NeoPi backend (#151).
