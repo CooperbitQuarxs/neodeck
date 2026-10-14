@@ -340,11 +340,18 @@ export function RoutineBuilder({ routine, onSaved, onError }: Props) {
 
 	// ─── Render ────────────────────────────────────────────────────────────
 
+	const legacyAction = spec.steps[0];
 	const canSave =
 		spec.name.trim().length > 0 &&
 		spec.trigger.length > 0 &&
 		spec.steps.length > 0 &&
-		(legacy || specValidation.valid) &&
+		(legacy
+			? (legacyAction?.type === "agent"
+				? legacyAction.prompt
+				: legacyAction?.type === "run"
+					? legacyAction.command
+					: routine?.actionBody ?? "").trim().length > 0
+			: specValidation.valid) &&
 		compile.errors.length === 0 &&
 		!busy;
 
