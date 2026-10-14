@@ -1,6 +1,6 @@
 import { afterAll, beforeEach, expect, test } from "bun:test";
 import { createHash } from "node:crypto";
-import { lstat, mkdtemp, mkdir, readdir, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
+import { lstat, mkdtemp, mkdir, readdir, readFile, realpath, rm, stat, symlink, writeFile } from "node:fs/promises";
 import * as path from "node:path";
 import { tmpdir } from "node:os";
 import { parse as parseYaml } from "yaml";
@@ -127,7 +127,7 @@ test("saving the masked document with a new model keeps every credential, backs 
 	expect(parsed.providers.gamma!.apiKey).toBe("sk-shared-anchor-5b1e");
 	expect(((await stat(modelsFile)).mode & 0o777)).toBe(0o600);
 
-	expect(saved.backupPath).toBe(backupFile);
+	expect(saved.backupPath).toBe(await realpath(backupFile));
 	expect(await readFile(backupFile, "utf8")).toBe(FIXTURE);
 	expect(saved.registry).toMatchObject({ refreshed: true, missingModels: [] });
 	expect(saved.registry.error).toBeUndefined();
