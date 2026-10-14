@@ -281,7 +281,7 @@ export function buildRouter(
 	app.route("/", buildBridgesRouter(supervisor));
 	app.route("/", buildMarketplaceRouter(marketplace));
 	app.route("/", buildSkillsRouter(skills));
-	app.route("/", buildKbRouter(kb));
+	app.route("/", buildKbRouter(kb, { resolveAgent: token => opts.cardAgents?.resolveToken(token) }));
 	app.route("/auth/oauth", buildAuthOAuthRouter());
 	app.route("/onboarding", buildOnboardingRouter());
 	app.route("/subagents", buildSubagentsRouter(bridge));

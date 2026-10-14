@@ -143,6 +143,11 @@ Inbox provenance stays after the leading YAML. Routines accept both `body`
 and typed `properties`; chat `/task add` accepts multiline YAML or a JSON
 card-creation object.
 
+Card workers use `kb_read` and `kb_write` through a run-scoped bearer capability.
+The server derives project identity and read-only policy from the active run;
+workers cannot claim a different project. Completion or cancellation revokes
+the capability, and read-only capabilities reject knowledge writes.
+
 Read-only workers restrict the actual SDK capability set to bounded local
 `card_read`/`card_search` and explicitly requested `kb_read`. Mutation,
 execution, subagent, extension, MCP, LSP and ambient context capabilities are
