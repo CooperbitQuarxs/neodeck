@@ -45,6 +45,7 @@ All notable changes to NPI deck (a fork of bjb2/omp-deck; entries before the for
 
 ### Fixed
 
+- Routine tests restore inherited backend-home and database overrides after teardown, including failed setup, so later tests retain the configured NeoPi backend (#151).
 - The pinned NeoPi compiler launcher decodes the generated config's JSON-escaped path and resolves the compiler inside that tree's executable directory, including Windows executable shims (#145). Implemented by Claude Sonnet 5.5 and GPT-6.1 Sol.
 - Routine foundations tests use the operating system's temporary directory instead of `/home/shayna/tmp`, so setup does not depend on the developer's home being writable (#144). Implemented by Claude Sonnet 5.5; verified by GPT-6.1 Sol.
 - **The Skills list shows a skill's new description after SKILL.md changes, and the first skill in a fresh agent dir appears live** (#32). NeoPi caches every SKILL.md it reads, so after an edit on disk the listing kept the old frontmatter until the deck restarted; the skills watcher now drops that cache before each `skills_changed` broadcast. A watched root that did not exist at launch (a fresh `~/.omp/agent/skills/`) used to be skipped for good; it is now watched through its nearest existing parent and armed when it appears, and a root that is deleted goes back to waiting.

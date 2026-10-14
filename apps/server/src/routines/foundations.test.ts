@@ -10,6 +10,8 @@ import { RoutinesRunner } from "../routines-runner.ts";
 import { initializeOwnedGeneration, stopOwnedProcesses } from "../owned-process.ts";
 
 const root = os.tmpdir();
+const savedHome = process.env.NPI_DECK_HOME;
+const savedDbPath = process.env.NPI_DECK_DB_PATH;
 let home = "";
 let runner: RoutinesRunner | undefined;
 function setup(agentCommand?: () => string[]): void {
@@ -28,13 +30,18 @@ function spec(steps: RoutineSpec["steps"], concurrency: RoutineSpec["concurrency
 	return { version: 1, name: "test", trigger: [{ manual: {} }], steps, concurrency } as RoutineSpec;
 }
 afterEach(async () => {
-	await runner?.dispose();
-	await stopOwnedProcesses();
-	closeDb();
-	delete process.env.NPI_DECK_HOME;
-	delete process.env.NPI_DECK_DB_PATH;
-	if (home) fs.rmSync(home, { recursive: true, force: true });
-	home = ""; runner = undefined;
+	try {
+		await runner?.dispose();
+		await stopOwnedProcesses();
+	} finally {
+		closeDb();
+		if (savedHome === undefined) delete process.env.NPI_DECK_HOME;
+		else process.env.NPI_DECK_HOME = savedHome;
+		if (savedDbPath === undefined) delete process.env.NPI_DECK_DB_PATH;
+		else process.env.NPI_DECK_DB_PATH = savedDbPath;
+		if (home) fs.rmSync(home, { recursive: true, force: true });
+		home = ""; runner = undefined;
+	}
 });
 
 test("queue holds second invocation until first finishes, then releases the busy state", async () => {
