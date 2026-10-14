@@ -127,7 +127,7 @@ export function createState(input: {
 			| { max: number | null }
 			| null)?.max ?? 0) + 100;
 	const stateId = `s_${id().toLowerCase().slice(0, 12)}`;
-	db.prepare<unknown, [string, string, string, number]>(
+	db.query<unknown, [string, string, string, number]>(
 		"INSERT INTO task_states (id, name, color, position) VALUES (?, ?, ?, ?)",
 	).run(stateId, input.name, input.color ?? "#6e6a62", nextPos);
 	const out = getState(stateId);
@@ -144,7 +144,7 @@ export function updateState(
 	if (!existing) return undefined;
 	const next = { ...existing, ...patch };
 	getDb()
-		.prepare<unknown, [string, string, number, string]>(
+		.query<unknown, [string, string, number, string]>(
 			"UPDATE task_states SET name = ?, color = ?, position = ? WHERE id = ?",
 		)
 		.run(next.name, next.color, next.position, stateId);
@@ -180,7 +180,7 @@ export function reorderStates(orderedIds: string[]): TaskState[] {
 	}
 
 	db.transaction(() => {
-		const update = db.prepare<unknown, [number, string]>(
+		const update = db.query<unknown, [number, string]>(
 			"UPDATE task_states SET position = ? WHERE id = ?",
 		);
 		for (let i = 0; i < orderedIds.length; i++) {
@@ -206,14 +206,14 @@ export function deleteState(stateId: string): { reassigned: number } {
 	let reassigned = 0;
 	db.transaction(() => {
 		const result = db
-			.prepare<unknown, [string, string, string]>(
+			.query<unknown, [string, string, string]>(
 				"UPDATE tasks SET state_id = ?, updated_at = ? WHERE state_id = ?",
 			)
 			.run(fallback.id, nowIso(), stateId);
 		reassigned = Number(result.changes ?? 0);
 		// Renumber the fallback column to keep ordering stable.
 		renumberColumn(fallback.id);
-		db.prepare<unknown, [string]>("DELETE FROM task_states WHERE id = ?").run(stateId);
+		db.query<unknown, [string]>("DELETE FROM task_states WHERE id = ?").run(stateId);
 	})();
 	notifyTasksChanged();
 	return { reassigned };
@@ -316,7 +316,7 @@ export function createTask(input: {
 			.get() as { value: number } | null;
 		if (!seqRow) throw new Error("tasks sequence missing — migration 002 not applied");
 		displayId = seqRow.value;
-		db.prepare<unknown, [string, number, string, string, string, number, string | null, string, string, string]>(
+		db.query<unknown, [string, number, string, string, string, number, string | null, string, string, string]>(
 			`INSERT INTO tasks (id, display_id, title, body, state_id, order_in_state, cwd, created_at, updated_at, state_entered_at)
 			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		).run(taskId, displayId, input.title, input.body ?? "", state.id, maxOrder + 1000, normalizeCwd(input.cwd), now, now, now);
@@ -350,7 +350,7 @@ export function updateTask(
 	// edits must NOT reset the per-column recency sort.
 	const stateChanged = patch.stateId !== undefined && patch.stateId !== existing.stateId;
 	const stateEnteredAt = stateChanged ? nowIso() : existing.stateEnteredAt;
-	db.prepare<
+	db.query<
 		unknown,
 		[string, string, string, number, string | null, string, string, string | null, string]
 	>(
@@ -374,7 +374,7 @@ export function updateTask(
 }
 
 export function deleteTask(taskId: string): boolean {
-	const r = getDb().prepare<unknown, [string]>("DELETE FROM tasks WHERE id = ?").run(taskId);
+	const r = getDb().query<unknown, [string]>("DELETE FROM tasks WHERE id = ?").run(taskId);
 	const deleted = Number(r.changes ?? 0) > 0;
 	if (deleted) notifyTasksChanged();
 	return deleted;
@@ -410,7 +410,7 @@ export function moveTask(taskId: string, stateId: string, index: number): Task |
 		ids.splice(clampedIndex, 0, taskId);
 
 		// Renumber with 1000-unit gaps.
-		const update = db.prepare<unknown, [string, number, string, string]>(
+		const update = db.query<unknown, [string, number, string, string]>(
 			"UPDATE tasks SET state_id = ?, order_in_state = ?, updated_at = ? WHERE id = ?",
 		);
 		const now = nowIso();
@@ -419,7 +419,7 @@ export function moveTask(taskId: string, stateId: string, index: number): Task |
 		}
 
 		if (crossColumn) {
-			db.prepare<unknown, [string, string]>(
+			db.query<unknown, [string, string]>(
 				"UPDATE tasks SET state_entered_at = ? WHERE id = ?",
 			).run(now, taskId);
 		}
@@ -436,7 +436,7 @@ function renumberColumn(stateId: string): void {
 			"SELECT id FROM tasks WHERE state_id = ? ORDER BY order_in_state ASC",
 		)
 		.all(stateId) as { id: string }[];
-	const update = db.prepare<unknown, [number, string]>(
+	const update = db.query<unknown, [number, string]>(
 		"UPDATE tasks SET order_in_state = ? WHERE id = ?",
 	);
 	for (let i = 0; i < peers.length; i++) {

@@ -220,7 +220,7 @@ test("legacy shell routines also queue before spawning and drain on shutdown", a
 	const release = path.join(home, "release");
 	const r = createRoutine({ name: "legacy", cron: "", actionKind: "bash",
 		actionBody: `echo start >> '${marker}'; until test -f '${release}'; do sleep .05; done; echo end >> '${marker}'` });
-	getDb().prepare("UPDATE routines SET concurrency = 'queue' WHERE id = ?").run(r.id);
+	getDb().query("UPDATE routines SET concurrency = 'queue' WHERE id = ?").run(r.id);
 	const first = runner!.fire(r.id);
 	for (let i = 0; i < 60 && !fs.existsSync(marker); i++) await Bun.sleep(25);
 	expect(fs.existsSync(marker)).toBe(true);
