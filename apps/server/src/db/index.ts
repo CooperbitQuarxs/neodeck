@@ -9,7 +9,7 @@
  * applied. Each file is executed atomically inside a transaction.
  */
 
-import { Database } from "bun:sqlite";
+import { Database, type SQLQueryBindings, type Statement } from "bun:sqlite";
 import * as fs from "node:fs";
 import * as path from "node:path";
 
@@ -22,6 +22,30 @@ const MIGRATIONS_DIR = migrationsDir();
 
 let instance: Database | null = null;
 
+/** Bun only owns the first 20 query strings; own every finite, parameterized DAO query until close. */
+class ConnectionDatabase extends Database {
+	// Bun uses isFinalized internally, but bun-types 1.3.14 omits it from Statement.
+	private readonly statements = new Map<string, Statement & { readonly isFinalized: boolean }>();
+
+	override query<Result, Params extends SQLQueryBindings | SQLQueryBindings[]>(
+		sql: string,
+	): Statement<Result, Params extends any[] ? Params : [Params]> {
+		const cached = this.statements.get(sql);
+		if (cached && !cached.isFinalized) {
+			return cached as Statement<Result, Params extends any[] ? Params : [Params]>;
+		}
+		const statement = super.prepare<Result, Params>(sql);
+		this.statements.set(sql, statement as Statement & { readonly isFinalized: boolean });
+		return statement;
+	}
+
+	override close(throwOnError = false): void {
+		for (const statement of this.statements.values()) statement.finalize();
+		this.statements.clear();
+		super.close(throwOnError);
+	}
+}
+
 export interface DbOpenOpts {
 	/** Absolute path to the sqlite file. Created if missing. */
 	path: string;
@@ -33,7 +57,7 @@ export function openDb(opts: DbOpenOpts): Database {
 	fs.mkdirSync(path.dirname(dbPath), { recursive: true, mode: 0o700 });
 	restrictDbFilesToOwner(dbPath);
 
-	const db = new Database(dbPath, { create: true, strict: true });
+	const db = new ConnectionDatabase(dbPath, { create: true, strict: true });
 	trackTransactions(db);
 	db.exec("PRAGMA journal_mode = WAL");
 	db.exec("PRAGMA foreign_keys = ON");
@@ -72,7 +96,8 @@ export function getDb(): Database {
 
 export function closeDb(): void {
 	if (instance) {
-		instance.close();
+		// Connection-owned queries must release their native resources before we forget the owner.
+		instance.close(true);
 		instance = null;
 	}
 }
@@ -167,7 +192,7 @@ function applyMigrations(db: Database): void {
 		.filter((f) => f.endsWith(".sql"))
 		.sort();
 
-	const recordStmt = db.prepare<unknown, [string, string]>(
+	const recordStmt = db.query<unknown, [string, string]>(
 		"INSERT INTO schema_migrations (name, applied_at) VALUES (?, ?)",
 	);
 
@@ -208,7 +233,7 @@ function seedWelcomeTaskIfEmpty(db: Database): void {
 			)
 			.get() as { value: number } | null;
 		const displayId = seqRow?.value ?? 1;
-		db.prepare<unknown, [string, number, string, string, string, number, string | null, string, string]>(
+		db.query<unknown, [string, number, string, string, string, number, string | null, string, string]>(
 			`INSERT INTO tasks (id, display_id, title, body, state_id, order_in_state, cwd, created_at, updated_at)
 			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		).run(taskId, displayId, title, body, "s_backlog", 1000, null, now, now);

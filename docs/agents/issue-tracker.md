@@ -10,7 +10,7 @@ fork discovery may otherwise resolve to `Shreyans13/omp-deck`.
 - Read: `gh issue view <number> --repo PsychedelicShayna/neodeck --comments`, including labels.
 - List: `gh issue list --repo PsychedelicShayna/neodeck --state <state> --json number,title,body,labels,comments` with task-specific filters.
 - Apply or remove existing labels: `gh issue edit <number> --repo PsychedelicShayna/neodeck --add-label "..."` or `--remove-label "..."`.
-- Close when the fix merged (`Fixes #<n>`), when verified duplicate, or when the owner ordered it. Explain why in the closing comment. The Issue Funnel's narrower publication authority is defined in `docs/agents/issue-funnel.md`.
+- Issues stay open until the fix is promoted to the default branch; label `ready-for-human` after the nightly merge. Close after promotion (`Fixes #<n>`), when verified duplicate, or when the owner ordered it. Explain why in the closing comment. The Issue Funnel's narrower publication authority is defined in `docs/agents/issue-funnel.md`.
 - Posting follows workspace policy. Every GitHub comment and PR body opens with `> [!NOTE]` and `> <actual Model Name> on behalf of PsychedelicShayna`; Codex trigger comments use only the trigger phrase.
 - Use existing labels only; creating or changing label definitions requires a Captain decision.
 

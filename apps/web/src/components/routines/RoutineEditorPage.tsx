@@ -50,7 +50,7 @@ export function RoutineEditorPage({ routine, onBack, onSaved, onDeleted }: Props
 						<ArrowLeft className="h-3.5 w-3.5" />
 						All routines
 					</button>
-					<span className="chip bg-paper-3 text-ink-3">{isGraph ? "graph" : mode === "v1" ? "pipeline" : "single-action"}</span>
+					<span className={`chip bg-paper-3 text-ink-3${isGraph ? " normal-case" : ""}`}>{isGraph ? "graph" : mode === "v1" ? "pipeline" : "single-action"}</span>
 					{isNew ? (
 						<div className="flex items-center gap-0.5 rounded border border-line bg-paper-2 p-0.5">
 							<button

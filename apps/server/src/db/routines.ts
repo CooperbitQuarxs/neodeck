@@ -160,7 +160,7 @@ export function createRoutine(input: {
 	const routineId = `r_${id().toLowerCase().slice(0, 18)}`;
 	const now = nowIso();
 	getDb()
-		.prepare<
+		.query<
 			unknown,
 			[string, string, string, string, string, string, string | null, number, string, string]
 		>(
@@ -207,7 +207,7 @@ export function createV1Routine(input: {
 	const tags = input.spec.tags?.join(",") ?? null;
 	const timezone = input.spec.timezone ?? null;
 	getDb()
-		.prepare<
+		.query<
 			unknown,
 			[
 				string,
@@ -287,7 +287,7 @@ export function updateV1Routine(
 		const description = patch.description ?? spec.description ?? existing.description;
 		const enabled = patch.enabled === undefined ? existing.enabled : patch.enabled;
 		getDb()
-			.prepare<
+			.query<
 				unknown,
 				[string, string, string, string, string, string | null, string | null, string | null, number, string, string]
 			>(
@@ -313,7 +313,7 @@ export function updateV1Routine(
 		const description = patch.description ?? existing.description;
 		const enabled = patch.enabled === undefined ? existing.enabled : patch.enabled;
 		getDb()
-			.prepare<unknown, [string, string, number, string, string]>(
+			.query<unknown, [string, string, number, string, string]>(
 				`UPDATE routines SET name = ?, description = ?, enabled = ?, updated_at = ? WHERE id = ?`,
 			)
 			.run(name, description, enabled ? 1 : 0, now, routineId);
@@ -346,7 +346,7 @@ export function createGraphRoutine(input: {
 	const routineId = `r_${id().toLowerCase().slice(0, 18)}`;
 	const now = nowIso();
 	const graph = input.graph;
-	getDb().prepare(
+	getDb().query(
 		`INSERT INTO routines
 		 (id, name, description, cron, action_kind, action_body, enabled, created_at, updated_at,
 		  concurrency, budget_json, tags, timezone, spec_version, graph_json)
@@ -372,7 +372,7 @@ export function updateGraphRoutine(routineId: string, patch: {
 	const graph = patch.graph ?? existing.graph;
 	if (!graph) throw new Error(`graph routine ${routineId} has no graph`);
 	assertValidGraph(graph, registry);
-	getDb().prepare(
+	getDb().query(
 		`UPDATE routines SET name = ?, description = ?, enabled = ?, cron = ?, concurrency = ?,
 		 budget_json = ?, tags = ?, timezone = ?, graph_json = ?, updated_at = ? WHERE id = ?`,
 	).run(
@@ -400,7 +400,7 @@ export function updateRoutine(
 	if (!existing) return undefined;
 	const next = { ...existing, ...patch };
 	getDb()
-		.prepare<
+		.query<
 			unknown,
 			[string, string, string, string, string, string | null, number, string, string]
 		>(
@@ -423,7 +423,7 @@ export function updateRoutine(
 }
 
 export function deleteRoutine(routineId: string): boolean {
-	const r = getDb().prepare<unknown, [string]>("DELETE FROM routines WHERE id = ?").run(routineId);
+	const r = getDb().query<unknown, [string]>("DELETE FROM routines WHERE id = ?").run(routineId);
 	return Number(r.changes ?? 0) > 0;
 }
 
@@ -444,7 +444,7 @@ export function setRoutineSchedule(
 	if (sets.length === 0) return;
 	args.push(routineId);
 	getDb()
-		.prepare<unknown, (string | null)[]>(`UPDATE routines SET ${sets.join(", ")} WHERE id = ?`)
+		.query<unknown, (string | null)[]>(`UPDATE routines SET ${sets.join(", ")} WHERE id = ?`)
 		.run(...args);
 }
 
@@ -455,7 +455,7 @@ export function startRun(routineId: string, trigger: RoutineRun["trigger"], trig
 	const runId = `run_${id().toLowerCase().slice(0, 18)}`;
 	const startedAt = nowIso();
 	getDb()
-		.prepare<unknown, [string, string, string, string, string | null]>(
+		.query<unknown, [string, string, string, string, string | null]>(
 			"INSERT INTO routine_runs (id, routine_id, started_at, trigger, trigger_payload) VALUES (?, ?, ?, ?, ?)",
 		)
 		.run(runId, routineId, startedAt, trigger, triggerPayload === undefined ? null : encodeTriggerPayload(triggerPayload));
@@ -466,7 +466,7 @@ export function startRun(routineId: string, trigger: RoutineRun["trigger"], trig
 
 /** Persist the tree selected for this run before executing its first agent step. */
 export function setRunBackend(runId: string, backend: { path: string; commit: string | null; version: string | null }): void {
-	getDb().prepare<unknown, [string, string | null, string | null, string]>(
+	getDb().query<unknown, [string, string | null, string | null, string]>(
 		"UPDATE routine_runs SET backend_path = ?, backend_commit = ?, backend_version = ? WHERE id = ?",
 	).run(backend.path, backend.commit, backend.version, runId);
 }
@@ -476,7 +476,7 @@ export function finishRun(
 	patch: { exitCode?: number; stdoutExcerpt?: string; stderrExcerpt?: string; error?: string },
 ): void {
 	getDb()
-		.prepare<unknown, [string, number | null, string, string, string | null, string]>(
+		.query<unknown, [string, number | null, string, string, string | null, string]>(
 			`UPDATE routine_runs
 			   SET ended_at = ?, exit_code = ?, stdout_excerpt = ?, stderr_excerpt = ?, error = ?
 			 WHERE id = ?`,
@@ -523,7 +523,7 @@ export function finishGraphRun(record: GraphRunRecord, abortReason?: string): vo
 	getDb().transaction(() => {
 		const run = getRun(record.id);
 		if (!run || run.routineId !== record.routineId) throw new Error("graph trace run does not match routine");
-		getDb().prepare("UPDATE routine_runs SET graph_run_json = ? WHERE id = ?")
+		getDb().query("UPDATE routine_runs SET graph_run_json = ? WHERE id = ?")
 			.run(JSON.stringify(record), record.id);
 		finalizeRun(record.id, {
 			endedAt: record.endedAt,

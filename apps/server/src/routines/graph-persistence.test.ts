@@ -143,7 +143,7 @@ test("invalid typed edges fail before save, update or dispatch even if the store
 	expect((await api.request(`/routines/${valid.id}`, request({ graph: invalid }, "PATCH"))).status).toBe(400);
 	expect(() => updateGraphRoutine(valid.id, { graph: invalid }, run.graphRegistry)).toThrow("invalid graph");
 	expect(getRoutine(valid.id)?.graph).toEqual(graph());
-	getDb().prepare("UPDATE routines SET graph_json = ? WHERE id = ?").run(JSON.stringify(invalid), valid.id);
+	getDb().query("UPDATE routines SET graph_json = ? WHERE id = ?").run(JSON.stringify(invalid), valid.id);
 	expect((await api.request(`/routines/${valid.id}/run`, request({}))).status).toBe(400);
 	await expect(run.fire(valid.id)).rejects.toThrow("invalid graph");
 	expect(listRuns(valid.id)).toEqual([]);
@@ -301,7 +301,7 @@ test("manual activation records unmatched event sources and their consumers as s
 test("native cron activates its configured source and never falls back to the legacy cron mirror", async () => {
 	const run = setup();
 	const manual = createGraphRoutine({ name: "no native cron", graph: graph() }, run.graphRegistry);
-	getDb().prepare("UPDATE routines SET cron = ? WHERE id = ?").run("* * * * * *", manual.id);
+	getDb().query("UPDATE routines SET cron = ? WHERE id = ?").run("* * * * * *", manual.id);
 	run.schedule(getRoutine(manual.id)!);
 	expect(getRoutine(manual.id)?.nextRunAt).toBeUndefined();
 
