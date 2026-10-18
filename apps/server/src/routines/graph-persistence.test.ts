@@ -198,6 +198,60 @@ test("actual native run preserves truthy scalar, object and ordered recursive pr
 	expect(listing.runs[0]).not.toHaveProperty("nodeRuns");
 });
 
+test("stored graph traces redact user credential fields without mutating execution inputs or usage metadata", async () => {
+	const run = setup();
+	const event = {
+		access_token: "test-event-token",
+		ordinary: { count: 17, truthy: "not-literal-true", enabled: false, absent: null },
+		nested: { Password: 17, list: [{ "api-key": "test-nested-key", kept: 1 }] },
+	};
+	const original = structuredClone(event);
+	let received: unknown;
+	run.graphRegistry.register({ definition: definition("inspect", "number"), execute: ({ activation, inputs, node, recordUsage }) => {
+		received = inputs[0]!.output.result;
+		expect(activation.event).toBe(event);
+		expect(received).toBe(event);
+		expect(node.config.API_KEY).toBe("test-config-key");
+		recordUsage({ llmTokensIn: 7, llmTokensOut: 9, llmCostMicros: 10 });
+		return [{ port: "out", value: 1 }];
+	} });
+	const native = graph();
+	native.budget = { max_steps_executed: 3 };
+	native.nodes.push({ id: "inspect", type: "inspect", config: { API_KEY: "test-config-key", allowance: 17 } });
+	connect(native, "inspect-input", "source", "inspect", "event");
+	const saved = createGraphRoutine({ name: "protected-provenance", graph: native }, run.graphRegistry);
+	await run.fire(saved.id, "manual", event);
+	const record = listRuns(saved.id)[0]!;
+	const trace = getGraphRun(record.id)!;
+	const protectedEvent = {
+		...event, access_token: "[redacted]",
+		nested: { Password: "[redacted]", list: [{ "api-key": "[redacted]", kept: 1 }] },
+	};
+	expect(record.exitCode).toBe(0);
+	expect(received).toBe(event);
+	expect(event).toEqual(original);
+	expect(JSON.parse(record.triggerPayload!)).toEqual(protectedEvent);
+	expect(trace.activation.event).toEqual(protectedEvent);
+	expect(trace.outputs.find(output => output.nodeId === "source")?.result).toEqual(protectedEvent);
+	const inspected = trace.nodeRuns.find(node => node.nodeId === "inspect")!;
+	expect(inspected.inputs[0]!.result).toEqual(protectedEvent);
+	expect(findGraphOutput(inspected.outputs[0]!, "source")?.result).toEqual(protectedEvent);
+	expect(inspected.outputs[0]!.result).toEqual({ value: 1 });
+	expect(trace.usage).toEqual({ stepsExecuted: 2, llmTokensIn: 7, llmTokensOut: 9, llmCostMicros: 10 });
+	expect(trace.graph.budget).toEqual(native.budget);
+	expect(trace.graph.nodes[1]!.config).toEqual({ API_KEY: "[redacted]", allowance: 17 });
+	expect(native.nodes[1]!.config.API_KEY).toBe("test-config-key");
+	const stored = getDb().query<{ graph_run_json: string }, [string]>("SELECT graph_run_json FROM routine_runs WHERE id = ?").get(record.id)!.graph_run_json;
+	for (const credential of ["test-event-token", "test-nested-key", "test-config-key"]) expect(stored).not.toContain(credential);
+	const api = buildRoutinesRouter(run);
+	const response = await api.request(`/routines/${saved.id}/runs/${record.id}/graph`);
+	expect(response.status).toBe(200);
+	expect(await response.json()).toEqual(trace);
+	closeDb();
+	openDb({ path: path.join(home, "deck.db") });
+	expect(getGraphRun(record.id)).toEqual(trace);
+});
+
 test("native failures and usage-budget aborts finalize traces and existing run aggregates", async () => {
 	const run = setup();
 	run.graphRegistry.register({ definition: definition("fail"), execute: () => { throw new Error("real handler failure"); } });

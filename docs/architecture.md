@@ -212,9 +212,13 @@ endpoint. `GET /api/routine-node-types` returns the shared catalogue;
 running them. Native graphs reject legacy action/YAML authoring fields.
 `GET /api/routines/:id/runs/:runId/graph` returns a `GraphRunRecord`, including
 the executed definition, activation, ordered node records, outputs, status and
-usage. Final traces and existing run aggregates persist atomically. Later edits
-do not replace a historical trace; reopening the database preserves exact JSON
-values and recursive provenance.
+usage. Final traces and existing run aggregates persist atomically. Before
+persisting a trace, the trigger-payload credential-key policy redacts values
+within activation events, node configurations and output results, including
+recursive provenance. Execution still receives the original objects; structural
+fields such as token budgets and usage counters are not redacted. Later edits
+do not replace a historical trace; reopening the database preserves the stored
+JSON values and recursive provenance.
 
 ## Theming
 

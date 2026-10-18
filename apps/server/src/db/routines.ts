@@ -18,7 +18,7 @@ import type {
 } from "@npi-deck/protocol";
 
 import { getDb, id, nowIso } from "./index.ts";
-import { encodeTriggerPayload } from "./trigger-payload.ts";
+import { encodeTriggerPayload, redactCredentialField } from "./trigger-payload.ts";
 import { finalizeRun } from "./routine-step-runs.ts";
 
 interface RoutineRow {
@@ -518,13 +518,35 @@ export function getRun(runId: string): RoutineRun | undefined {
 	return row ? rowToRun(row) : undefined;
 }
 
+/** Redact user data during serialization, without copying or changing live envelopes. */
+function encodeGraphTrace(record: GraphRunRecord): string {
+	const ancestors: object[] = [];
+	const payloadScopes: boolean[] = [];
+	return JSON.stringify(record, function (this: object, key: string, value: unknown) {
+		while (ancestors.length && ancestors[ancestors.length - 1] !== this) {
+			ancestors.pop();
+			payloadScopes.pop();
+		}
+		const insidePayload = payloadScopes[payloadScopes.length - 1] ?? false;
+		if (insidePayload) {
+			const protectedValue = redactCredentialField(key, value);
+			if (protectedValue !== value) return protectedValue;
+		}
+		if (value !== null && typeof value === "object") {
+			ancestors.push(value);
+			payloadScopes.push(insidePayload || key === "result" || key === "config" || (this === record.activation && key === "event"));
+		}
+		return value;
+	});
+}
+
 /** Final trace and existing run aggregates become durable in the same transaction. */
 export function finishGraphRun(record: GraphRunRecord, abortReason?: string): void {
 	getDb().transaction(() => {
 		const run = getRun(record.id);
 		if (!run || run.routineId !== record.routineId) throw new Error("graph trace run does not match routine");
 		getDb().query("UPDATE routine_runs SET graph_run_json = ? WHERE id = ?")
-			.run(JSON.stringify(record), record.id);
+			.run(encodeGraphTrace(record), record.id);
 		finalizeRun(record.id, {
 			endedAt: record.endedAt,
 			exitCode: record.status === "success" ? 0 : 1,
