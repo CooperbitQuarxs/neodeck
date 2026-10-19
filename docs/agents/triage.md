@@ -38,6 +38,7 @@ claims, linked merged PRs, review receipts and replies, promotion state, and
 remaining acceptance. Correct stale labels from evidence. The built-in commit
 role (`@commit`, resolved at runtime) performs reconciliation until a dedicated
 triage role is chosen; this policy does not install a scheduler or webhook.
+Daily triage adds `upstream` to a promotion proposal only when that proposal actually carries a `sync/` merge; the promotion workflow does not detect or apply upstream involvement.
 
 ## Duplicate reconciliation
 
