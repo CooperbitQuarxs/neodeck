@@ -14,7 +14,7 @@ import {
 	moveTask,
 } from "../../db/tasks.ts";
 import { KbService, resolveKbRoot } from "../../kb-service.ts";
-import { renderString } from "../template.ts";
+import { renderString, renderDeep } from "../template.ts";
 import { notificationService } from "../../notifications/index.ts";
 import type { RunContext, StepResult } from "../types.ts";
 import { readKb, workflowKb } from "../../kb-workflows.ts";
@@ -64,6 +64,7 @@ export async function executeDeckStep(
 							? undefined
 							: renderString(step.body, context as unknown as Record<string, unknown>),
 					stateId,
+					properties: step.properties === undefined ? undefined : renderDeep(step.properties, context as unknown as Record<string, unknown>) as Record<string, unknown>,
 					cwd:
 						step.cwd === undefined
 							? undefined
@@ -106,8 +107,13 @@ export async function executeDeckStep(
 						: resolveStateRef(renderString(step.state_ref, context as unknown as Record<string, unknown>));
 				const stamp = new Date(item.createdAt).toISOString().slice(0, 10);
 				const provenance = `_Promoted from inbox · ${item.kind} · ${stamp} · ${item.id}_`;
-				const taskBody = item.body.trim().length > 0 ? `${item.body}\n\n---\n${provenance}` : provenance;
-				const task = createTask({ title: item.title, body: taskBody, stateId });
+				const content = step.body === undefined ? item.body : renderString(step.body, context as unknown as Record<string, unknown>);
+				const taskBody = content.trim().length > 0 ? `${content}\n\n---\n${provenance}` : provenance;
+				const task = createTask({
+					title: item.title, body: taskBody, stateId,
+					properties: step.properties === undefined ? undefined : renderDeep(step.properties, context as unknown as Record<string, unknown>) as Record<string, unknown>,
+					cwd: step.cwd === undefined ? undefined : renderString(step.cwd, context as unknown as Record<string, unknown>),
+				});
 				const shouldMark = step.mark_processed !== false;
 				const inbox = shouldMark ? updateInbox(item.id, { processed: true }) ?? item : item;
 				return ok(startedMs, `promoted inbox ${item.id} -> T-${task.displayId}`, { task, inbox });

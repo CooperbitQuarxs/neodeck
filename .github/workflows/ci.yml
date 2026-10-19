@@ -7,11 +7,11 @@ on:
     branches: [main, nightly]
   workflow_dispatch:
 
-# Cancel in-flight runs on the same ref when a new push lands. Keeps the
-# matrix from queueing duplicate work during rapid push sequences.
+# Supersede stale PR heads, but keep every push proof on nightly/main.
+# Unique non-PR groups also prevent replacement of older pending runs.
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: ci-${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   # ─── Cross-platform matrix: typecheck + test + web build ──────────────────

@@ -63,24 +63,7 @@ import type {
 import { kbSessionIdentity, kbTools } from "../kb-workflows.ts";
 
 const log = logger("bridge:in-process");
-const DEFAULT_MODEL_CANDIDATES = [
-	{ provider: "anthropic", id: "claude-opus-5-5" },
-	{ provider: "github-copilot", id: "claude-opus-5.5" },
-	{ provider: "openrouter", id: "anthropic/claude-opus-5.5" },
-] as const;
-const FALLBACK_MODEL_CANDIDATES = [
-	{ provider: "openai-codex", id: "gpt-6-sol" },
-	{ provider: "github-copilot", id: "gpt-6-sol" },
-	{ provider: "openrouter", id: "openai/gpt-6-sol" },
-] as const;
-
-function firstAuthenticatedModel(registry: ModelRegistry, candidates: readonly ModelRef[]) {
-	for (const { provider, id } of candidates) {
-		const model = registry.find(provider, id);
-		if (model && registry.hasConfiguredAuth(model)) return model;
-	}
-	return undefined;
-}
+import { DEFAULT_MODEL_CANDIDATES, FALLBACK_MODEL_CANDIDATES, firstAuthenticatedModel } from "../deck-model-defaults.ts";
 
 type DiscoveredAdvisors = Awaited<ReturnType<ReturnType<typeof feature<"advisors">>["discoverAdvisorConfigs"]>>;
 

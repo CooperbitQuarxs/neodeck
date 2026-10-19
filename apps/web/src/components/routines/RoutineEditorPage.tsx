@@ -14,6 +14,7 @@ interface Props {
 export function RoutineEditorPage({ routine, onSaved, onDeleted }: Props) {
 	const [error, setError] = useState<string>();
 	const isNew = routine === "new";
+
 	async function remove(): Promise<void> {
 		if (routine === "new" || !confirm(`Delete routine "${routine.name}"?`)) return;
 		try {
@@ -34,7 +35,9 @@ export function RoutineEditorPage({ routine, onSaved, onDeleted }: Props) {
 			</header>
 			{error ? <div role="alert" className="border-b border-line bg-danger/10 px-3 py-2 text-xs text-danger">{error}</div> : null}
 			<div className="min-h-0 flex-1 p-3">
-				<RoutineBuilder routine={isNew ? undefined : routine} onSaved={(saved) => { setError(undefined); onSaved(saved); }} onError={setError} />
+				{!isNew && routine.specVersion === 2 ? (
+					<p className="px-3 py-3 text-sm text-ink-2">This routine executes a native graph. Its definition is managed through the routine API, not the single-action or pipeline editor.</p>
+				) : <RoutineBuilder routine={isNew ? undefined : routine} onSaved={(saved) => { setError(undefined); onSaved(saved); }} onError={setError} />}
 			</div>
 		</div>
 	);

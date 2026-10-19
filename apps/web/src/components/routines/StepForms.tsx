@@ -588,7 +588,14 @@ export function DeckStepForm({ step, onChange, advanced = true }: FormProps<"dec
 						<TextInput value={step.state_ref ?? ""} onChange={(v) => onChange({ ...step, state_ref: v === "" ? undefined : v })} placeholder="backlog or s_backlog" mono />
 					</Field>
 					</> : <p className="text-2xs text-ink-3">Turn on Advanced to choose the inbox item and destination column.</p>}
-					<p className="text-2xs text-ink-3">Card text and properties are kept from the inbox item. <Link to="/inbox" className="text-accent underline">Edit them in Inbox.</Link></p>
+					{advanced ? <>
+						<CardBodyField label="Body override (optional)" body={step.body ?? ""} onChange={(body) => onChange({ ...step, body: body === "" ? undefined : body })} advanced={advanced} rows={5} placeholder="Research this capture" />
+						<CardBodyProperties body={step.body ?? ""} advanced={advanced} onChange={(body) => onChange({ ...step, body })} />
+						<Field label="cwd / project routing (optional)">
+							<TextInput value={step.cwd ?? ""} onChange={(v) => onChange({ ...step, cwd: v === "" ? undefined : v })} placeholder="Unassigned when omitted" mono />
+						</Field>
+					</> : null}
+					<p className="text-2xs text-ink-3">Card text and properties are kept from the inbox item unless overridden in Advanced. <Link to="/inbox" className="text-accent underline">Edit them in Inbox.</Link></p>
 					<label className="flex items-center gap-2 font-mono text-2xs text-ink-2">
 						<input
 							type="checkbox"

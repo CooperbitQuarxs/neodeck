@@ -15,6 +15,9 @@
 // Re-export the V1 routine spec validator. JSON Schemas live in src/schemas/.
 export { compileStructuredOutputSchema, validateRoutineSpec } from "./validate";
 export type { ValidationError, ValidationResult } from "./validate";
+export * from "./graph";
+export { isGraphValue, validateRoutineGraph } from "./graph-validation";
+import type { RoutineGraph } from "./graph";
 // MIXTURES.toml document, validation report and mixture trace projections (#80).
 export * from "./mixtures";
 
@@ -1551,6 +1554,21 @@ export interface TaskState {
 	isDefault: boolean;
 }
 
+export interface CardRun {
+	id: string;
+	taskId: string;
+	status: "queued" | "running" | "completed" | "failed" | "cancelled";
+	assignedAt: string;
+	startedAt?: string;
+	finishedAt?: string;
+	cwd?: string;
+	ownedWorktree: boolean;
+	model?: string;
+	role?: string;
+	outcome?: string;
+	error?: string;
+}
+
 export interface Task {
 	id: string;
 	/** Monotonic deck-wide display number. Render as `T-${displayId}`. */
@@ -1572,11 +1590,15 @@ export interface Task {
 	 */
 	stateEnteredAt: string;
 	archivedAt?: string;
+	/** Latest persisted assignment and outcome, independent of card front matter. */
+	run?: CardRun;
 }
 
 export interface CreateTaskRequest {
 	title: string;
 	body?: string;
+	/** Merged into leading YAML; body remains the sole card-property store. */
+	properties?: Record<string, unknown>;
 	stateId?: string;
 	cwd?: string;
 }
@@ -1584,6 +1606,7 @@ export interface CreateTaskRequest {
 export interface UpdateTaskRequest {
 	title?: string;
 	body?: string;
+	properties?: Record<string, unknown>;
 	stateId?: string;
 	orderInState?: number;
 	/** `null` or blank clears the cwd (files the task as unassigned); omit to leave it unchanged. */
@@ -1688,7 +1711,12 @@ export interface ListInboxResponse {
  */
 export interface PromoteInboxItemRequest {
 	stateId?: string;
+	/** Project assignment; linked worktree and other properties remain leading YAML in the inbox body. */
+	cwd?: string;
 	markProcessed?: boolean;
+	body?: string;
+	properties?: Record<string, unknown>;
+	cwd?: string;
 }
 
 export interface PromoteInboxItemResponse {
@@ -1716,12 +1744,14 @@ export interface Routine {
 	lastRunAt?: string;
 	nextRunAt?: string;
 	// V1 additions — see "V1 routine spec" section below for the parsed-spec types.
-	/** 0 = V0 single-action routine (cron+actionKind+actionBody); 1 = V1 multi-step (specYaml). */
-	specVersion: 0 | 1;
+	/** 0 = legacy single-action; 1 = YAML pipeline; 2 = native graph. */
+	specVersion: 0 | 1 | 2;
 	/** Concurrency policy. V0 routines default to 'skip'; V1 routines set it explicitly in their spec. */
 	concurrency: RoutineConcurrency;
 	/** Full V1 spec source-of-truth. NULL/undefined for V0 routines. */
 	specYaml?: string;
+	/** Native V2 source of truth; never derived from or rendered into YAML. */
+	graph?: RoutineGraph;
 	/** Optional runtime budget caps. */
 	budget?: RoutineBudget;
 	/** IANA timezone for cron evaluation. NULL = system default. */
@@ -1730,15 +1760,15 @@ export interface Routine {
 	tags?: string[];
 }
 
-export interface CreateRoutineRequest {
+export type CreateRoutineRequest = {
 	name: string;
 	description?: string;
-	cron: string;
-	actionKind: RoutineActionKind;
-	actionBody: string;
-	actionCwd?: string;
 	enabled?: boolean;
-}
+} & (
+	| { cron: string; actionKind: RoutineActionKind; actionBody: string; actionCwd?: string; specYaml?: string; graph?: never }
+	| { graph: RoutineGraph; cron?: never; actionKind?: never; actionBody?: never; actionCwd?: never; specYaml?: never }
+	| { specYaml: string; graph?: never; cron?: string; actionKind?: RoutineActionKind; actionBody?: string; actionCwd?: string }
+);
 
 export interface UpdateRoutineRequest {
 	name?: string;
@@ -1748,6 +1778,8 @@ export interface UpdateRoutineRequest {
 	actionBody?: string;
 	actionCwd?: string;
 	enabled?: boolean;
+	specYaml?: string;
+	graph?: RoutineGraph;
 }
 
 export interface RoutineRun {
@@ -1890,6 +1922,7 @@ export type RoutineStep =
 						action: "create_task";
 						title: string;
 						body?: string;
+						properties?: Record<string, unknown>;
 						/** Task state id or case-insensitive state-name substring. Defaults to the default state. */
 						state_ref?: string;
 						cwd?: string;
@@ -1913,6 +1946,9 @@ export type RoutineStep =
 						state_ref?: string;
 						/** Defaults to true — promoted inbox items are marked processed. */
 						mark_processed?: boolean;
+						properties?: Record<string, unknown>;
+						body?: string;
+						cwd?: string;
 				  }
 				| {
 						type: "deck";

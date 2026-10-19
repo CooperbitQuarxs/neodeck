@@ -20,6 +20,7 @@ import { logger } from "./log.ts";
 import { buildRouter } from "./routes.ts";
 import { serveUpload } from "./routes-uploads.ts";
 import { WsHub, type ConnectionData } from "./ws.ts";
+import { localListenerOrigin } from "./request-peer.ts";
 import { MarketplaceService } from "./marketplace-service.ts";
 import { SkillsService } from "./skills-service.ts";
 import { startSkillsWatcher } from "./skills-watcher.ts";
@@ -193,6 +194,8 @@ export async function startDeck(opts: StartDeckOptions = {}): Promise<DeckHandle
 	notificationService.register(new BrowserNotificationChannel());
 
 
+	const { CardAgentRunner } = await import("./card-agents.ts");
+	const cardAgents = new CardAgentRunner(config);
 	const bridge = new InProcessAgentBridge({
 		idleTimeoutMs: config.idleTimeoutMs,
 	});
@@ -211,7 +214,7 @@ export async function startDeck(opts: StartDeckOptions = {}): Promise<DeckHandle
 		marketplaceService,
 		skillsService,
 		kbService,
-		{ restartServer: () => scheduleRestart(stop) },
+		{ restartServer: () => scheduleRestart(stop), cardAgents },
 	);
 	const skillsWatcherDispose = activeBackend() ? startSkillsWatcher(config) : () => {};
 	const kbWatcherDispose = startKbWatcher(kbService);
@@ -354,6 +357,11 @@ export async function startDeck(opts: StartDeckOptions = {}): Promise<DeckHandle
 		},
 	});
 
+	if (server.hostname === undefined || server.port === undefined) {
+		throw new Error("Card agent callbacks require a TCP listener");
+	}
+	cardAgents.setApiOrigin(localListenerOrigin(server.hostname, server.port));
+	await cardAgents.recover();
 	log.info(`listening on http://${server.hostname}:${server.port}`);
 	if (bootDeadline) clearTimeout(bootDeadline);
 	if (pending) rmSync(transactionFile, { force: true });
@@ -370,11 +378,13 @@ export async function startDeck(opts: StartDeckOptions = {}): Promise<DeckHandle
 		const steps: Array<[string, () => unknown]> = [
 			["work admissions close", () => workRegistry.closeAdmissions()],
 			["runner close admissions", () => routinesRunner.closeAdmissions()],
+			["card runner close admissions", () => cardAgents.closeAdmissions()],
 			["listener stop", () => server.stop(true)],
 			["oauth flows abort", () => abortOAuthFlows()],
 			["skills watcher dispose", () => skillsWatcherDispose()],
 			["kb watcher dispose", () => kbWatcherDispose()],
 			["runner dispose", () => routinesRunner.dispose()],
+			["card runner dispose", () => cardAgents.dispose()],
 			["owned processes stop", () => stopOwnedProcesses()],
 			["bridge supervisor shutdown", () => supervisor.shutdown()],
 			["bridge dispose", () => bridge.dispose()],

@@ -1,4 +1,4 @@
-import type { SlashCommand, Task } from "@npi-deck/protocol";
+import type { CreateTaskRequest, SlashCommand, Task } from "@npi-deck/protocol";
 
 import {
 	createTask,
@@ -60,11 +60,19 @@ export const DECK_SLASH_COMMANDS: DeckSlashCommand[] = [
 	{
 		name: "task add",
 		description: "Create a backlog task in this workspace",
-		argumentHint: "<title>",
+		argumentHint: "<title> [newline + YAML/body] | <JSON card>",
 		handle(args, ctx) {
-			const title = args.trim();
-			if (!title) throw new Error("Usage: /task add <title>");
-			const created = createTask({ title, stateId: "s_backlog", cwd: ctx.cwd });
+			const raw = args.trim();
+			if (!raw) throw new Error("Usage: /task add <title> [newline + YAML/body] or <JSON card>");
+			let input: CreateTaskRequest;
+			if (raw.startsWith("{")) {
+				input = JSON.parse(raw) as CreateTaskRequest;
+				if (typeof input.title !== "string" || !input.title.trim()) throw new Error("Card title is required");
+			} else {
+				const newline = raw.indexOf("\n");
+				input = { title: newline < 0 ? raw : raw.slice(0, newline).trim(), ...(newline < 0 ? {} : { body: raw.slice(newline + 1) }) };
+			}
+			const created = createTask({ ...input, stateId: input.stateId ?? "s_backlog", cwd: input.cwd ?? ctx.cwd });
 			return { kind: "consumed", output: `Created T-${created.displayId}: ${created.title} (backlog)` };
 		},
 	},
