@@ -94,6 +94,34 @@ test("an authorized project agent creates its first note in a missing vault", as
 	expect((await readKb(kb, { operation: "open", path: "projects/neodeck/first.md" }) as any).rawContent).toBe("First learned fact");
 });
 
+test("concurrent authorized create operations publish exactly one complete note without overwriting it", async () => {
+	const target = "projects/neodeck/concurrent.md";
+	const contents = ["First agent's complete note", "Second agent's complete note"];
+	const results = await Promise.allSettled(contents.map(content => writeKb(kb, identity, { path: target, content, mode: "create", kind: "note" })));
+	expect(results.filter(result => result.status === "fulfilled")).toHaveLength(1);
+	expect(results.filter(result => result.status === "rejected")).toHaveLength(1);
+	const winner = results.findIndex(result => result.status === "fulfilled");
+	expect(await readFile(path.join(vault, target), "utf8")).toBe(contents[winner]);
+	await expect(writeKb(kb, identity, { path: target, content: "Late overwrite", mode: "create", kind: "note" })).rejects.toThrow("conflict");
+	expect(await readFile(path.join(vault, target), "utf8")).toBe(contents[winner]);
+});
+
+test("high-entropy notes retain exact literal search and reverse navigation with compact candidate signatures", async () => {
+	let state = 17;
+	const text = Array.from({ length: 128 * 1024 }, () => {
+		state ^= state << 13; state ^= state >>> 17; state ^= state << 5;
+		return String.fromCharCode(0x4000 + ((state >>> 0) % 0x4000));
+	}).join("");
+	await note("entropy.md", `${text}\n[[target]]`);
+	kb.invalidate();
+	for (const query of [text.slice(23, 24), text.slice(49, 51), text.slice(74, 90)]) {
+		const result = await kb.search(query, 20);
+		expect(result.results.some(hit => hit.path === "entropy.md" && hit.matchKind === "body")).toBe(true);
+	}
+	expect((await kb.search("impossible-ascii-sequence-zqxv", 20)).results).toEqual([]);
+	expect((await kb.getBacklinks("target.md"))?.backlinks.some(link => link.source === "entropy.md")).toBe(true);
+});
+
 test("server-derived common git identity allows own knowledge and neighbour edges, rejecting aliases and foreign decisions", async () => {
 	const worktree = path.join(root, "random-checkout");
 	await mkdir(worktree); await mkdir(path.join(project, ".git/worktrees/card"), { recursive: true });

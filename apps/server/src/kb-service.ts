@@ -24,7 +24,7 @@
  */
 
 import { createReadStream, existsSync, readFileSync } from "node:fs";
-import { mkdir, readdir, readFile, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
+import { link, mkdir, readdir, readFile, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
 import { createInterface } from "node:readline";
@@ -155,8 +155,8 @@ interface GraphCache {
 	backlinks: Map<string, KbBacklink[]>;
 	unresolvedCount: number;
 	byPath: Map<string, KbGraphNode>;
-	/** Literal substring candidate index; stores note paths, never note bodies. */
-	bodyPostings: Map<string, Set<string>>;
+	/** Bounded per-note substring signatures; candidates are verified against disk. */
+	bodyFilters: Map<string, Uint32Array>;
 }
 interface FileRecord {
 	relPath: string; // forward-slash kb-relative
@@ -401,8 +401,8 @@ export class KbService {
 	 *
 	 * Frontmatter is validated by re-running parseFrontmatter on the incoming
 	 * content. Invalid YAML returns `{ kind: "invalid-frontmatter", message }`
-	 * so the editor can surface the parser's complaint. Writes go through a
-	 * temp + rename pair so concurrent reads never see a half-written file.
+	 * so the editor can surface the parser's complaint. A private complete temp
+	 * file is renamed for updates or hard-linked exclusively for creates.
 	 */
 	async saveFile(
 		subpath: string,
@@ -444,22 +444,20 @@ export class KbService {
 			}
 		}
 
-		// Atomic write: temp file in the same dir, then rename. Single-drive
-		// assumption (kb-cockpit-proposal decision 4). Rename across drives
-		// would fail; we'd need a cp+rm fallback, which is out of v1.
+		// Same-directory staging keeps publication atomic. A link cannot replace
+		// an existing destination, even when concurrent creators passed preflight.
 		const dir = path.dirname(abs);
-		const tmp = path.join(dir, `.${path.basename(abs)}.${process.pid}.${Date.now()}.tmp`);
+		const tmp = path.join(dir, `.${path.basename(abs)}.${crypto.randomUUID()}.tmp`);
 		try {
-			await writeFile(tmp, content, "utf8");
-			await rename(tmp, abs);
+			await writeFile(tmp, content, { encoding: "utf8", flag: "wx" });
+			if (mode === "create") await link(tmp, abs);
+			else await rename(tmp, abs);
 		} catch (err) {
+			if (mode === "create" && (err as NodeJS.ErrnoException).code === "EEXIST") return { kind: "conflict" };
 			log.error(`atomic save failed at ${abs}`, err);
-			try {
-				await rm(tmp, { force: true });
-			} catch {
-				// best-effort
-			}
 			throw err;
+		} finally {
+			await rm(tmp, { force: true });
 		}
 
 		// Force a fresh index next read so the new file (or new content)
@@ -478,7 +476,7 @@ export class KbService {
 	/**
 	 * Full wiki-link graph + frontmatter-tag aggregation. Built lazily on
 	 * first request and cached until the watcher invalidates the index.
-	 * Initialization reads visible bodies once, also building search postings.
+	 * Initialization reads visible bodies once, also building search signatures.
 	 *
 	 * Caps the response at GRAPH_MAX_NODES; sets `truncated: true` when the
 	 * cap fires so the UI can warn the user.
@@ -535,9 +533,9 @@ export class KbService {
 	 *   tag    one of `frontmatter.tags` matches (50 exact, 20 contains)
 	 *   body   substring hit in the body (10 base + 1 per extra hit, capped)
 	 *
-	 * Body candidates come from a generation-scoped 1/2/3-code-unit inverted
-	 * index built during graph initialization. Only candidates are reopened
-	 * to verify literal hits and produce the original 160-char snippet.
+	 * Body candidates come from bounded per-note 1/2/3-code-unit signatures
+	 * built during graph initialization. Hash collisions only add disk reads;
+	 * exact hits and the original 160-char snippet are verified on disk.
 	 */
 	async search(query: string, limit: number, entryOnly = false): Promise<KbSearchResponse> {
 		for (;;) {
@@ -588,9 +586,9 @@ export class KbService {
 				}
 			}
 
-			// Intersect postings, not every body. Short queries use exact 1/2-unit
-			// postings; longer queries verify trigram candidates against the file.
-			for (const relPath of entryOnly ? [] : bodyCandidates(graph!.bodyPostings, q)) {
+			// Inspect compact signatures, not every body. Verify possible matches
+			// on disk so collisions never change literal search semantics.
+			for (const relPath of entryOnly ? [] : bodyCandidates(graph!.bodyFilters, q)) {
 				const r = this.byRelPath.get(relPath);
 				if (!r || !(await this.safeExisting(r.absPath))) continue;
 				let raw: string;
@@ -642,7 +640,7 @@ export class KbService {
 	 * placeholder node (the UI can prompt-create via the existing flow).
 	 * Complete reverse navigation necessarily reads all visible bodies once
 	 * per generation: an inbound link can occur in any note. The same pass
-	 * builds search postings; subsequent hops reuse edges, not body content.
+	 * builds search signatures; subsequent hops reuse edges, not body content.
 	 */
 	private async buildGraph(): Promise<GraphCache> {
 		const t0 = performance.now();
@@ -652,7 +650,7 @@ export class KbService {
 		const edges: KbGraphEdge[] = [];
 		const backlinks = new Map<string, KbBacklink[]>();
 		const edgeSeen = new Set<string>();
-		const bodyPostings = new Map<string, Set<string>>();
+		const bodyFilters = new Map<string, Uint32Array>();
 		let unresolvedCount = 0;
 
 		// Pass 1: seed nodes (so unreached files still appear as orphans).
@@ -685,7 +683,7 @@ export class KbService {
 			);
 			for (const { r, raw } of reads) {
 				if (raw === undefined) continue;
-				indexBody(bodyPostings, r.relPath, raw.toLowerCase());
+				bodyFilters.set(r.relPath, indexBody(raw.toLowerCase()));
 			const { frontmatter, body } = parseFrontmatter(raw);
 			const node = nodes.get(r.relPath);
 			if (!node) continue;
@@ -731,7 +729,7 @@ export class KbService {
 			backlinks,
 			unresolvedCount,
 			byPath: nodes,
-			bodyPostings,
+			bodyFilters,
 		};
 	}
 	// ─── internals ───────────────────────────────────────────────────────
@@ -1057,45 +1055,38 @@ export class KbService {
 
 // ─── helpers ───────────────────────────────────────────────────────────────
 
-/**
- * At most 3L posting memberships for L lowercased UTF-16 units across the
- * corpus (duplicates collapse per note). No bodies or per-query results are
- * retained. Indexing is O(L), alongside the required reverse-edge body pass.
- */
-function indexBody(postings: Map<string, Set<string>>, relPath: string, text: string): void {
+/** At most 8 KiB per note, and approximately one byte per source code unit. */
+function indexBody(text: string): Uint32Array {
+	const bits = new Uint32Array(Math.min(2048, Math.max(8, Math.ceil(text.length / 4))));
+	const width = bits.length * 32;
 	for (let i = 0; i < text.length; i++) {
 		for (let length = 1; length <= 3 && i + length <= text.length; length++) {
-			const gram = text.slice(i, i + length);
-			let paths = postings.get(gram);
-			if (!paths) {
-				paths = new Set<string>();
-				postings.set(gram, paths);
-			}
-			paths.add(relPath);
+			const bit = gramHash(text, i, length) % width;
+			bits[bit >>> 5]! |= 1 << (bit & 31);
 		}
 	}
+	return bits;
 }
 
-function bodyCandidates(postings: Map<string, Set<string>>, query: string): string[] {
+function gramHash(text: string, start: number, length: number): number {
+	let hash = 2166136261 ^ length;
+	for (let offset = 0; offset < length; offset++) hash = Math.imul(hash ^ text.charCodeAt(start + offset), 16777619);
+	return hash >>> 0;
+}
+
+function bodyCandidates(filters: Map<string, Uint32Array>, query: string): string[] {
 	const length = Math.min(3, query.length);
-	const grams = new Set<string>();
-	const lists: Set<string>[] = [];
-	for (let i = 0; i + length <= query.length; i++) {
-		const gram = query.slice(i, i + length);
-		if (grams.has(gram)) continue;
-		grams.add(gram);
-		const paths = postings.get(gram);
-		if (!paths) return [];
-		lists.push(paths);
-	}
-	// Enumerate the smallest posting, not the inventory; retain only paths
-	// present in every posting. Ordering/occurrences are verified on disk.
-	lists.sort((a, b) => a.size - b.size);
-	const smallest = lists[0];
-	if (!smallest) return [];
+	const hashes = new Set<number>();
+	for (let i = 0; i + length <= query.length; i++) hashes.add(gramHash(query, i, length));
 	const candidates: string[] = [];
-	for (const relPath of smallest) {
-		if (lists.every((paths) => paths.has(relPath))) candidates.push(relPath);
+	for (const [relPath, bits] of filters) {
+		const width = bits.length * 32;
+		let possible = true;
+		for (const hash of hashes) {
+			const bit = hash % width;
+			if (!(bits[bit >>> 5]! & (1 << (bit & 31)))) { possible = false; break; }
+		}
+		if (possible) candidates.push(relPath);
 	}
 	return candidates;
 }
