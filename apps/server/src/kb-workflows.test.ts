@@ -3,7 +3,7 @@ import { mkdtemp, mkdir, writeFile, rm, symlink, readFile } from "node:fs/promis
 import os from "node:os";
 import path from "node:path";
 import { KbService } from "./kb-service.ts";
-import { kbProject, kbPrompt, writeKb, readKb, type KbAgentIdentity } from "./kb-workflows.ts";
+import { kbProject, kbPrompt, kbSessionIdentity, kbTools, writeKb, readKb, type KbAgentIdentity } from "./kb-workflows.ts";
 import { buildKbRouter } from "./routes-kb.ts";
 import { buildOnboardingRouter } from "./routes-onboarding.ts";
 import { createKbAgentTools } from "./kb-cli-extension.ts";
@@ -92,6 +92,80 @@ test("an authorized project agent creates its first note in a missing vault", as
 	kb.invalidate();
 	await writeKb(kb, identity, { path: "projects/neodeck/first.md", content: "First learned fact", mode: "create", kind: "note" });
 	expect((await readKb(kb, { operation: "open", path: "projects/neodeck/first.md" }) as any).rawContent).toBe("First learned fact");
+});
+
+test("concurrent authorized create operations publish exactly one complete note without overwriting it", async () => {
+	const target = "projects/neodeck/concurrent.md";
+	const contents = ["First agent's complete note", "Second agent's complete note"];
+	const results = await Promise.allSettled(contents.map(content => writeKb(kb, identity, { path: target, content, mode: "create", kind: "note" })));
+	expect(results.filter(result => result.status === "fulfilled")).toHaveLength(1);
+	expect(results.filter(result => result.status === "rejected")).toHaveLength(1);
+	const winner = results.findIndex(result => result.status === "fulfilled");
+	expect(await readFile(path.join(vault, target), "utf8")).toBe(contents[winner]);
+	await expect(writeKb(kb, identity, { path: target, content: "Late overwrite", mode: "create", kind: "note" })).rejects.toThrow("conflict");
+	expect(await readFile(path.join(vault, target), "utf8")).toBe(contents[winner]);
+});
+
+test("high-entropy notes retain exact literal search and reverse navigation with compact candidate signatures", async () => {
+	let state = 17;
+	const text = Array.from({ length: 128 * 1024 }, () => {
+		state ^= state << 13; state ^= state >>> 17; state ^= state << 5;
+		return String.fromCharCode(0x4000 + ((state >>> 0) % 0x4000));
+	}).join("");
+	await note("entropy.md", `${text}\n[[target]]`);
+	kb.invalidate();
+	for (const query of [text.slice(23, 24), text.slice(49, 51), text.slice(74, 90)]) {
+		const result = await kb.search(query, 20);
+		expect(result.results.some(hit => hit.path === "entropy.md" && hit.matchKind === "body")).toBe(true);
+	}
+	expect((await kb.search("impossible-ascii-sequence-zqxv", 20)).results).toEqual([]);
+	expect((await kb.getBacklinks("target.md"))?.backlinks.some(link => link.source === "entropy.md")).toBe(true);
+});
+
+test("live plan-mode identity blocks KB writes and restores authority after leaving planning", async () => {
+	let planning = false;
+	const session = { getPlanModeState: () => planning ? { enabled: true } : undefined };
+	const tools = kbTools(() => kbSessionIdentity("plan-agent", project, session), kb);
+	const write = tools.find(tool => tool.name === "kb_write")!;
+	const invoke = (name: string) => write.execute("call", { path: `projects/neodeck/${name}.md`, content: "Learning", mode: "create", kind: "note" } as never, undefined, undefined, {} as never);
+	await invoke("before-plan");
+	planning = true;
+	await expect(invoke("during-plan")).rejects.toThrow("forbidden");
+	expect(await kb.getFile("projects/neodeck/during-plan.md")).toBeUndefined();
+	planning = false;
+	await invoke("after-plan");
+	expect((await kb.getFile("projects/neodeck/after-plan.md"))?.rawContent).toBe("Learning");
+	expect(kbSessionIdentity("gone-agent", project, undefined).readOnly).toBe(true);
+});
+
+test("read traversal follows external vault junctions while agent writes still reject symlink aliases", async () => {
+	const external = path.join(root, "external-vault");
+	await mkdir(external);
+	await writeFile(path.join(external, "remote.md"), "# Remote\nexternal-junction-specific text\n[[target]]");
+	await symlink(external, path.join(vault, "cryptocracy"), "junction");
+	kb.invalidate();
+	expect((await readKb(kb, { operation: "open", path: "cryptocracy/remote.md" }) as { rawContent: string }).rawContent).toContain("external-junction-specific");
+	expect((await kb.getGraph()).nodes.some(node => node.path.endsWith("/remote.md"))).toBe(true);
+	expect((await kb.search("external-junction-specific", 20)).results.some(hit => hit.path.endsWith("/remote.md"))).toBe(true);
+	await symlink(external, path.join(vault, "projects/neodeck/external"), "junction");
+	await expect(writeKb(kb, identity, { path: "projects/neodeck/external/remote.md", content: "forbidden overwrite", mode: "update", kind: "note" })).rejects.toThrow("symlink");
+	expect(await readFile(path.join(external, "remote.md"), "utf8")).toContain("external-junction-specific");
+});
+
+test("neighbour edge writes require a parsed, resolved link rather than code or nonexistent targets", async () => {
+	const target = "projects/neopi/edges/neodeck/validated.md";
+	for (const content of [
+		"[[projects/neodeck/missing]]",
+		"`[[projects/neodeck/learned]]`",
+		"```md\n[[projects/neodeck/learned]]\n```",
+		"---\nexample: '[[projects/neodeck/learned]]'\n---\nNo body link",
+	]) {
+		await expect(writeKb(kb, identity, { path: target, content, mode: "create", kind: "edge" })).rejects.toThrow("indexed owning project note");
+		expect(await kb.getFile(target)).toBeUndefined();
+	}
+	await writeKb(kb, identity, { path: target, content: "Affected API: [[projects/neodeck/learned#Discovery|Owning note]]", mode: "create", kind: "edge" });
+	expect((await kb.getLinks(target))?.links[0]?.resolved).toBe("projects/neodeck/learned.md");
+	expect((await kb.getBacklinks("projects/neodeck/learned.md"))?.backlinks.some(link => link.source === target)).toBe(true);
 });
 
 test("server-derived common git identity allows own knowledge and neighbour edges, rejecting aliases and foreign decisions", async () => {

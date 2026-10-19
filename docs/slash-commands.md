@@ -42,9 +42,12 @@ processed after the note is saved. Requires an active project chat. For example:
 The KB browser is read-only; agents populate it using `kb_write`. Server identity
 determines the writable `projects/<project>/` area, including linked Git worktrees.
 Neighbour writes must be typed edges under `projects/<neighbour>/edges/<project>/`
-with a link to the owning project's knowledge. They cannot change another
+with a parsed link that resolves to an indexed owning-project note; nonexistent
+targets and links inside code/frontmatter do not grant edge-write authority. They cannot change another
 project's ADRs or product decisions. Chat tools use the active session's
-server-bound project identity; read-only agent capabilities cannot write.
+server-bound project identity; read-only and live plan-mode sessions cannot write.
+Read traversal follows configured external vault junctions; that does not grant
+write authority through a symlink or into another project's decisions.
 First-run setup selects the vault location without populating it. Direct file and
 starter-scaffold HTTP writes are disabled; ask a project agent to create notes.
 

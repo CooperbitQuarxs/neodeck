@@ -120,24 +120,22 @@ the same human title.
 
 Complete backlinks require a one-time server-side read of every visible note
 body per vault invalidation: an inbound link can appear anywhere. That shared,
-single-flight pass builds reverse edges and literal substring postings; warm
+single-flight pass builds reverse edges and compact substring signatures; warm
 backlinks reuse the index without reopening notes. Agents receive only the
 requested node or edges, never the whole vault. This is an initialization
 interpretation, not a claim that cold traversal performs zero whole-vault I/O.
 
-Different full-text queries intersect generation-owned postings and reopen
-only candidate notes to verify exact substrings, scores and snippets. No note
-bodies or per-query results are retained. Common short queries or adversarial
-texts can still make all notes candidates. Metadata scoring still visits the
-inventory; initialization and invalidation rebuilds are corpus-linear, and
-32 concurrent note reads bound concurrency, not total bytes.
+Different full-text queries inspect generation-owned per-note signatures and
+reopen only possible matches to verify exact substrings, scores and snippets.
+Signatures retain at most 8 KiB per note, approximately one byte per source
+UTF-16 code unit for smaller notes, rather than a Map/Set per distinct gram.
+Hash collisions can add candidate reads but never false search results.
+No note bodies or per-query results are retained. Common short queries,
+high-entropy notes and adversarial texts can still make all notes candidates.
+Metadata scoring still visits the inventory; initialization and invalidation
+rebuilds are corpus-linear, and 32 concurrent reads bound concurrency, not
+total bytes.
 
-A bounded Linux implementation probe under syscall tracing used 2,000 notes
-totalling 8,192,000 bytes: cold metadata/reverse/postings initialization took
-3.36 seconds, and two different sparse queries took 3.15 and 1.95 milliseconds,
-each reopening only its matching note. Process-wide RSS changed from 87.7 to
-165.9 MiB. These are synthetic, traced measurements, not a massive-vault
-latency or memory guarantee.
 
 ## Templating
 

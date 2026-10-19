@@ -60,7 +60,7 @@ import type {
 	SessionHandle,
 	SlashDispatchResult,
 } from "./types.ts";
-import { kbTools } from "../kb-workflows.ts";
+import { kbSessionIdentity, kbTools } from "../kb-workflows.ts";
 
 const log = logger("bridge:in-process");
 import { DEFAULT_MODEL_CANDIDATES, FALLBACK_MODEL_CANDIDATES, firstAuthenticatedModel } from "../deck-model-defaults.ts";
@@ -382,7 +382,7 @@ export class InProcessAgentBridge implements AgentBridge {
 			sessionManager,
 			modelRegistry,
 			settings,
-			customTools: kbTools(() => ({ agentId: sessionId, projectCwd: sessionManager.getCwd?.() ?? cwd, readOnly: false })),
+			customTools: kbTools(() => kbSessionIdentity(sessionId, sessionManager.getCwd?.() ?? cwd, this.active.get(sessionId)?.session)),
 			authStorage: modelRegistry.authStorage,
 			// Skip eval-tool Python warmup on session create. On Windows this otherwise
 			// flashes a python.exe console window each turn-zero; on demand spawn is fine.
