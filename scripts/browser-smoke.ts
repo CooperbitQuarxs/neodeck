@@ -83,13 +83,12 @@ function signalGroup(signal: NodeJS.Signals): void {
 // Crashpad deliberately detaches from Chromium's process group. Only touch
 // crash handlers from this browser tree carrying this invocation's private HOME.
 function detachedCrashpads(): number[] {
-	const browserDirectory = path.dirname(realpathSync(executable));
 	const owned: number[] = [];
 	for (const entry of readdirSync("/proc")) {
 		if (!/^\d+$/.test(entry)) continue;
 		try {
 			const argv = readFileSync(`/proc/${entry}/cmdline`, "utf8").split("\0");
-			if (!argv[0] || path.dirname(argv[0]) !== browserDirectory) continue;
+			if (!argv[0]) continue;
 			if (path.basename(argv[0]) !== "chrome_crashpad_handler" && !argv.includes("--type=crashpad-handler")) continue;
 			if (readFileSync(`/proc/${entry}/environ`, "utf8").split("\0").includes(`HOME=${home}`)) owned.push(Number(entry));
 		} catch (error) {
