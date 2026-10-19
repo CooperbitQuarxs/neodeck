@@ -115,8 +115,11 @@ export async function writeKb(service: KbService, identity: KbAgentIdentity, req
 	if (request.captureId && !capture) throw new Error("Capture not found");
 	if (capture) content = `# ${capture.title}\n\n${capture.body}\n\n_Captured from inbox ${capture.id} (${capture.kind})_\n`;
 	if (typeof content !== "string") throw new Error("KB content required");
-	if (neighbour && !new RegExp(`\\[\\[projects/${project}/[^\\]\\n]+\\]\\]`).test(content)) {
-		throw new Error("Neighbour edge must link back to the owning project note");
+	if (neighbour) {
+		const links = await service.linksInContent(content, request.path);
+		if (!links.some(link => link.resolved?.startsWith(`projects/${project}/`))) {
+			throw new Error("Neighbour edge must link back to an indexed owning project note");
+		}
 	}
 	const saved = await service.saveFile(request.path, content, request.mode);
 	if (saved.kind !== "ok") throw new Error(`KB save refused: ${saved.kind}`);

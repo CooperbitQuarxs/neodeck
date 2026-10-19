@@ -122,6 +122,22 @@ test("high-entropy notes retain exact literal search and reverse navigation with
 	expect((await kb.getBacklinks("target.md"))?.backlinks.some(link => link.source === "entropy.md")).toBe(true);
 });
 
+test("neighbour edge writes require a parsed, resolved link rather than code or nonexistent targets", async () => {
+	const target = "projects/neopi/edges/neodeck/validated.md";
+	for (const content of [
+		"[[projects/neodeck/missing]]",
+		"`[[projects/neodeck/learned]]`",
+		"```md\n[[projects/neodeck/learned]]\n```",
+		"---\nexample: '[[projects/neodeck/learned]]'\n---\nNo body link",
+	]) {
+		await expect(writeKb(kb, identity, { path: target, content, mode: "create", kind: "edge" })).rejects.toThrow("indexed owning project note");
+		expect(await kb.getFile(target)).toBeUndefined();
+	}
+	await writeKb(kb, identity, { path: target, content: "Affected API: [[projects/neodeck/learned#Discovery|Owning note]]", mode: "create", kind: "edge" });
+	expect((await kb.getLinks(target))?.links[0]?.resolved).toBe("projects/neodeck/learned.md");
+	expect((await kb.getBacklinks("projects/neodeck/learned.md"))?.backlinks.some(link => link.source === target)).toBe(true);
+});
+
 test("server-derived common git identity allows own knowledge and neighbour edges, rejecting aliases and foreign decisions", async () => {
 	const worktree = path.join(root, "random-checkout");
 	await mkdir(worktree); await mkdir(path.join(project, ".git/worktrees/card"), { recursive: true });

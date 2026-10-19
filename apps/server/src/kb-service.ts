@@ -754,6 +754,13 @@ export class KbService {
 		return note ? { path: note.path, links: note.outgoingLinks } : undefined;
 	}
 
+	/** Parse unsaved note links through the same code/frontmatter and resolution rules. */
+	async linksInContent(content: string, sourcePath: string): Promise<KbWikilink[]> {
+		await this.ensureIndex();
+		const dir = path.posix.dirname(normalizeRel(sourcePath));
+		return this.extractWikilinks(parseFrontmatter(content).body, dir === "." ? "" : dir);
+	}
+
 	/** Existing paths must resolve inside the vault; symlink escapes are not notes. */
 	private async safeExisting(abs: string): Promise<boolean> {
 		try {
