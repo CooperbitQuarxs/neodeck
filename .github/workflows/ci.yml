@@ -147,7 +147,11 @@ jobs:
         run: bun test
 
       - name: web build
-        run: bun --cwd apps/web run build
+        shell: bash
+        run: |
+          set -euo pipefail
+          bun run --cwd apps/web build
+          test -d apps/web/dist
 
       # Nightly checks are informational; a successful web build can publish
       # even when typecheck/tests fail. Stable releases keep both checks as gates.
