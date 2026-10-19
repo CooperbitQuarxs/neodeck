@@ -10,12 +10,22 @@
  */
 
 import { broadcastBus } from "../../broadcast-bus.ts";
-import type { NotificationChannel, NotificationEnvelope } from "../types.ts";
+import type {
+	NotificationChannel,
+	NotificationChannelPreflight,
+	NotificationChannelReceipt,
+	NotificationEnvelope,
+} from "../types.ts";
 
 export class BrowserNotificationChannel implements NotificationChannel {
 	readonly id = "browser";
 
-	deliver(envelope: NotificationEnvelope): void {
+	/** Broadcast registration cannot establish recipient presence or permission. */
+	preflight(): NotificationChannelPreflight {
+		return { status: "ready" };
+	}
+
+	deliver(envelope: NotificationEnvelope): NotificationChannelReceipt {
 		broadcastBus.broadcast({
 			type: "notification",
 			id: envelope.id,
@@ -28,5 +38,7 @@ export class BrowserNotificationChannel implements NotificationChannel {
 			...(envelope.actionUrl !== undefined ? { actionUrl: envelope.actionUrl } : {}),
 			timestamp: envelope.timestamp,
 		});
+		// The bus deliberately isolates listener failures; this is dispatch only.
+		return { status: "dispatched" };
 	}
 }
