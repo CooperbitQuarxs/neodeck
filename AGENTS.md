@@ -5,19 +5,12 @@ Web cockpit and agent fleet console for NeoPi (`npi`). Repository:
 `bjb2/omp-deck` no longer exists; changing the local upstream remote awaits
 the Captain's answer.
 
-## Workspace policy comes first
+## Read before acting
 
-Workspace policy governs branches, worktrees, signed commits, pull requests,
-merging, labels, and GitHub posting. Repository-specific values are in
-`docs/policy/README.md`; nothing here adds a confirmation step.
-
-- Default branch: `main`; integration: `nightly`.
-- Create topic branches in `../neodeck-wt-<slug>` from freshly fetched `origin/nightly`; PRs target `nightly`. `hotfix/` PRs target `main`, followed by a PR merging `main` back into `nightly`.
-- Merge commits only: `Merge PR #<number>: <conventional PR subject> (@<author>)`.
-- PR bodies use `.github/PULL_REQUEST_TEMPLATE.md` and the workspace NOTE identity block.
-- Contributor PRs are read-only on the owner's machine; see `docs/agents/pr-review-bots.md` › Running PR code.
-- Review bots are advisory, requested at the authoring agent's discretion; see `docs/agents/pr-review-bots.md` before requesting or handling a round.
-- Weekly nightly-to-main promotion and release tags are documented in `docs/policy/README.md`.
+- Read `README.md` for project context and runtime layout; it is not agent policy.
+- Read `CONTEXT.md` for repository/tracker vocabulary before interpreting work.
+- Read `docs/agents/policy.md` before branches, commits, GitHub posts, PRs, or merges; `docs/agents/` is the home for agent policy and mechanics.
+- Before requesting review, answering findings, or merging, read `docs/agents/pr-review-bots.md`: every PR requires clean Code Review on the final head and every finding answered; request no new security passes.
 
 ## Fork maintenance
 
@@ -35,13 +28,12 @@ and display untouched during verification.
 
 GitHub Issues on `PsychedelicShayna/neodeck`; always target it explicitly because
 fork discovery can resolve to the upstream parent. Read
-`docs/agents/issue-tracker.md` for issue mechanics, effort sizing, legacy-label
-migration, NeoPi dependency contracts, and wayfinding.
+`docs/agents/issue-tracker.md` for commands, sizing, NeoPi contracts, and wayfinding.
 
-### Triage labels
+### Triage
 
-Use the five canonical readiness labels, layered with type, priority, and
-`effort:*`. Read `docs/agents/triage-labels.md` when triaging.
+Read `docs/agents/triage.md` before classifying, claiming, reconciling, or closing
+issues and PRs; `docs/agents/triage-labels.md` defines the composable vocabulary.
 
 ### Issue Funnel
 
@@ -50,11 +42,11 @@ Before publishing or amending Captain specifications, read
 
 ### Domain docs
 
-Single-context: one `CONTEXT.md` and `docs/adr/` at the repo root. Read
+Single-context: root `CONTEXT.md` and decisions under `docs/agents/adr/` when present. Read
 `docs/agents/domain.md` before domain exploration.
 
 ## Sizing work
 
-Whenever assessing effort or duration, estimate for an AI agent, not a human.
-Use the house `effort:*` taxonomy; the legacy difficulty/frame mapping and
-retention rules live in `docs/agents/issue-tracker.md#effort-and-legacy-sizing-migration`.
+Read `docs/agents/issue-tracker.md#sizing` for independent difficulty/frame
+estimates, provenance, and one-time agent-frame normalization. Preserve
+human-authored estimates and existing evidenced title prefixes.
