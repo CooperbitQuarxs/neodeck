@@ -20,6 +20,7 @@ import { logger } from "./log.ts";
 import { buildRouter } from "./routes.ts";
 import { serveUpload } from "./routes-uploads.ts";
 import { WsHub, type ConnectionData } from "./ws.ts";
+import { localListenerOrigin } from "./request-peer.ts";
 import { MarketplaceService } from "./marketplace-service.ts";
 import { SkillsService } from "./skills-service.ts";
 import { startSkillsWatcher } from "./skills-watcher.ts";
@@ -356,7 +357,7 @@ export async function startDeck(opts: StartDeckOptions = {}): Promise<DeckHandle
 		},
 	});
 
-	cardAgents.setApiOrigin(`http://${server.hostname === "0.0.0.0" ? "127.0.0.1" : server.hostname}:${server.port}`);
+	cardAgents.setApiOrigin(localListenerOrigin(server.hostname, server.port));
 	await cardAgents.recover();
 	log.info(`listening on http://${server.hostname}:${server.port}`);
 	if (bootDeadline) clearTimeout(bootDeadline);

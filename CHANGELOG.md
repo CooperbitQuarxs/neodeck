@@ -48,6 +48,7 @@ All notable changes to NPI deck (a fork of bjb2/omp-deck; entries before the for
 ### Fixed
 
 - Queued card assignments resume after a server restart; cancellations use the failure column, and deleted outcome columns no longer discard completed runs.
+- Card workers reach protected KB routes on IPv6 listeners, and assignments reject an active column that is also the completion column (#101).
 
 - Linked card worktrees are validated by OS-native canonical directory rather than Git's path spelling, including Windows 8.3 aliases and macOS aliases (#101). Card-run persistence uses connection-owned queries so strict database close can release its writes.
 - Knowledge-protocol tests provision the native SDK before admitting cases, keeping cold backend loading outside per-case hooks without increasing case deadlines (#101).

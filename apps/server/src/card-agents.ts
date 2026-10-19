@@ -59,6 +59,13 @@ export class CardAgentRunner {
 		if (!Number.isSafeInteger(limit) || limit < 1) throw new Error("cardAgentConcurrency must be a positive safe integer");
 		return limit;
 	}
+	private checkColumns(): void {
+		const active = this.config.cardAgentActiveState ?? "s_active";
+		if (active === this.doneState()) throw new Error("Card agent active and done columns must be distinct");
+		for (const state of [active, this.doneState(), this.config.cardAgentFailureState ?? "s_blocked"]) {
+			if (!getState(state)) throw new Error(`Card agent column is not configured: ${state}`);
+		}
+	}
 	capacityChanged(): void { this.checkLimit(); this.drain(); }
 	resolveToken(token: string): { agentId: string; projectCwd: string | null; readOnly: boolean } | undefined {
 		for (const entry of this.assignments.values()) {
@@ -82,6 +89,7 @@ export class CardAgentRunner {
 					const task = getTask(entry.run.taskId);
 					if (!task || task.archivedAt) throw new Error("Queued card is no longer available");
 					const properties = cardExecutionProperties(task.body);
+					this.checkColumns();
 					const release = workRegistry.admit("card", entry.run.id);
 					const assignment: Assignment = { run: entry.run, task, properties, ownership, controller: new AbortController(), token: crypto.randomUUID(), release };
 					this.assignments.set(task.id, assignment);
@@ -105,9 +113,7 @@ export class CardAgentRunner {
 		if (!task) throw new Error("Task not found");
 		if (task.archivedAt) throw new Error("Cannot assign an archived card");
 		const properties = cardExecutionProperties(task.body);
-		for (const state of [this.config.cardAgentActiveState ?? "s_active", this.doneState(), this.config.cardAgentFailureState ?? "s_blocked"]) {
-			if (!getState(state)) throw new Error(`Card agent column is not configured: ${state}`);
-		}
+		this.checkColumns();
 		const run: CardRun = {
 			id: `card-${crypto.randomUUID()}`, taskId, status: "queued", assignedAt: new Date().toISOString(), ownedWorktree: !properties.worktree,
 			model: properties.model ?? (properties.role ? undefined : this.config.cardAgentModel),

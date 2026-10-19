@@ -150,6 +150,16 @@ if (!fixtureRoot) {
   expect(getTask(running.id)?.run?.status).toBe("cancelled"); expect(existsSync(getTask(running.id)!.run!.cwd!)).toBe(false); expect(unfinishedCardRuns()).toEqual([]);
  }, 80_000);
 
+ test("assignment rejects an active column equal to the completion column before recording a run", async () => {
+  const owner = new CardAgentRunner({ ...config, cardAgentActiveState: "s_done" });
+  try {
+   const card = await create("invalid matching columns", { worktree: linked });
+   expect(() => owner.assign(card.id)).toThrow("must be distinct");
+   expect(getTask(card.id)?.run).toBeUndefined();
+   expect(getTask(card.id)?.stateId).toBe(card.stateId);
+  } finally { await owner.dispose(); }
+ });
+
  test("recovery executes persisted queued assignments with their original ID but never replays running work", async () => {
   const queued = await create("persisted queue recovery", { worktree: linked });
   const interrupted = await create("persisted running recovery", { worktree: linked });

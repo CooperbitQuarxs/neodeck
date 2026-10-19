@@ -16,6 +16,13 @@ export type RequestPeerEnv = { Bindings: RequestPeerBindings };
  */
 export const PROXY_PEER_HEADER = "x-npi-deck-proxy-peer";
 
+/** Reach this listener from a local worker, including wildcard and IPv6 binds. */
+export function localListenerOrigin(hostname: string, port: number): string {
+	const host = hostname === "0.0.0.0" ? "127.0.0.1" : hostname === "::" || hostname === "[::]" ? "::1" : hostname;
+	const authority = host.includes(":") && !host.startsWith("[") ? `[${host}]` : host;
+	return `http://${authority}:${port}`;
+}
+
 /**
  * Loopback gate for privileged routes (secret reveal, restart).
  *
