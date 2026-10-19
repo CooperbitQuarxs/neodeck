@@ -55,6 +55,8 @@ export interface GraphActivation {
 	event: GraphObject;
 	/** Select one source explicitly, otherwise activate sources matching eventType. */
 	sourceNodeId?: string;
+	/** Stable event/explicit operation identity; retries must retain it. */
+	operationId?: string;
 }
 
 /**
@@ -81,6 +83,15 @@ export interface GraphEmission {
 	value: GraphValue;
 }
 
+export interface GraphEffect {
+	logicalKey: string;
+	status: "planned" | "confirmed" | "uncertain" | "rejected" | "not-dispatched";
+	destination: GraphObject;
+	request: GraphObject;
+	receipt?: GraphObject;
+	replayed: boolean;
+}
+
 export interface GraphNodeRun {
 	nodeId: string;
 	type: string;
@@ -92,6 +103,7 @@ export interface GraphNodeRun {
 	inputPorts: string[];
 	outputs: GraphOutput[];
 	error?: string;
+	effects?: GraphEffect[];
 }
 
 export interface GraphExecutionResult {
@@ -106,6 +118,7 @@ export interface GraphExecutionResult {
 		llmCostMicros: number;
 		stepsExecuted: number;
 	};
+	dryRun?: boolean;
 }
 
 /** Persisted trace includes the definition actually executed, not its later edit. */
