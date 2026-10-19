@@ -1688,6 +1688,8 @@ export interface ListInboxResponse {
  */
 export interface PromoteInboxItemRequest {
 	stateId?: string;
+	/** Project assignment; linked worktree and other properties remain leading YAML in the inbox body. */
+	cwd?: string;
 	markProcessed?: boolean;
 }
 

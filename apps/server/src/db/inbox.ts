@@ -82,6 +82,22 @@ export function createInbox(input: {
 	return out;
 }
 
+/** Commit a delivery receipt atomically with the synchronous inbox mutation. */
+export function inboxMutation<T>(scope: string, key: string | undefined, mutate: () => T): T {
+	if (!key) return mutate();
+	const db = getDb();
+	return db.transaction(() => {
+		const receipt = db.query<{ response_json: string }, [string, string]>(
+			"SELECT response_json FROM inbox_mutation_receipts WHERE scope = ? AND request_key = ?",
+		).get(scope, key);
+		if (receipt) return JSON.parse(receipt.response_json) as T;
+		const result = mutate();
+		db.query("INSERT INTO inbox_mutation_receipts (scope, request_key, response_json) VALUES (?, ?, ?)")
+			.run(scope, key, JSON.stringify(result));
+		return result;
+	})();
+}
+
 export function updateInbox(
 	itemId: string,
 	patch: { title?: string; body?: string; kind?: InboxKind; source?: string; processed?: boolean },
