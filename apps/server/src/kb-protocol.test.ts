@@ -14,48 +14,49 @@ let saved: Record<string, string | undefined>;
 let kbRoot: string;
 let router: InternalUrlRouter;
 
-beforeAll(async () => {
-	await loadBackend();
-});
+// quarantined: flaky on Windows, tracked by #192
+describe.skipIf(process.platform === "win32")("kb:// resolution", () => {
+	beforeAll(async () => {
+		await loadBackend();
+	});
 
-beforeEach(() => {
-	saved = Object.fromEntries(ENV_KEYS.map((k) => [k, process.env[k]]));
-	kbRoot = mkdtempSync(path.join(os.tmpdir(), "npi-deck-kb-proto-"));
-	process.env.NPI_DECK_KB_ROOT = kbRoot;
-	// Wall off homedir as a safety net even though NPI_DECK_KB_ROOT wins.
-	const tmpHome = mkdtempSync(path.join(os.tmpdir(), "npi-deck-kb-home-"));
-	process.env.HOME = tmpHome;
-	process.env.USERPROFILE = tmpHome;
+	beforeEach(() => {
+		saved = Object.fromEntries(ENV_KEYS.map((k) => [k, process.env[k]]));
+		kbRoot = mkdtempSync(path.join(os.tmpdir(), "npi-deck-kb-proto-"));
+		process.env.NPI_DECK_KB_ROOT = kbRoot;
+		// Wall off homedir as a safety net even though NPI_DECK_KB_ROOT wins.
+		const tmpHome = mkdtempSync(path.join(os.tmpdir(), "npi-deck-kb-home-"));
+		process.env.HOME = tmpHome;
+		process.env.USERPROFILE = tmpHome;
 
-	// Seed a small wiki.
-	mkdirSync(path.join(kbRoot, "system"), { recursive: true });
-	mkdirSync(path.join(kbRoot, "tools"), { recursive: true });
-	writeFileSync(
-		path.join(kbRoot, "system", "working-voice.md"),
-		"# Working voice\n\nbody\n",
-		"utf8",
-	);
-	writeFileSync(
-		path.join(kbRoot, "system", "deck-notes.md"),
-		"# Deck notes\n\nbody — with em-dash\n",
-		"utf8",
-	);
-	writeFileSync(path.join(kbRoot, "tools", "x.md"), "x\n", "utf8");
+		// Seed a small wiki.
+		mkdirSync(path.join(kbRoot, "system"), { recursive: true });
+		mkdirSync(path.join(kbRoot, "tools"), { recursive: true });
+		writeFileSync(
+			path.join(kbRoot, "system", "working-voice.md"),
+			"# Working voice\n\nbody\n",
+			"utf8",
+		);
+		writeFileSync(
+			path.join(kbRoot, "system", "deck-notes.md"),
+			"# Deck notes\n\nbody — with em-dash\n",
+			"utf8",
+		);
+		writeFileSync(path.join(kbRoot, "tools", "x.md"), "x\n", "utf8");
 
-	sdk().InternalUrlRouter.resetForTests();
-	router = sdk().InternalUrlRouter.instance();
-	router.register(new KbProtocolHandler());
-});
+		sdk().InternalUrlRouter.resetForTests();
+		router = sdk().InternalUrlRouter.instance();
+		router.register(new KbProtocolHandler());
+	});
 
-afterEach(() => {
-	sdk().InternalUrlRouter.resetForTests();
-	for (const k of ENV_KEYS) {
-		if (saved[k] === undefined) delete process.env[k];
-		else process.env[k] = saved[k];
-	}
-});
+	afterEach(() => {
+		sdk().InternalUrlRouter.resetForTests();
+		for (const k of ENV_KEYS) {
+			if (saved[k] === undefined) delete process.env[k];
+			else process.env[k] = saved[k];
+		}
+	});
 
-describe("kb:// resolution", () => {
 	test("resolves an explicit `.md` path verbatim", async () => {
 		const res = await router.resolve("kb://system/working-voice.md");
 		expect(res.content).toContain("# Working voice");

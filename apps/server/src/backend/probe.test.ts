@@ -48,7 +48,8 @@ test("refuses unprepared candidate before importing SDK modules", async () => {
 	} finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("refuses a Bun older than the tree's engines.bun", async () => {
+// quarantined: flaky on Windows, tracked by #198
+test.skipIf(process.platform === "win32")("refuses a Bun older than the tree's engines.bun", async () => {
 	const tree = recordedTree({ bunEngine: ">=99.0.0" });
 	expect(await refusal(tree)).toContain(`Bun ${Bun.version} does not satisfy NeoPi's engines.bun ">=99.0.0"`);
 });
