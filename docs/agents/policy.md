@@ -120,6 +120,9 @@ run, and revert through a PR if it fails.
 `.github/workflows/promote-nightly.yml` runs monthly and on `workflow_dispatch`
 to **open the promotion PR only**, with `human: pending`; the owner merges
 `nightly` into `main`. Automation does not merge into the default branch.
+The workflow applies `upstream` only when merge subjects in
+`origin/$BASE..origin/$SOURCE` reference a `sync/` branch, indicating a carried
+upstream release; ordinary internal promotion does not imply upstream involvement.
 
 Scheduled/dispatch execution requires the workflow on the default branch.
 The Captain performs the first promotion after it lands on `nightly`; watch the
