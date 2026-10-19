@@ -78,9 +78,14 @@ jobs:
                  echo "- [ ] Tested locally (not run: promotion PR)"
                  echo "- [ ] CHANGELOG updated (not applicable: promotion PR)"
               } > "$body"
+              upstream_labels=()
+              promotion_merges=$(git log --merges --format=%s "origin/$BASE..origin/$SOURCE")
+              if [[ "$promotion_merges" == *"sync/"* ]]; then
+                 upstream_labels+=(--label upstream)
+              fi
               url=$(gh pr create --base "$BASE" --head "$branch" \
                  --title "chore(promote): nightly into main $date" \
-                 --body-file "$body")
+                 --body-file "$body" "${upstream_labels[@]}")
               number=${url##*/}
               [ -n "$number" ] || { echo "::error::could not determine the promotion PR number"; exit 1; }
               echo "number=$number" >> "$GITHUB_OUTPUT"
