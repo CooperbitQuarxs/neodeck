@@ -3,7 +3,7 @@ import { mkdtemp, mkdir, writeFile, rm, symlink, readFile } from "node:fs/promis
 import os from "node:os";
 import path from "node:path";
 import { KbService } from "./kb-service.ts";
-import { kbProject, kbPrompt, writeKb, readKb, type KbAgentIdentity } from "./kb-workflows.ts";
+import { kbProject, kbPrompt, kbSessionIdentity, kbTools, writeKb, readKb, type KbAgentIdentity } from "./kb-workflows.ts";
 import { buildKbRouter } from "./routes-kb.ts";
 import { buildOnboardingRouter } from "./routes-onboarding.ts";
 import { createKbAgentTools } from "./kb-cli-extension.ts";
@@ -120,6 +120,36 @@ test("high-entropy notes retain exact literal search and reverse navigation with
 	}
 	expect((await kb.search("impossible-ascii-sequence-zqxv", 20)).results).toEqual([]);
 	expect((await kb.getBacklinks("target.md"))?.backlinks.some(link => link.source === "entropy.md")).toBe(true);
+});
+
+test("live plan-mode identity blocks KB writes and restores authority after leaving planning", async () => {
+	let planning = false;
+	const session = { getPlanModeState: () => planning ? { enabled: true } : undefined };
+	const tools = kbTools(() => kbSessionIdentity("plan-agent", project, session), kb);
+	const write = tools.find(tool => tool.name === "kb_write")!;
+	const invoke = (name: string) => write.execute("call", { path: `projects/neodeck/${name}.md`, content: "Learning", mode: "create", kind: "note" } as never, undefined, undefined, {} as never);
+	await invoke("before-plan");
+	planning = true;
+	await expect(invoke("during-plan")).rejects.toThrow("forbidden");
+	expect(await kb.getFile("projects/neodeck/during-plan.md")).toBeUndefined();
+	planning = false;
+	await invoke("after-plan");
+	expect((await kb.getFile("projects/neodeck/after-plan.md"))?.rawContent).toBe("Learning");
+	expect(kbSessionIdentity("gone-agent", project, undefined).readOnly).toBe(true);
+});
+
+test("read traversal follows external vault junctions while agent writes still reject symlink aliases", async () => {
+	const external = path.join(root, "external-vault");
+	await mkdir(external);
+	await writeFile(path.join(external, "remote.md"), "# Remote\nexternal-junction-specific text\n[[target]]");
+	await symlink(external, path.join(vault, "cryptocracy"), "junction");
+	kb.invalidate();
+	expect((await readKb(kb, { operation: "open", path: "cryptocracy/remote.md" }) as { rawContent: string }).rawContent).toContain("external-junction-specific");
+	expect((await kb.getGraph()).nodes.some(node => node.path.endsWith("/remote.md"))).toBe(true);
+	expect((await kb.search("external-junction-specific", 20)).results.some(hit => hit.path.endsWith("/remote.md"))).toBe(true);
+	await symlink(external, path.join(vault, "projects/neodeck/external"), "junction");
+	await expect(writeKb(kb, identity, { path: "projects/neodeck/external/remote.md", content: "forbidden overwrite", mode: "update", kind: "note" })).rejects.toThrow("symlink");
+	expect(await readFile(path.join(external, "remote.md"), "utf8")).toContain("external-junction-specific");
 });
 
 test("neighbour edge writes require a parsed, resolved link rather than code or nonexistent targets", async () => {

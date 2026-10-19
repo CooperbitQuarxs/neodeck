@@ -761,14 +761,17 @@ export class KbService {
 		return this.extractWikilinks(parseFrontmatter(content).body, dir === "." ? "" : dir);
 	}
 
-	/** Existing paths must resolve inside the vault; symlink escapes are not notes. */
+	/** Reads follow configured junctions; write authority is checked separately. */
 	private async safeExisting(abs: string): Promise<boolean> {
 		try {
+			const logical = normalizeRel(path.relative(this.root, abs));
+			if (!this.resolveAbs(logical)) return false;
 			const root = await realpath(this.root);
 			const target = await realpath(abs);
-			if (target !== root && !target.startsWith(`${root}${path.sep}`)) return false;
-			const rel = normalizeRel(path.relative(root, target));
-			return !this.pathIsExcluded(rel, (await stat(target)).isDirectory());
+			const physical = target === root || target.startsWith(`${root}${path.sep}`)
+				? normalizeRel(path.relative(root, target)) : logical;
+			const directory = (await stat(target)).isDirectory();
+			return !this.pathIsExcluded(logical, directory) && !this.pathIsExcluded(physical, directory);
 		} catch {
 			return false;
 		}

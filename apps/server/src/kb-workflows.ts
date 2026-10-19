@@ -11,6 +11,14 @@ export interface KbAgentIdentity {
 	projectCwd: string | null;
 	readOnly: boolean;
 }
+
+export function kbSessionIdentity(
+	agentId: string,
+	projectCwd: string | null,
+	session: { getPlanModeState(): { enabled: boolean } | undefined } | undefined,
+): KbAgentIdentity {
+	return { agentId, projectCwd, readOnly: !session || session.getPlanModeState()?.enabled === true };
+}
 export interface KbReadRequest {
 	operation: "open" | "links" | "backlinks" | "search";
 	path?: string;

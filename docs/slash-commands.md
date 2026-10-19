@@ -45,7 +45,9 @@ Neighbour writes must be typed edges under `projects/<neighbour>/edges/<project>
 with a parsed link that resolves to an indexed owning-project note; nonexistent
 targets and links inside code/frontmatter do not grant edge-write authority. They cannot change another
 project's ADRs or product decisions. Chat tools use the active session's
-server-bound project identity; read-only agent capabilities cannot write.
+server-bound project identity; read-only and live plan-mode sessions cannot write.
+Read traversal follows configured external vault junctions; that does not grant
+write authority through a symlink or into another project's decisions.
 First-run setup selects the vault location without populating it. Direct file and
 starter-scaffold HTTP writes are disabled; ask a project agent to create notes.
 
