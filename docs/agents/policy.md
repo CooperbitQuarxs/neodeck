@@ -148,10 +148,16 @@ are in [triage.md](triage.md#closure).
 
 ## Releases
 
-Existing upstream tags use `vX.Y.Z` (`v0.1.0` through `v0.6.1`). Fork releases,
-when introduced, follow NeoPi's `v<upstream>-<fork>.<YYYYMMDD>` pattern. Policy
-changes create no tags or versions. Promotion is separate from tagging and
-live deployment; [installation](../install.md) owns runtime setup.
+The existing CI workflow publishes a stable GitHub release after each push to
+`main`, a unique prerelease after each push to `nightly`, and a stable release
+from a selected ref on `workflow_dispatch`. The Ubuntu matrix builder supplies
+the source-plus-web archive; PRs do not publish. Releases and tags are
+append-only: never delete or overwrite an existing release, its assets or tag.
+The package-derived tag formats, dispatch commands and archive setup are in
+[README.md › Releases](../../README.md#releases). These tags replace the
+previous proposed date-based fork convention; existing upstream tags remain
+unchanged. Release publication is separate from promotion and live deployment;
+[installation](../install.md) owns runtime setup.
 
 ## Mechanics
 

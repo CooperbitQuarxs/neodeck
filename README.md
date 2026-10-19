@@ -89,6 +89,66 @@ That's it — pick a model in the chat surface and send a prompt.
 
 Other env knobs: `NPI_DECK_PORT`, `NPI_DECK_HOST`, `NPI_DECK_DB_PATH`, `NPI_DECK_UPLOADS_ROOT` — see [docs/configuration.md](./docs/configuration.md). For the full step-by-step (prerequisites, `neopi-setup` options, `config.yml`, the launcher, uninstalling), see [docs/install.md](./docs/install.md).
 
+## Releases
+
+The existing CI workflow publishes a **stable GitHub release on each push to
+`main`**, and a **new prerelease on each push to `nightly`**, after the Ubuntu
+typecheck, tests and web build succeed. Other matrix platforms continue
+independently; a PR never publishes. Tags derive from the root package version:
+stable uses `v<version>+build.<run_id>.<run_attempt>` (or appends `.build.…`
+when the version already has build metadata), while nightly uses
+`v<version-without-build-metadata>-nightly.<shortsha>.<run_id>.<run_attempt>`.
+The current `-dev` package suffix does not turn a stable-channel GitHub release
+into a prerelease. Stable releases become GitHub's latest; nightlies do not.
+
+**Retention is append-only:** all releases, assets and tags remain available.
+Every nightly push and full workflow rerun has a unique tag, even for the same
+commit. Nothing prunes, replaces or overwrites an earlier release or tag.
+
+To publish a chosen branch, tag or commit as stable, use **Actions → CI → Run
+workflow**, enter its `ref` (default `main`), or run:
+
+```sh
+gh workflow run ci.yml --repo PsychedelicShayna/neodeck --ref main -f ref=main
+# For example, publish nightly's selected commit as stable:
+gh workflow run ci.yml --repo PsychedelicShayna/neodeck --ref main -f ref=nightly
+```
+
+`--ref main` selects the workflow definition; `-f ref=…` selects the source
+resolved once to an immutable commit for every build and the release tag.
+A dispatch is always stable, even when the source ref is `nightly`.
+Until this workflow revision is promoted to `main`, the new form may not be
+visible on the default branch; use `--ref nightly` with the same `-f ref=…`
+after the PR lands there. Publishing needs the job's `contents: write`
+permission to be allowed by repository/organization policy; no extra secret
+or package-registry setup is required. Publishing never installs or restarts
+the local runtime.
+
+### Release archives
+
+`neodeck-checkout.tar.gz` contains tracked sources plus `apps/web/dist` from
+the same Ubuntu CI build, rooted at `neodeck/`; `SHA256SUMS` covers that archive.
+It is **not a standalone binary or installer** and does not bundle dependencies,
+NeoPi or its native addon. GitHub's automatic source archives do not include
+the built web bundle. Keep the [checkout quickstart](#quickstart) and
+[installation prerequisites](docs/install.md#prerequisites): clone the
+repository, check out the release tag, and optionally overlay its matching
+archive before installing dependencies and preparing NeoPi:
+
+```sh
+tag='COPY_THE_RELEASE_TAG'
+git clone https://github.com/PsychedelicShayna/neodeck.git
+cd neodeck
+git checkout --detach "$tag"
+mkdir release-download
+gh release download "$tag" --repo PsychedelicShayna/neodeck \
+  --pattern neodeck-checkout.tar.gz --pattern SHA256SUMS --dir release-download
+(cd release-download && sha256sum -c SHA256SUMS)
+tar -xzf release-download/neodeck-checkout.tar.gz --strip-components=1
+bun install --frozen-lockfile --ignore-scripts
+# Continue the quickstart's neopi-setup and launcher steps.
+```
+
 ## How it compares
 
 omp + NPI deck is one slice of a busy space. The neighbors:
