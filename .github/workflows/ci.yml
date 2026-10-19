@@ -54,6 +54,21 @@ jobs:
           echo "NPI_DECK_NEOPI_SOURCE=$src" >> "$GITHUB_ENV"
           echo "NPI_DECK_HOME=$RUNNER_TEMP/npi-deck-home" >> "$GITHUB_ENV"
 
+      # NeoPi's Swift bridge can select the newer Command Line Tools SDK even
+      # when Xcode is the default. Use that same toolchain for the native linker.
+      - name: select matching macOS compiler and SDK
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          export DEVELOPER_DIR=/Library/Developer/CommandLineTools
+          sdk="$(xcrun --sdk macosx --show-sdk-path)"
+          echo "DEVELOPER_DIR=$DEVELOPER_DIR" >> "$GITHUB_ENV"
+          echo "SDKROOT=$sdk" >> "$GITHUB_ENV"
+          xcrun clang --version
+          xcrun ld -v
+          xcrun swiftc --version
+          echo "SDKROOT=$sdk"
+
       - name: prepare NeoPi backend (install, native addon, tsconfig)
         run: bun scripts/neopi-setup.ts --build-native
 
