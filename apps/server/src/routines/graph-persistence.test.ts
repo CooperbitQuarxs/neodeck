@@ -2,7 +2,7 @@ import { afterEach, expect, test } from "bun:test";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import type { GraphNodeType, GraphOutput, GraphRunRecord, Routine, RoutineGraph, RoutineRun, RoutineSpec } from "@npi-deck/protocol";
+import type { GraphNodeType, GraphOutput, GraphRunRecord, GraphValue, Routine, RoutineGraph, RoutineRun, RoutineSpec } from "@npi-deck/protocol";
 import { closeDb, getDb, openDb } from "../db/index.ts";
 import { createGraphRoutine, createRoutine, createV1Routine, getGraphRun, getRoutine, listRuns, updateGraphRoutine } from "../db/routines.ts";
 import { listStepRuns } from "../db/routine-step-runs.ts";
@@ -277,6 +277,52 @@ test("recursive provenance cannot expand a moderate activation into an unbounded
 	const listing = await (await api.request(`/routines/${saved.id}/runs`)).json() as { runs: RoutineRun[] };
 	expect(listing.runs[0]?.error).toContain("serialization budget");
 	expect((await api.request(`/routines/${saved.id}/runs/${record.id}/graph`)).status).toBe(404);
+});
+
+test("oversized handler errors leave bounded history and retain incurred usage", async () => {
+	const run = setup();
+	run.graphRegistry.register({ definition: definition("large-error"), execute: ({ recordUsage }) => {
+		recordUsage({ llmTokensIn: 7, llmTokensOut: 9, llmCostMicros: 10 });
+		throw new Error("oversized-handler-error ".repeat(500_000));
+	} });
+	const native = graph();
+	native.nodes.push({ id: "failure", type: "large-error", config: {} });
+	connect(native, "failure-input", "source", "failure", "event");
+	const saved = createGraphRoutine({ name: "bounded-history-error", graph: native }, run.graphRegistry);
+	await run.fire(saved.id, "manual", {});
+	const record = listRuns(saved.id)[0]!;
+	expect(record.exitCode).toBe(1);
+	expect(record.error).toContain("serialization budget");
+	expect(record.error!.length).toBeLessThanOrEqual(8192);
+	expect(record.totalLlmTokens).toBe(16);
+	expect(record.totalLlmCostMicros).toBe(10);
+	expect(record.stepCountTotal).toBe(2);
+	expect(record.stepCountFailed).toBe(1);
+	expect(getGraphRun(record.id)).toBeUndefined();
+});
+
+test("native serialization depth failure preserves completed execution aggregates", async () => {
+	const run = setup();
+	let deep: GraphValue = "leaf";
+	for (let index = 0; index < 20_000; index++) deep = { nested: deep };
+	run.graphRegistry.register({ definition: definition("deep-result"), execute: ({ recordUsage }) => {
+		recordUsage({ llmTokensIn: 3, llmTokensOut: 5, llmCostMicros: 12 });
+		return [{ port: "out", value: deep }];
+	} });
+	const native = graph();
+	native.nodes.push({ id: "deep", type: "deep-result", config: {} });
+	connect(native, "deep-input", "source", "deep", "event");
+	const saved = createGraphRoutine({ name: "deep-history-error", graph: native }, run.graphRegistry);
+	await run.fire(saved.id, "manual", {});
+	const record = listRuns(saved.id)[0]!;
+	expect(record.endedAt).toBeDefined();
+	expect(record.exitCode).toBe(1);
+	expect(record.error).toContain("could not be serialized");
+	expect(record.totalLlmTokens).toBe(8);
+	expect(record.totalLlmCostMicros).toBe(12);
+	expect(record.stepCountTotal).toBe(2);
+	expect(record.stepCountFailed).toBe(0);
+	expect(getGraphRun(record.id)).toBeUndefined();
 });
 
 test("native failures and usage-budget aborts finalize traces and existing run aggregates", async () => {

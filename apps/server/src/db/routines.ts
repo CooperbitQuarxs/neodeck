@@ -519,6 +519,7 @@ export function getRun(runId: string): RoutineRun | undefined {
 }
 
 const MAX_GRAPH_TRACE_BYTES = 8 * 1024 * 1024;
+const MAX_GRAPH_HISTORY_ERROR_CHARS = 8 * 1024;
 class GraphTraceLimitError extends Error {
 	constructor() { super(`Graph trace exceeds the ${MAX_GRAPH_TRACE_BYTES}-byte serialization budget`); }
 }
@@ -562,14 +563,18 @@ export function finishGraphRun(record: GraphRunRecord, abortReason?: string): vo
 		let traceError: string | undefined;
 		try { trace = encodeGraphTrace(record); }
 		catch (failure) {
-			if (!(failure instanceof GraphTraceLimitError)) throw failure;
-			traceError = failure.message;
+			traceError = failure instanceof GraphTraceLimitError
+				? failure.message
+				: `Graph trace could not be serialized: ${String(failure).slice(0, MAX_GRAPH_HISTORY_ERROR_CHARS)}`;
 		}
+		const historyError = traceError
+			? `${traceError}\n${record.error?.slice(0, MAX_GRAPH_HISTORY_ERROR_CHARS) ?? ""}`.slice(0, MAX_GRAPH_HISTORY_ERROR_CHARS)
+			: record.error?.slice(0, MAX_GRAPH_HISTORY_ERROR_CHARS);
 		getDb().query("UPDATE routine_runs SET graph_run_json = ? WHERE id = ?").run(trace, record.id);
 		finalizeRun(record.id, {
 			endedAt: record.endedAt,
 			exitCode: !traceError && record.status === "success" ? 0 : 1,
-			error: traceError ? `${record.error ? `${record.error}; ` : ""}${traceError}` : record.error,
+			error: historyError,
 			...(record.status === "aborted" ? {
 				abortedAt: record.endedAt,
 				abortReason: abortReason ?? record.abortReason ?? "cancelled",

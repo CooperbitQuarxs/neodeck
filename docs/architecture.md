@@ -224,6 +224,9 @@ expansion of every recursive envelope occurrence. Oversized traces are not
 stored or served; run history instead records a terminal serialization-budget
 failure while retaining execution usage and step aggregates. No partial or
 truncated provenance is presented as a complete trace.
+Other JSON serialization failures, including excessive nesting, use the same
+terminal-history path without discarding execution aggregates. History error
+excerpts are capped at 8,192 characters, including the serialization diagnostic.
 
 ## Theming
 
