@@ -68,6 +68,9 @@ Use one PR per issue and the exact headings/order/checklist in
 checks beside unchecked boxes. Title uses the commit's Conventional Commit
 form. Declare `Depends on #<n>` for dependencies and merge them first.
 
+A topic branch with commits gets a PR in the same turn it is declared done;
+[daily triage](triage.md#intake-and-two-passes) lists orphan branches.
+
 Every issue and PR gets a kind, priority where assessed, and relevant state from
 [triage-labels.md](triage-labels.md). Intake uses `needs-triage`; every PR carries
 `review: codex` plus its evidenced current-head review state. Follow
@@ -94,8 +97,8 @@ The authoring agent merges its own PR into `nightly` promptly when all criteria
 pass, unless its assignment reserves merging to another agent or the Captain:
 
 - Full requested behavior and acceptance complete, relevant docs/callers current.
-- Complete clean Code Review on the final head and every finding answered,
-  including unsolicited rounds: [pr-review-bots.md](pr-review-bots.md).
+- The one-round, 80% confidence gate and every finding's disposition in
+  [pr-review-bots.md](pr-review-bots.md#merge-gate) are satisfied.
 - Required checks green, or a documented identical base failure with its
   `baseline` issue and evidence under the review procedure.
 - Up to date with the base, dependencies merged, and any explicitly required
@@ -110,6 +113,10 @@ After merging, recheck dependent/open PRs and bring the new base into topic
 branches with merge commits, not rebases. Regressions on integration are reverted
 through a PR. Never merge into `main` as an agent; promotion is the owner's
 choice. Leave an open PR only with a stated reason.
+
+Delegate every CI or review wait to a `openai-codex/gpt-6-luna` poller, which
+reports exact-head results and failures to the integrator. The integrator moves
+another actionable PR while the poller watches rather than blocking on a wait.
 
 A workflow change triggered only after landing cannot exercise itself through
 its own PR. Keep it single-purpose, watch its first eligible integration/default
