@@ -1716,7 +1716,6 @@ export interface PromoteInboxItemRequest {
 	markProcessed?: boolean;
 	body?: string;
 	properties?: Record<string, unknown>;
-	cwd?: string;
 }
 
 export interface PromoteInboxItemResponse {

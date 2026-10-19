@@ -52,6 +52,7 @@ All notable changes to NPI deck (a fork of bjb2/omp-deck; entries before the for
 
 ### Fixed
 
+- Restored typechecking and release publication by removing a duplicate inbox-promotion project field from the protocol.
 - Queued card assignments resume after a server restart; cancellations use the failure column, and deleted outcome columns no longer discard completed runs.
 - Card workers reach protected KB routes on IPv6 listeners, and assignments reject an active column that is also the completion column (#101).
 
