@@ -1,4 +1,4 @@
-import { afterEach, expect, test } from "bun:test";
+import { afterAll, afterEach, expect } from "bun:test";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
@@ -8,12 +8,16 @@ import { listStepRuns } from "../db/routine-step-runs.ts";
 import { createRoutine, createV1Routine, getRoutine, listRuns, updateV1Routine } from "../db/routines.ts";
 import { RoutinesRunner } from "../routines-runner.ts";
 import { initializeOwnedGeneration, stopOwnedProcesses } from "../owned-process.ts";
+import { createIsolatedTest, isIsolatedCase } from "../test-isolation.ts";
+
+const test = createIsolatedTest(import.meta.path);
 
 const root = os.tmpdir();
 const savedHome = process.env.NPI_DECK_HOME;
 const savedDbPath = process.env.NPI_DECK_DB_PATH;
 let home = "";
 let runner: RoutinesRunner | undefined;
+let cleanup: Promise<void> | undefined;
 function setup(agentCommand?: () => string[]): void {
 	fs.mkdirSync(root, { recursive: true });
 	home = fs.mkdtempSync(path.join(root, "npi-routine-test-"));
@@ -29,20 +33,28 @@ function routine(spec: RoutineSpec, enabled = true) {
 function spec(steps: RoutineSpec["steps"], concurrency: RoutineSpec["concurrency"] = "skip"): RoutineSpec {
 	return { version: 1, name: "test", trigger: [{ manual: {} }], steps, concurrency } as RoutineSpec;
 }
-afterEach(async () => {
-	try {
-		await runner?.dispose();
-		await stopOwnedProcesses();
-	} finally {
-		closeDb();
-		if (savedHome === undefined) delete process.env.NPI_DECK_HOME;
-		else process.env.NPI_DECK_HOME = savedHome;
-		if (savedDbPath === undefined) delete process.env.NPI_DECK_DB_PATH;
-		else process.env.NPI_DECK_DB_PATH = savedDbPath;
-		if (home) fs.rmSync(home, { recursive: true, force: true });
-		home = ""; runner = undefined;
-	}
-});
+if (isIsolatedCase(import.meta.path)) {
+	afterEach(() => {
+		cleanup = (async () => {
+			try {
+				await runner?.dispose();
+				await stopOwnedProcesses();
+			} finally {
+				closeDb();
+				if (savedHome === undefined) delete process.env.NPI_DECK_HOME;
+				else process.env.NPI_DECK_HOME = savedHome;
+				if (savedDbPath === undefined) delete process.env.NPI_DECK_DB_PATH;
+				else process.env.NPI_DECK_DB_PATH = savedDbPath;
+				if (home) fs.rmSync(home, { recursive: true, force: true });
+				home = ""; runner = undefined;
+			}
+		})();
+		return cleanup;
+	});
+	// Preserve the original afterEach failure, but join its still-running work
+	// before the worker exits. Slow cancellation must not add a second timeout.
+	afterAll(async () => { await cleanup; }, 60_000);
+}
 
 test("queue holds second invocation until first finishes, then releases the busy state", async () => {
 	setup();
