@@ -39,6 +39,7 @@ remaining acceptance. Correct stale labels from evidence. The built-in commit
 role (`@commit`, resolved at runtime) performs reconciliation until a dedicated
 triage role is chosen; this policy does not install a scheduler or webhook.
 Daily triage adds `upstream` to a promotion proposal only when that proposal actually carries a `sync/` merge; the promotion workflow does not detect or apply upstream involvement.
+Daily, after `git fetch --prune origin`, list orphan topic branches from `git branch -r --no-merged origin/nightly`, excluding remote HEAD/default/integration refs and branches with an open PR (match the paginated open-PR inventory by head repository and branch).
 
 ## Duplicate reconciliation
 
@@ -83,7 +84,7 @@ assumed second adjustment.
   assertion of continuous activity. Record the responsible session/PR because
   several agents may share a GitHub account.
 - Replace an actor's `started` with `finished` when that actor's agreed part is
-  complete. Human participation can finish while unattended review fixes remain;
+  complete. Human participation can finish while follow-up work remains;
   agent implementation can finish while promotion is still pending.
 - Keep at most one state per actor. The two actors' states may coexist when
   their parts differ. `finished` is not `mergeable`, and labels alone do not
@@ -95,18 +96,13 @@ An `idea` remains undecided; `spec` records a specification, not permission.
 An authorized `experiment` uses an `experimental/` branch only; entering
 `nightly` or `main` requires a separate owner decision.
 
-## Review requirements and PR state
+## Optional review and PR state
 
-The default condition is plain English: **every PR, including documentation,
-configuration, and mechanical changes, gets Codex Code Review**. Triage assigns
-`review: codex` to anticipated work; the PR author rechecks the actual diff
-against [pr-review-bots.md](pr-review-bots.md), carries the requirement onto the
-PR, and requests review on its head. No new security passes are requested.
-
-The review document owns token-to-login mapping, current-head review states,
-finding dispositions, and the merge gate. Apply `mergeable` only after all
-repository criteria pass; actor completion and GitHub's conflict flag alone
-are insufficient. Who merges is defined in [policy.md](policy.md).
+[policy.md](policy.md#nightly-delivery) owns nightly delivery and optional review
+selection. Triage does not assign a reviewer by default. Review and `mergeable`
+labels describe evidence or confidence; none gates nightly.
+[pr-review-bots.md](pr-review-bots.md) supplies mechanics when review is chosen.
+Changes to the base do not invalidate evidence or require refreshed labels.
 
 ## Closure
 

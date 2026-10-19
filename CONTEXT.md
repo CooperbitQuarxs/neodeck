@@ -4,6 +4,8 @@ Project overview: [README.md](README.md). Policy and mechanics:
 [docs/agents/policy.md](docs/agents/policy.md). Architectural decisions live in
 `docs/agents/adr/` when present.
 
+PR: a unit of tangible change the owner can feel when she runs the build.
+
 | Term | Meaning here |
 | --- | --- |
 | NeoDeck / deck | This web cockpit and fleet console, forked from `Shreyans13/omp-deck` |
@@ -22,10 +24,10 @@ Project overview: [README.md](README.md). Policy and mechanics:
 | Experiment | Authorized exploration on an `experimental/` branch, not ordinary integration/default work |
 | Difficulty | Complexity/uncertainty/risk estimate in eight bands over [0, 1], independent of time or priority |
 | Frame normalization | Agent duration estimates lowered exactly one unit once, with hours as floor; human estimates unchanged |
-| Review requirement | `review: codex` identifies the configured reviewer, not the result of a round |
-| Review state | Requested, open, closed, or stalled for a reviewer on the current PR head; old-head receipts do not pass the gate |
-| Mergeable | All documented repository merge criteria pass; neither actor completion nor GitHub's no-conflicts flag alone, and not authority to merge |
-| Integration | `nightly`, where topic PRs merge and are verified without replacing the live installation |
+| Review selection | Optional `review: codex` records a selected double-checker, not a requirement |
+| Review state | Optional descriptive evidence of a recorded round; never a nightly merge gate |
+| Mergeable | Optional integrator confidence label; not a CI/review gate or authority to merge |
+| Integration | `nightly`, where topic PRs merge, then are built, installed, and checked for launch |
 | Promotion | Owner-approved merge from `nightly` to `main`; NeoDeck fixes remain open until complete acceptance reaches `main` |
 | Baseline | A defect already on the base during review, which may be fork-local rather than upstream |
 | Wayfinding map | An umbrella with native sub-issues and dependency links; relationships do not require map-specific labels |
