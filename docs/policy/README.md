@@ -48,12 +48,12 @@ daily reconciliation, available additions, and held migrations are in
 `docs/agents/triage-labels.md`. The complete setup skill and participation
 vocabulary are not finalized.
 
-- Type and GitHub defaults: `bug`, `enhancement`, `documentation`, `duplicate`, `invalid`, `good first issue`, `help wanted`; composable `idea`, `experiment`, and specification-presence `spec` are also available.
+- Type and disposition: `bug`, `enhancement`, `documentation`, `duplicate`, `invalid`; composable `idea`, `experiment`, and specification-presence `spec` are also available.
 - Priority: `priority: p0` … `priority: p3`. Estimates: eight `difficulty:*` intervals and `frame: hours`, `frame: days`, `frame: weeks`, `frame: months`, `frame: years`, with independent meanings and provenance in the tracker policy. Historical `effort:*` labels remain reviewable metadata, not compulsory assignments or literal durations.
 - Issue triage: `needs-triage`, `needs-info`, `wontfix`; preserve `ready-for-agent` and `ready-for-human` as legacy markers pending evidence-based reconciliation.
 - PR state remains `needs-review`, `ready-for-merge`, `review-stalled`. Accepted target `mergeable` awaits coordinated parent-policy/consumer migration; it changes neither merge permission nor review gates.
 - Other shared labels: `accessibility`, `downstream`, `hotfix`, `entangled`, `stale: identical`, `stale: similar`. Accepted target `upstream` means substantive upstream involvement; current operational `upstream-sync` remains until coordinated migration. `baseline` retirement is undecided.
-- Retained historical associations include `question`, `neopi-upstream`, `codex-review`, `sentinel-review-requested`, and `wayfinder:*`; these are not new triage recommendations. The deselected-label rule and preservation of current required operational names are in `docs/agents/triage-labels.md`.
+- Retained historical associations include `question`, `good first issue`, `help wanted`, `neopi-upstream`, `codex-review`, `sentinel-review-requested`, and `wayfinder:*`; these are not new triage recommendations. The deselected-label rule and preservation of current required operational names are in `docs/agents/triage-labels.md`.
 
 This documentation cutover neither relabels/closes issues nor removes existing
 labels. Preserve historical estimates and other metadata until reviewed.
