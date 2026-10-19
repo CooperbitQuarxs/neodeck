@@ -10,7 +10,7 @@ a setup-skill implementation.
 | Role | Branch | Ships as |
 | --- | --- | --- |
 | Default (promoted) | `main` | Installed snapshot `~/.local/share/npi-deck`, served by `npi-deck.service` |
-| Integration | `nightly` | Verification only; does not replace the live snapshot/service |
+| Integration | `nightly` | Built, installed, and launch-checked after each merge or batch; separate from default/live promotion |
 
 Start topic work from a freshly fetched remote integration branch in its own
 worktree:
@@ -69,13 +69,13 @@ checks beside unchecked boxes. Title uses the commit's Conventional Commit
 form. Declare `Depends on #<n>` for dependencies and merge them first.
 
 A topic branch with commits gets a PR in the same turn it is declared done;
-[daily triage](triage.md#intake-and-two-passes) lists orphan branches.
+every opened PR merges, with a revert PR if the change turns out wrong.
+[Daily triage](triage.md#intake-and-two-passes) lists orphan branches.
 
 Every issue and PR gets a kind, priority where assessed, and relevant state from
-[triage-labels.md](triage-labels.md). Intake uses `needs-triage`; every PR carries
-`review: codex` plus its evidenced current-head review state. Follow
-[triage.md](triage.md) for daily reconciliation and readiness rather than treating
-labels as authorization.
+[triage-labels.md](triage-labels.md). Intake uses `needs-triage`. Review labels
+are optional descriptive evidence, never nightly gates. Follow
+[triage.md](triage.md) for reconciliation rather than treating labels as authority.
 
 Every GitHub comment, issue, review reply, and PR body begins:
 
@@ -85,42 +85,51 @@ Every GitHub comment, issue, review reply, and PR body begins:
 ```
 
 The authoring agent may push its topic, post on its PR, file baseline issues,
-apply the policy's labels, and merge its PR into integration after the gates.
+apply the policy's labels, and merge its PR into integration under Nightly delivery.
 Other PRs, repository settings/rulesets/protection, and posting elsewhere stay
 outside that authority. Changes to workflows go through their own PR. Contributor
 heads are read-only on the owner's machine; use the owner-head rule in
 [pr-review-bots.md](pr-review-bots.md#running-pr-code).
 
-## Merging
+## Nightly delivery
 
-The authoring agent merges its own PR into `nightly` promptly when all criteria
-pass, unless its assignment reserves merging to another agent or the Captain:
+The owner uses nightly and supplies feedback; CI and review bots do not decide
+whether a change stays. Merge at about 80% confidence that the change works;
+lower is acceptable. Record confidence and suspected PR-caused check failures
+in the merge note. Fix failures in a follow-up if they matter.
 
-- Full requested behavior and acceptance complete, relevant docs/callers current.
-- The one-round, 80% confidence gate and every finding's disposition in
-  [pr-review-bots.md](pr-review-bots.md#merge-gate) are satisfied.
-- Required checks green, or a documented identical base failure with its
-  `baseline` issue and evidence under the review procedure.
-- Up to date with the base, dependencies merged, and any explicitly required
-  review/authorization satisfied. Retain the outer policy's
-  `sentinel-review-requested` requirement where present; this iteration adds no
-  reviewer or new security pass.
+The authoring agent merges into `nightly` unless the assignment names another
+integrator. Merge commits only: `gh pr merge --merge`, with subject
+`Merge PR #<number>: <conventional PR subject> (@<author>)`. Resolve actual
+conflicts by merging the base into the topic, never rebasing or refreshing.
+A changed base never invalidates review, confidence, or other evidence.
+Regressions are reverted through a PR; every opened PR merges or is reverted.
 
-Apply `mergeable` only when those criteria pass. Merge commits only:
-`gh pr merge --merge`, subject
-`Merge PR #<number>: <conventional PR subject> (@<author>)`. No squash or rebase.
-After merging, recheck dependent/open PRs and bring the new base into topic
-branches with merge commits, not rebases. Regressions on integration are reverted
-through a PR. Never merge into `main` as an agent; promotion is the owner's
-choice. Leave an open PR only with a stated reason.
+After each merge or batch, build and install nightly and check that it launches.
+"It does not start" is the blocking bar. Use the native setup and launcher
+commands in [installation](../install.md), preserving pinned NeoPi/native-addon
+contracts and existing runtime identities. This authorizes nightly installation,
+not promotion or replacement/restart of the separate default/live snapshot.
+A proof session may hold the destination-scoped runtime install lock for at most
+ten minutes, releasing it as soon as proof ends. Use the lock from
+[NeoPi #386](https://github.com/PsychedelicShayna/neopi/pull/386), with the same
+`NPI_DEST` for `hold`, `status`, `release` and installation; expired holds do not
+defer delivery. Record the installed revision and launch result.
 
-Delegate every CI or review wait to a `openai-codex/gpt-6-luna` poller, which
-reports exact-head results and failures to the integrator. The integrator moves
-another actionable PR while the poller watches rather than blocking on a wait.
+Review bots are optional double-checkers: no default request, at most one round
+only for a large-blast-radius change that could make the harness unusable.
+Fix what matters to merging; note or ignore the rest. Mechanics live in
+[pr-review-bots.md](pr-review-bots.md). Owner-discretion bug hunts inspect
+nightly after landing and are not merge gates.
 
-A workflow change triggered only after landing cannot exercise itself through
-its own PR. Keep it single-purpose, watch its first eligible integration/default
-run, and revert through a PR if it fails.
+CI and tests never block nightly. Delegate any watching to a cheap poller and
+keep moving; do not wait for review, CI, or exact-head receipts. Review and
+`mergeable` labels are descriptive only. Checks for promotion remain the
+owner's decision.
+
+Workflow changes go through PRs. For a workflow triggered only after landing,
+keep it single-purpose, delegate watching its first eligible run, and revert
+through a PR if needed. Agents leave rulesets and branch protection unchanged.
 
 ## Promotion
 
@@ -130,8 +139,8 @@ to **open the promotion PR only**, with `human: pending`; the owner merges
 
 Scheduled/dispatch execution requires the workflow on the default branch.
 The Captain performs the first promotion after it lands on `nightly`; watch the
-first eligible run after it reaches `main`. Workflow landing or promotion does
-not authorize reinstalling the live snapshot or restarting its service.
+first eligible run after it reaches `main`. Default/live installation and
+service changes remain the owner's decision; nightly delivery is authorized above.
 
 NeoDeck fixes stay open until the complete acceptance is promoted to `main`;
 merging a linked PR to `nightly` alone does not close them. Closure mechanics
@@ -151,6 +160,6 @@ live deployment; [installation](../install.md) owns runtime setup.
 | Classifying, claiming, reconciling, or closing issues | [triage.md](triage.md), [triage-labels.md](triage-labels.md) |
 | GitHub commands, estimates, NeoPi contracts, wayfinding | [issue-tracker.md](issue-tracker.md) |
 | Publishing Captain specifications | [issue-funnel.md](issue-funnel.md) |
-| Requesting review, answering findings, or merging | [pr-review-bots.md](pr-review-bots.md) |
+| Requesting optional review or answering findings | [pr-review-bots.md](pr-review-bots.md) |
 | Exploring terminology or architectural decisions | Root `CONTEXT.md`, [domain.md](domain.md), `docs/agents/adr/` when present |
 | Fork placement or synchronizing upstream | [fork-maintenance.md](fork-maintenance.md), [upstream-sync.md](upstream-sync.md) |

@@ -85,20 +85,17 @@ iteration and remain revisable.
 
 | Label | Meaning |
 | --- | --- |
-| `review: codex` | Codex reviews this change (mention `@codex`) |
-| `review: requested (codex)` | A Codex round is requested on the current head |
-| `review: open (codex)` | Codex findings are unanswered on the current head |
-| `review: closed (codex)` | Completed recorded round and every finding dispositioned under the review guide's merge gate |
-| `review: stalled (codex)` | Missing/failed round or remaining gate blocker; summary posted |
-| `mergeable` | Meets this repository's documented merge criteria; who merges is policy |
+| `review: codex` | Optional selection of Codex as a double-checker |
+| `review: requested (codex)` | A recorded Codex round was requested |
+| `review: open (codex)` | Recorded Codex findings remain open |
+| `review: closed (codex)` | The recorded round is complete and addressed as useful |
+| `review: stalled (codex)` | Describes missing/failed review evidence, never a nightly blocker |
+| `mergeable` | Optional integrator confidence signal, not a CI/review gate or merge authority |
 
-The reviewer family is configurable; this repository configures only `codex`.
-The token is after the colon or in parentheses; its login and trigger are
-mapped in [pr-review-bots.md](pr-review-bots.md). Triage assigns requirements;
-the PR author rechecks the actual diff. Every PR gets `review: codex`.
-A new head clears stale state and `mergeable` until the review guide's fix
-assessment or base-only comparison re-establishes them; another round is not
-automatically required.
+Only `codex` is configured; [pr-review-bots.md](pr-review-bots.md) maps its
+login and trigger. These labels are optional descriptive evidence. Record the
+round's SHA where useful; a new head or changed base does not invalidate it
+or demand a new round, mechanical comparison, or label refresh.
 
 ## Composition
 
@@ -108,16 +105,15 @@ automatically required.
 - Multiple applicable kinds may coexist. An `idea` need not be a `spec`, and
   neither alone means ready for implementation.
 - One priority, difficulty band, and frame per sufficiently assessed issue;
-  one state per actor and one current-head state per reviewer.
+  one state per actor and one descriptive state per selected reviewer.
 - `duplicate` + `entangled` is valid for incompatible variants. `needs-info`
   and `entangled` exclude pending pickup until unblocked.
 - `experiment` may compose with `idea` or `bug`; its branch restriction excludes
   ordinary nightly/default merge eligibility without a separate owner decision.
-- `agent: finished` and `human: finished` do not imply `mergeable`. Review closed
-  does not itself prove CI, conflict resolution, acceptance, or merge authority.
+- Actor completion and review labels do not confer merge authority. Nightly
+  delivery follows [policy.md](policy.md#nightly-delivery), not label gates.
 - A base defect need not originate upstream: keep `baseline` distinct from
-  `upstream`. Retain `sentinel-review-requested` while the outer policy consumes
-  it; no new reviewer or security pass is configured by this vocabulary.
+  `upstream`. Legacy reviewer-request labels do not impose nightly gates.
 
 ## Open decisions
 

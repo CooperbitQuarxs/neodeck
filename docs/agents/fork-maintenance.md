@@ -38,8 +38,8 @@ Keep open PRs separate until their contracts are compared with upstream.
 Preserve requirements not actually replaced and report the recommended merge
 order and unresolved behavior decisions before promotion.
 
-Validate upstream regressions and deck contracts at affected boundaries.
-Record exact results separately from unavailable checks. Verification and
-staged installs must leave the live snapshot, state, display, and service
-untouched. Installation details live in `docs/install.md`; synchronization is
-not permission to deploy to the live installation.
+Record affected-boundary validation and unavailable checks honestly.
+Isolated verification leaves default/live state, display, and service untouched.
+After landing, follow [policy.md](policy.md#nightly-delivery) for authorized
+nightly build/install/launch; default/live promotion remains separate.
+Installation details live in `docs/install.md`.

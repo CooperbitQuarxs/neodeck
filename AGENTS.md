@@ -10,7 +10,7 @@ the Captain's answer.
 - Read `README.md` for project context and runtime layout; it is not agent policy.
 - Read `CONTEXT.md` for repository/tracker vocabulary before interpreting work.
 - Read `docs/agents/policy.md` before branches, commits, GitHub posts, PRs, or merges; `docs/agents/` is the home for agent policy and mechanics.
-- Before requesting review, answering findings, or merging, read `docs/agents/pr-review-bots.md` for the one-round confidence gate, post-review fix/base-merge assessment, and factual disposition of every finding; request no new security passes.
+- Before requesting optional review or answering findings, read `docs/agents/pr-review-bots.md` for reviewer mechanics; `docs/agents/policy.md` owns nightly delivery.
 
 ## Fork maintenance
 
@@ -18,9 +18,9 @@ Before adding fork behavior or integrating upstream, read
 `docs/agents/fork-maintenance.md` for placement and compatibility rules.
 Before synchronizing a release, follow `docs/agents/upstream-sync.md`.
 Repository slug changes do not rename package scopes, environment variables,
-installed paths, launchers, or services. The installed snapshot remains
-`~/.local/share/npi-deck`, served by `npi-deck.service`; keep the live service
-and display untouched during verification.
+installed paths, launchers, or services. The default/live snapshot remains
+`~/.local/share/npi-deck`, served by `npi-deck.service`. Nightly installation
+is authorized under `docs/agents/policy.md`; default/live promotion is separate.
 
 ## Agent skills
 
