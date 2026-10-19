@@ -1,59 +1,127 @@
 # Triage labels
 
-This interim policy records settled meanings and the current operational names.
-The full setup skill and participation lifecycle remain unfinished. Available
-labels are not implementation authorization.
+Iteration 1 of the repository vocabulary. Labels describe independent facts;
+apply the supported combination rather than inventing a compound label.
+[Triage](triage.md) owns the procedure, [tracker sizing](issue-tracker.md#sizing)
+owns estimate provenance, and [review mechanics](pr-review-bots.md) owns review
+receipts. Label availability does not authorize work.
 
-## Triage and legacy readiness
+## Kind
 
 | Label | Meaning |
 | --- | --- |
-| `needs-triage` | Evaluation or an unresolved policy decision is needed |
-| `needs-info` | Required information is missing; identify what is needed |
-| `ready-for-agent` | Legacy marker for fully specified AFK-agent readiness |
-| `ready-for-human` | Legacy marker for human implementation or intervention |
-| `wontfix` | Will not be actioned |
+| `bug` | Something isn't working |
+| `enhancement` | New feature or request |
+| `documentation` | User- or agent-facing docs, README or changelog |
+| `accessibility` | Barrier affecting people with disabilities |
+| `idea` | An undecided possibility; not a spec, not authorized work |
+| `experiment` | Tried on an `experimental/` branch; never merged to nightly or default without an owner decision |
+| `spec` | Is or contains an implementation specification |
+| `hotfix` | Urgent targeted fix to the default branch |
 
-Preserve existing `ready-for-agent` and `ready-for-human` assignments pending
-evidence-based reconciliation. They do not confer new authorization. Human/agent
-pending, started, and finished participation is still under discussion, with no
-replacement spellings selected. Started would communicate active ownership;
-finished would concern that participant's work, not universal PR mergeability.
-Do not create actor-state aliases or treat these concepts as deployed labels.
+## Relationship and disposition
 
-## Available additions and held migrations
+| Label | Meaning |
+| --- | --- |
+| `upstream` | Upstream is involved: sync, compatibility, conflict avoidance or divergence |
+| `downstream` | Needed by a project that consumes this one |
+| `duplicate` | Same request as another issue; context merged into the canonical one |
+| `entangled` | Incompatible alternatives; the owner chooses one, the rest close |
+| `baseline` | Pre-existing defect found on the base during review; kept this iteration |
+| `invalid` | Closed: wrong repo, missing required information or format, or policy violation |
+| `wontfix` | Closed: will not be worked on |
+| `stale: identical` | Already implemented essentially as specified |
+| `stale: similar` | Implemented differently; open for the remaining differences |
 
-The shared names now include `accessibility`, `bug`, `documentation`,
-`downstream`, `duplicate`, `enhancement`, `entangled`, `hotfix`, `idea`, `invalid`,
-`needs-info`, `needs-triage`, `priority: p0` … `priority: p3`, all eight
-`difficulty:*` buckets, `frame: hours/days/weeks/months/years`, `stale: identical`,
-`stale: similar`, `wontfix`, `experiment`, and `spec`. Frame shorthand denotes five
-separate labels. Existing associations remain until reviewed, not as blanket
-recommendations for new assignments. Availability does not mean issues have
-been relabeled or closed. Composition, idea/spec/experiment, alternatives, and
-sizing are defined in [the tracker policy](issue-tracker.md).
+NeoPi contract dependencies are body links, not a special NeoDeck label.
+`downstream` belongs on the NeoPi issue when NeoDeck needs its capability.
+Wayfinding maps retain native sub-issue links and dependency relationships.
 
-Deselected non-operational labels, including `question`, `good first issue`,
-`help wanted`, `rpc`, `t3c-npi`, `npi-deck`,
-`neopi-upstream`, `codex-review`, `sentinel-review-requested`, and the
-`effort:*`, `size:*`, `vouch:*`, and `wayfinder:*` families, are not recommended
-for new triage assignments. Preserve existing associations until reviewed
-cutover. Current required PR/readiness operational names remain in force until
-replacement is decided; this does not disable current gates.
+## Priority and estimates
 
-- `stale: identical` requires evidence that the requested behavior is already implemented essentially as specified; verify all acceptance before recommending closure.
-- `stale: similar` means a partial or different implementation, not automatic closure.
-- `upstream` is the accepted target for substantive upstream involvement, not only release synchronization. A fork-local manifestation does not disprove upstream origin. The operational name remains `upstream-sync` until parent policy and literal consumers migrate together; do not rename or create the target in this interim cutover.
-- `baseline` does not automatically mean upstream. Whether to retire it remains open; no blanket removal is authorized.
-- `mergeable` is the accepted target for meeting repository-specific documented merge gates. The operational name remains `ready-for-merge` until coordinated cutover. It neither changes review gates nor grants an agent permission to merge the default branch.
+| Label | Meaning |
+| --- | --- |
+| `priority: p0` | Blocks current work or handles an active incident |
+| `priority: p1` | High value or prerequisite for several issues |
+| `priority: p2` | Useful planned work |
+| `priority: p3` | Backlog or opportunistic work |
+| `difficulty: 0.000-0.125` | Agent difficulty in [0.000, 0.125); exact float is the title prefix |
+| `difficulty: 0.125-0.250` | Agent difficulty in [0.125, 0.250); exact float is the title prefix |
+| `difficulty: 0.250-0.375` | Agent difficulty in [0.250, 0.375); exact float is the title prefix |
+| `difficulty: 0.375-0.500` | Agent difficulty in [0.375, 0.500); exact float is the title prefix |
+| `difficulty: 0.500-0.625` | Agent difficulty in [0.500, 0.625); exact float is the title prefix |
+| `difficulty: 0.625-0.750` | Agent difficulty in [0.625, 0.750); exact float is the title prefix |
+| `difficulty: 0.750-0.875` | Agent difficulty in [0.750, 0.875); exact float is the title prefix |
+| `difficulty: 0.875-1.000` | Agent difficulty in [0.875, 1.000]; exact float is the title prefix |
+| `frame: hours` | Estimated time frame: hours (agent estimates lowered one unit) |
+| `frame: days` | Estimated time frame: days (agent estimates lowered one unit) |
+| `frame: weeks` | Estimated time frame: weeks (agent estimates lowered one unit) |
+| `frame: months` | Estimated time frame: months (agent estimates lowered one unit) |
+| `frame: years` | Estimated time frame: years (agent estimates lowered one unit) |
 
-## Evidence-led triage
+Keep the difficulty band descriptions as recorded. Existing title prefixes are
+preserved; this policy neither requires adding nor removes them. Agent frames
+are lowered exactly once, with hours as the floor; human frames are unchanged.
 
-Reconcile at least daily. Until the owner creates a dedicated triage role, use
-the built-in commit role (`@commit`, resolved at runtime), not a frozen model
-slug or a swarm. This requirement adds no scheduler or workflow.
+## Triage and actor state
 
-1. Read issue and linked PR bodies, relevant issue/PR comments, PR review bodies and inline comments/threads, current labels, linked implementation, and acceptance. Check actual merged state: a closed unmerged PR is not implemented work, and an author's claim is not independent CI/review proof. Review tangible changed behavior rather than unrelated upstream defects; reuse existing ownership and acceptance work.
-2. Produce an evidence-linked proposal with current labels, proposed additions/removals, issue-state recommendation, confidence, supporting source links, and unresolved policy decisions. An authorized integration owner reviews and applies verified changes. Keep unclear cases in `needs-triage` or `needs-info` as appropriate.
-3. Compare suspected duplicates by their bodies and relevant discussion, not titles alone. Preserve useful unique context in an attributed canonical-issue comment and crosslink before closing a verified duplicate.
-4. For implementation closure, verify every acceptance criterion and any explicit promotion condition; record the actual merge and proof. Automatic GitHub closure normally waits for the default branch, so a nightly merge may leave an issue open. Apply NeoDeck's existing promotion condition in [tracker conventions](issue-tracker.md#conventions), not an assumed new readiness state. Never close an umbrella for a partial PR or reopen correctly completed work merely because a new follow-up exists.
+| Label | Meaning |
+| --- | --- |
+| `needs-triage` | Not yet triaged |
+| `triage: started` *(proposal)* | Triage in progress; labels are provisional |
+| `needs-info` | Cannot proceed until the named information arrives |
+| `agent: pending` | Ready for an out-of-the-loop (OTL) agent to pick up |
+| `agent: started` | An agent has claimed this; do not duplicate the work |
+| `agent: finished` | The agent's part is done; not necessarily mergeable |
+| `human: pending` | Needs an in-the-loop (ITL) session with a human |
+| `human: started` | A human has claimed the in-the-loop part |
+| `human: finished` | The human's in-the-loop part is done |
+
+`started` is a claim, not a heartbeat. Human means human-in-the-loop, not a
+requirement that a human write the code. Proposal spellings are in use this
+iteration and remain revisable.
+
+## Review and merge
+
+| Label | Meaning |
+| --- | --- |
+| `review: codex` | Codex reviews this change (mention `@codex`) |
+| `review: requested (codex)` | A Codex round is requested on the current head |
+| `review: open (codex)` | Codex findings are unanswered on the current head |
+| `review: closed (codex)` | Codex's latest round on the current head is clean and every finding answered |
+| `review: stalled (codex)` *(proposal)* | Review loop ended with findings unresolved; summary posted |
+| `mergeable` | Meets this repository's documented merge criteria; who merges is policy |
+
+The reviewer family is configurable; this repository configures only `codex`.
+The token is after the colon or in parentheses; its login and trigger are
+mapped in [pr-review-bots.md](pr-review-bots.md). Triage assigns requirements;
+the PR author rechecks the actual diff. Every PR gets `review: codex`.
+
+## Composition
+
+- Kind, relationship, priority, difficulty, frame, specification, actor state,
+  review state, and merge eligibility describe separate axes. Examples:
+  `upstream` + `bug`, `downstream` + `enhancement`, or `upstream` + `experiment`.
+- Multiple applicable kinds may coexist. An `idea` need not be a `spec`, and
+  neither alone means ready for implementation.
+- One priority, difficulty band, and frame per sufficiently assessed issue;
+  one state per actor and one current-head state per reviewer.
+- `duplicate` + `entangled` is valid for incompatible variants. `needs-info`
+  and `entangled` exclude pending pickup until unblocked.
+- `experiment` may compose with `idea` or `bug`; its branch restriction excludes
+  ordinary nightly/default merge eligibility without a separate owner decision.
+- `agent: finished` and `human: finished` do not imply `mergeable`. Review closed
+  does not itself prove CI, conflict resolution, acceptance, or merge authority.
+- A base defect need not originate upstream: keep `baseline` distinct from
+  `upstream`. Retain `sentinel-review-requested` while the outer policy consumes
+  it; no new reviewer or security pass is configured by this vocabulary.
+
+## Open decisions
+
+Recorded, not implemented: retiring `baseline` (the proposed bug + upstream
+composition loses fork-local base defects); upstream-conflict-potential and
+user-disruption axes; a dedicated label for blocking questions; resource
+allocation; a squash/rebase exception; owner approval mechanism for policy
+files; setup skill and HTML questionnaire; Magi tribunal reviewer; automated
+triage runner/webhook; GitHub Projects/Discussions reporting. These questions
+are not implicit permission to add labels, automation, reviewers, or gates.

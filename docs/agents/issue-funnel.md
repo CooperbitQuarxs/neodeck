@@ -12,7 +12,7 @@ specification ingestion.
 
 ## Boot
 
-Read this file, `docs/agents/issue-tracker.md`, and
+Read this file, `docs/agents/issue-tracker.md`, `docs/agents/triage.md`, and
 `docs/agents/triage-labels.md`. Read queue, ledger, and brief artifacts only
 when the assignment names them; operator briefs beat older handoff bullets.
 List open issues with `gh issue list --repo PsychedelicShayna/neodeck --state open`
@@ -36,24 +36,23 @@ unless an ordered umbrella only links its children.
 
 ## Composable labels
 
-Each funnel issue carries a suitable type and one `priority:*`; leave uncertain
-classification for evidence-led triage. Use the interim meanings and estimate
-provenance in `issue-tracker.md`, not compulsory `effort:*` assignment or an
-automatic historical-label conversion. Use existing labels only; label creation
-requires a separate Captain decision.
+Each funnel issue carries a suitable kind and one assessed priority; uncertain
+classification uses `needs-triage`. Follow `triage.md` for classification and
+`issue-tracker.md#sizing` for estimate provenance and one-time frame normalization.
+Use existing labels; creating definitions requires a separate Captain decision.
 
 Keep undecided ideas distinct from implementation specifications and explicit
 authorization. `spec` records specification presence, not permission or pickup;
-`experiment` does not start work. Preserve unresolved alternative choices and
-legacy readiness assignments according to `triage-labels.md`.
+`experiment` does not start work. Preserve unresolved choices and use the actor
+states defined in `triage-labels.md`.
 
 ## Dedupe and amend
 
 - New issue when no open issue owns the subject; compare bodies, relevant comments, and linked work rather than title similarity.
 - Comment-amend when already filed; published bodies change only on Captain order. Preserve source attribution and links to the brief, evidence, and related issue/PR contracts.
-- Label-only when the contract is fine but taxonomy is broken; propose evidence-backed additions/removals through `triage-labels.md`, preserving historical metadata until reviewed.
+- Label-only when the contract is fine but taxonomy is broken; apply evidence-backed deltas through `triage.md`, preserving useful source and estimate provenance.
 - Before closing a verified duplicate, preserve useful unique context in an attributed canonical-issue comment and crosslink.
-- Entangled bodies identify sibling issues and the supersession condition. Close siblings only once the selected alternative actually ships and closure is authorized.
+- Entangled records identify sibling issues and the supersession condition. Present concise differences/pros/cons for the Captain's choice; close alternatives with the recorded decision only when authorized.
 
 ## Publish
 
