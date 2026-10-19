@@ -201,9 +201,9 @@ stable input order.
 optional selected source node. The built-in `event.source` emits that event
 through its `event` port; one activation runs each matching source once.
 Unselected sources and disconnected branches produce skipped records, not
-invented values. Execution is a deterministic DAG; inbox subscriptions, gate
-and operation catalogues, external actions, iteration and canvas authoring have
-their own slices and do not change this envelope contract.
+invented values. Execution is a deterministic DAG; gate and operation catalogues,
+external actions, iteration and canvas authoring have their own slices and do not
+change this envelope contract.
 
 Create and update through `POST /api/routines` and
 `PATCH /api/routines/:id` with `graph`, and execute through the existing run
@@ -228,6 +228,49 @@ Trace nesting is bounded at 256 levels during serialization, independently of
 the JavaScript engine's stack behavior. Other JSON serialization failures use
 the same terminal-history path without discarding execution aggregates.
 History error excerpts are capped at 8,192 characters, including the diagnostic.
+
+### Inbox intake
+
+Fresh navigation opens Inbox (`/inbox`); Chat is `/chat` and Kanban remains
+available at `/tasks`. Explicit deep links and the first-run onboarding gate
+keep their meaning.
+
+The production registry includes `inbox.card_added`, labelled **inbox: card
+added**, with no inputs, an object-valued `event` output and a config schema
+requiring `{ "eventType": "inbox.card_added" }`. A generic `event.source` with
+that event type can subscribe too. Wire its output to ordinary registered graph
+operations/actions; intake is not a separate kind-specific classifier or filing
+pipeline. Model operations report actual usage through `recordUsage`.
+
+`db/inbox.ts::createInbox` commits the card and its `inbox_graph_events`
+deliveries in one transaction. The card snapshot includes all currently
+persisted inbox properties (including an empty body/source and YAML in the body).
+Each enabled native flow/source configured at creation gets one durable delivery,
+keyed by `(card id, routine id, source node id)`. No title/body deduplication is
+used. Transaction rollback drops both the delivery and its after-commit wakeup;
+HTTP idempotency receipts therefore cannot produce an extra event. Internal
+deck creation and graph-created cards use the same boundary, with a new card ID
+for each genuine new card. Reads, edits, promotion, processing, deletion and
+websocket refreshes do not emit creation events.
+
+After commit, the runner calls `fireGraphEvent`, selecting each intended source
+explicitly. Notification payloads only identify the delivery: execution reads
+the original committed snapshot, not a subsequent edit or caller replacement.
+Admission atomically claims the durable delivery and starts its run before any
+async graph work. Replays and concurrent notifications cannot start a second
+run. The existing enabled-state, concurrency, cancellation and graph-budget
+controls apply, including visible concurrency-skipped/aborted runs; admission
+is not a claim that filing or any downstream effect succeeded.
+
+Restart drains only committed **pending deliveries**, never an inbox list.
+Disabled flows get no deliveries for new cards; deliveries whose source was
+removed, changed or disabled before dispatch are discarded, not held until
+re-enable. Already admitted work is **not retried** after a crash because an
+external effect may have happened: the interrupted run becomes visibly aborted
+with `server_restarted`, its admitted graph/activation snapshot, and no invented
+node results. Per-source receipts remain even when an inbox card is deleted.
+This is at-most-once admission, not a promise of exactly-once external effects
+or completion across a crash; individual action nodes own effect receipts.
 
 ## Theming
 

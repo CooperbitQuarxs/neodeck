@@ -7,7 +7,7 @@
  *   4. Done              — handoff to chat
  *
  * Every step is skippable; the wizard is escapable (top-right "Skip
- * setup" link nav to /). On any kind of completion (walked through OR
+ * setup" link nav to /chat). On any kind of completion (walked through OR
  * X-ed out) the server-side flag is written so we don't retrigger.
  *
  * Each step renders a tick when its work is already done (provider
@@ -66,7 +66,7 @@ export function OnboardingView() {
 			if (skipped) {
 				localStorage.setItem("npi-deck:onboarding-skip-toast-pending", "1");
 			}
-			navigate("/");
+			navigate("/chat");
 		} catch (err) {
 			setError(err instanceof Error ? err.message : String(err));
 		}

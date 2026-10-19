@@ -16,7 +16,7 @@ import { Cron } from "croner";
 import { parse as parseYaml } from "yaml";
 import * as path from "node:path";
 
-import type { GraphActivation, GraphExecutionResult, GraphObject, Routine, RoutineActionKind, RoutineSpec, RoutineTrigger } from "@npi-deck/protocol";
+import { INBOX_CARD_ADDED_EVENT, type GraphActivation, type GraphExecutionResult, type GraphObject, type Routine, type RoutineActionKind, type RoutineSpec, type RoutineTrigger } from "@npi-deck/protocol";
 
 import { logger } from "./log.ts";
 import {
@@ -35,6 +35,7 @@ import { spawnOwned, terminateOwned } from "./owned-process.ts";
 import { routineAgentCommand } from "./routines/agent-command.ts";
 import { workRegistry } from "./work-registry.ts";
 import { executeGraph, GraphNodeRegistry } from "./routines/graph-runner.ts";
+import { admitInboxGraphEvent, discardInboxGraphEvent, inboxGraphEventsFor, pendingInboxGraphEvents, recoverInboxGraphEvents, subscribeInboxGraphEvents } from "./db/inbox-graph-events.ts";
 
 const log = logger("routines-runner");
 
@@ -60,6 +61,7 @@ export class RoutinesRunner {
 	private crons = new Map<string, ScheduledCron[]>();
 	private disposed = false;
 	private closing = false;
+	private unsubscribeInbox?: () => void;
 	private readonly runs = new Map<string, { abort: AbortController; finished: Promise<void> }>();
 	readonly concurrency = new ConcurrencyController();
 	readonly graphRegistry = new GraphNodeRegistry();
@@ -71,17 +73,23 @@ export class RoutinesRunner {
 	closeAdmissions(): void { this.closing = true; }
 
 	start(): void {
+		if (this.unsubscribeInbox || this.closing) return;
+		recoverInboxGraphEvents();
+		this.unsubscribeInbox = subscribeInboxGraphEvents(() => this.dispatchInboxEvents());
 		const routines = listRoutines();
 		for (const r of routines) {
 			if (r.enabled) this.schedule(r);
 		}
 		log.info(`scheduled ${routines.filter((r) => r.enabled).length} routine(s)`);
+		this.dispatchInboxEvents();
 	}
 
 	async dispose(): Promise<void> {
 		if (this.disposed) return;
 		this.closeAdmissions();
 		this.disposed = true;
+		this.unsubscribeInbox?.();
+		this.unsubscribeInbox = undefined;
 		for (const entries of this.crons.values()) {
 			for (const entry of entries) {
 				try { entry.cron.stop(); } catch (err) { log.warn(`stop failed for routine ${entry.routineId}`, err); }
@@ -168,9 +176,31 @@ export class RoutinesRunner {
 		});
 	}
 
-	/** Admission point for future inbox subscriptions; activations are never routed through V0. */
+	/** Inbox notifications can replay; only a committed per-source delivery may start. */
 	async fireGraphEvent(routineId: string, activation: GraphActivation): Promise<void> {
-		await this.fireGraphActivation(routineId, activation, "event");
+		if (activation.eventType !== INBOX_CARD_ADDED_EVENT) {
+			await this.fireGraphActivation(routineId, activation, "event");
+			return;
+		}
+		for (const delivery of inboxGraphEventsFor(routineId, activation)) {
+			const routine = getRoutine(routineId);
+			const source = routine?.graph?.nodes.find((node) => node.id === delivery.activation.sourceNodeId);
+			if (!routine?.enabled || routine.specVersion !== 2 || !source
+				|| this.graphRegistry.get(source.type)?.definition.kind !== "event"
+				|| source.config.eventType !== INBOX_CARD_ADDED_EVENT) {
+				discardInboxGraphEvent(routineId, delivery.activation);
+				continue;
+			}
+			await this.fireGraphActivation(routineId, delivery.activation, "event");
+		}
+	}
+
+	private dispatchInboxEvents(): void {
+		if (this.closing) return;
+		for (const delivery of pendingInboxGraphEvents()) {
+			void this.fireGraphEvent(delivery.routineId, delivery.activation)
+				.catch((err) => log.warn("inbox graph intake failed", err));
+		}
 	}
 
 	private async fireGraphActivation(
@@ -200,7 +230,10 @@ export class RoutinesRunner {
 		if (!validation.valid) throw new Error(`invalid graph: ${JSON.stringify(validation.errors)}`);
 		const definition = structuredClone(graph);
 		const activationSnapshot = structuredClone(activation);
-		const run = startRun(routine.id, trigger, activation.event);
+		const start = () => startRun(routine.id, trigger, activation.event);
+		const run = trigger === "event" && activation.eventType === INBOX_CARD_ADDED_EVENT
+			? admitInboxGraphEvent(routine.id, activation, definition, start) : start();
+		if (!run) return;
 		const decision = this.concurrency.decide(routine.id, run.id, graph.concurrency ?? "skip");
 		const persist = (result: GraphExecutionResult, abortReason?: string) => finishGraphRun({
 			...result, id: run.id, routineId: routine.id, startedAt: run.startedAt,

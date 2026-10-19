@@ -17,7 +17,7 @@ import { onboardingApi } from "./lib/onboarding-api";
 
 /**
  * First-paint redirect: if the server reports `needsOnboarding`, route
- * brand-new users to the wizard instead of an empty chat. Only triggers
+ * brand-new users to the wizard, and everyone else to Inbox. Only triggers
  * once per page load and only when the user lands on `/` — typing any
  * other URL bypasses the gate (the wizard is escapable, and we don't
  * want to re-trap users who already saw it).
@@ -26,6 +26,8 @@ function OnboardingGate() {
 	const navigate = useNavigate();
 	const location = useLocation();
 	const checked = useRef(false);
+	const currentPath = useRef(location.pathname);
+	currentPath.current = location.pathname;
 	useEffect(() => {
 		if (checked.current) return;
 		checked.current = true;
@@ -33,11 +35,13 @@ function OnboardingGate() {
 		void onboardingApi
 			.state()
 			.then((state) => {
-				if (state.needsOnboarding) navigate("/onboarding", { replace: true });
+				if (currentPath.current !== "/") return;
+				navigate(state.needsOnboarding ? "/onboarding" : "/inbox", { replace: true });
 			})
 			.catch(() => {
 				// State endpoint failed — don't block the app. Onboarding can be
 				// re-run from Settings if the gate misfires.
+				if (currentPath.current === "/") navigate("/inbox", { replace: true });
 			});
 	}, [location.pathname, navigate]);
 	return <Outlet />;
@@ -47,7 +51,8 @@ const router = createBrowserRouter([
 	{
 		element: <OnboardingGate />,
 		children: [
-			{ path: "/", element: <ChatView /> },
+			{ path: "/", element: <InboxView /> },
+			{ path: "/chat", element: <ChatView /> },
 			{ path: "/tasks", element: <TasksView /> },
 			{ path: "/routines", element: <RoutinesView /> },
 			{ path: "/routines/:id/runs/:runId", element: <RunDetailView /> },

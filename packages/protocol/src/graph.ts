@@ -26,6 +26,21 @@ export interface GraphNodeType {
 	configSchema?: GraphObject;
 }
 
+export const INBOX_CARD_ADDED_EVENT = "inbox.card_added";
+export const inboxCardAddedNodeType: GraphNodeType = {
+	type: INBOX_CARD_ADDED_EVENT,
+	label: "inbox: card added",
+	kind: "event",
+	inputs: [],
+	outputs: [{ id: "event", type: "object" }],
+	configSchema: {
+		type: "object",
+		required: ["eventType"],
+		properties: { eventType: { const: INBOX_CARD_ADDED_EVENT } },
+		additionalProperties: false,
+	},
+};
+
 export interface GraphNode {
 	id: string;
 	type: string;
