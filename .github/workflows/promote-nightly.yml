@@ -43,16 +43,9 @@ jobs:
               set -euo pipefail
               date=$(date -u +%Y-%m-%d)
               branch="sync/promote-$date"
-              upstream_labels=()
-              upstream_edit=(--remove-label upstream)
-              promotion_merges=$(git log --merges --format=%s "origin/$BASE..origin/$SOURCE")
-              if [[ "$promotion_merges" == *"sync/"* ]]; then
-                 upstream_labels+=(--label upstream)
-                 upstream_edit=(--add-label upstream)
-              fi
               existing=$(gh pr list --base "$BASE" --head "$branch" --state open --json number --jq '.[0].number // empty')
               if [ -n "$existing" ]; then
-                 gh pr edit "$existing" --add-label "review: codex" --add-label enhancement "${upstream_edit[@]}"
+                 gh pr edit "$existing" --add-label "review: codex" --add-label enhancement
                  echo "number=$existing" >> "$GITHUB_OUTPUT"
                  exit 0
               fi
@@ -82,7 +75,7 @@ jobs:
               } > "$body"
               url=$(gh pr create --base "$BASE" --head "$branch" \
                  --title "chore(promote): nightly into main $date" \
-                 --body-file "$body" --label "human: pending" --label "review: codex" --label enhancement "${upstream_labels[@]}")
+                 --body-file "$body" --label "human: pending" --label "review: codex" --label enhancement)
               number=${url##*/}
               [ -n "$number" ] || { echo "::error::could not determine the promotion PR number"; exit 1; }
               echo "number=$number" >> "$GITHUB_OUTPUT"
