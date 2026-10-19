@@ -35,7 +35,7 @@ they are not one mutually exclusive classification.
 
 | Layer | Labels | Rule |
 | --- | --- | --- |
-| Type and intent | `bug`, `enhancement`, `documentation`, `question`, `accessibility`, `idea`, `experiment` | Use appropriate labels; meanings below |
+| Type and intent | `bug`, `enhancement`, `documentation`, `accessibility`, `idea`, `experiment` | Use appropriate labels; meanings below |
 | Priority | `priority: p0` … `priority: p3` | Exactly one once triaged |
 | Estimates | Eight `difficulty:*` buckets; five `frame:*` units | Independent estimates with provenance; see [Sizing](#sizing) |
 | Specification | `spec` | An implementation specification is present, not permission to implement |
@@ -67,7 +67,7 @@ with tools and subagents; preserve human estimates as authored.
 ### Difficulty
 
 Difficulty is in `[0, 1]`: `0` is a mechanical one-line change; `1` is the hardest
-work the project will attempt. Weigh complexity, uncertainty, blast radius, and
+work the project will attempt. Weigh complexity, uncertainty, regression risk, and
 cross-repo coordination. Preserve the estimator and source of an estimate.
 
 | Label | Range |

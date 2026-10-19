@@ -33,7 +33,7 @@ recommendations for new assignments. Availability does not mean issues have
 been relabeled or closed. Composition, idea/spec/experiment, alternatives, and
 sizing are defined in [the tracker policy](issue-tracker.md).
 
-Deselected non-operational labels, including `rpc`, `t3c-npi`, `npi-deck`,
+Deselected non-operational labels, including `question`, `rpc`, `t3c-npi`, `npi-deck`,
 `neopi-upstream`, `codex-review`, `sentinel-review-requested`, and the
 `effort:*`, `size:*`, `vouch:*`, and `wayfinder:*` families, are not recommended
 for new triage assignments. Preserve existing associations until reviewed
