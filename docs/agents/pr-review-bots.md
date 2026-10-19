@@ -95,13 +95,19 @@ review keeps the PR open. Elapsed time and escalation never waive the gate.
 
 ## CI
 
-Fix failures introduced by the PR. Compare a failing check on the base and head:
-head-only failure belongs to the PR; identical failures are a `baseline` defect;
-both passing locally establishes flakiness and needs both results cited before
-a rerun. If a check cannot run locally, record the concrete reason and failing
-run in the baseline issue rather than rerunning in hope. A baseline-red check
-may remain red only with that issue and identical-failure evidence.
-CI workflow fixes remain separate from the feature PRs that need them.
+Fix failures introduced by the PR. Compare base and head using the failing
+check's platform, toolchain, dependencies, and command (the same CI job or an
+equivalent reproduced environment). Head-only failure belongs to the PR;
+identical failures are a `baseline` defect. Both passing in that environment
+supports flakiness; cite both runs before any rerun. Passing only on another
+platform or configuration does not establish flakiness.
+
+If the failing environment cannot be reproduced locally, record the concrete
+limitation and failing run in a baseline investigation issue rather than
+rerunning in hope. The limitation alone does not establish that the failure
+predates the PR. A baseline-red merge exception still requires identical-failure
+evidence from base and head. CI workflow fixes remain separate from the feature
+PRs that need them.
 
 ## Running PR code
 
