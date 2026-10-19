@@ -519,9 +519,10 @@ export function getRun(runId: string): RoutineRun | undefined {
 }
 
 const MAX_GRAPH_TRACE_BYTES = 8 * 1024 * 1024;
+const MAX_GRAPH_TRACE_DEPTH = 256;
 const MAX_GRAPH_HISTORY_ERROR_CHARS = 8 * 1024;
 class GraphTraceLimitError extends Error {
-	constructor() { super(`Graph trace exceeds the ${MAX_GRAPH_TRACE_BYTES}-byte serialization budget`); }
+	constructor(message = `Graph trace exceeds the ${MAX_GRAPH_TRACE_BYTES}-byte serialization budget`) { super(message); }
 }
 
 /** Redact user data during serialization, without copying or changing live envelopes. */
@@ -534,6 +535,7 @@ function encodeGraphTrace(record: GraphRunRecord): string {
 			ancestors.pop();
 			payloadScopes.pop();
 		}
+		if (ancestors.length >= MAX_GRAPH_TRACE_DEPTH) throw new GraphTraceLimitError(`Graph trace exceeds the ${MAX_GRAPH_TRACE_DEPTH}-level serialization depth budget`);
 		const insidePayload = payloadScopes[payloadScopes.length - 1] ?? false;
 		if (insidePayload) value = redactCredentialField(key, value);
 		// Charge each occurrence, including shared envelopes, before stringify expands it.

@@ -301,7 +301,7 @@ test("oversized handler errors leave bounded history and retain incurred usage",
 	expect(getGraphRun(record.id)).toBeUndefined();
 });
 
-test("native serialization depth failure preserves completed execution aggregates", async () => {
+test("serialization depth budget preserves completed execution aggregates independently of engine stack limits", async () => {
 	const run = setup();
 	let deep: GraphValue = "leaf";
 	for (let index = 0; index < 20_000; index++) deep = { nested: deep };
@@ -317,7 +317,7 @@ test("native serialization depth failure preserves completed execution aggregate
 	const record = listRuns(saved.id)[0]!;
 	expect(record.endedAt).toBeDefined();
 	expect(record.exitCode).toBe(1);
-	expect(record.error).toContain("could not be serialized");
+	expect(record.error).toContain("serialization depth budget");
 	expect(record.totalLlmTokens).toBe(8);
 	expect(record.totalLlmCostMicros).toBe(12);
 	expect(record.stepCountTotal).toBe(2);
