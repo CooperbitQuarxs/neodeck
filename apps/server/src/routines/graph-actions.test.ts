@@ -353,3 +353,29 @@ test("credential fields are redacted in durable action requests, receipts and pr
 	expect(JSON.parse(durable.effect_json).receipt.properties.password).toBe("[redacted]");
 	expect(durable.effect_json).not.toContain("private-password");
 });
+
+test("privacy-safe card receipts keep downstream requests identical after restart and replay", async () => {
+	setup();
+	const graph = flow("action.create-card", { title: "Private source", properties: { password: "private-replay-password", ordinary: false } });
+	graph.nodes.push({
+		id: "downstream", type: "action.create-card", config: {
+			request: { title: "Stable downstream", body: { $from: { nodeId: "action", path: ["result", "receipt", "body"] } } },
+		},
+	});
+	graph.edges.push({ id: "downstream", from: { nodeId: "action", port: "result" }, to: { nodeId: "downstream", port: "in" } });
+	const routine = createGraphRoutine({ name: "private replay", graph }, runner.graphRegistry);
+	await runner.fire(routine.id, "manual", { id: "private-event" });
+	expect(trace(routine.id).status).toBe("success");
+	const receipt = action(trace(routine.id)).effects![0]!.receipt!;
+	const downstream = listTasks().find(card => card.title === "Stable downstream")!;
+	closeDb(); openDb({ path: path.join(home, "deck.db") });
+	await runner.fire(routine.id, "manual", { id: "private-event" });
+	expect(trace(routine.id).status).toBe("success");
+	expect(action(trace(routine.id)).effects![0]).toMatchObject({ replayed: true, receipt });
+	expect(listTasks().filter(card => card.title === "Stable downstream")).toEqual([downstream]);
+	expect(downstream.body).toBe(receipt.body);
+	expect(downstream.body).toContain("[redacted]");
+	expect(downstream.body).not.toContain("private-replay-password");
+	expect(listTasks().find(card => card.title === "Private source")!.body).toContain("private-replay-password");
+	expect(JSON.stringify(trace(routine.id))).not.toContain("private-replay-password");
+});

@@ -1,7 +1,7 @@
 import { isGraphValue, type GraphEffect, type GraphObject, type GraphValue } from "@npi-deck/protocol";
 import { cardExecutionProperties, cardFrontmatter, withCardProperties } from "../card-properties.ts";
 import { getDb } from "../db/index.ts";
-import { getGraphEffect, GraphActionConflictError, graphDigest, reserveGraphEffect, storeGraphEffect } from "../db/graph-actions.ts";
+import { getGraphEffect, GraphActionConflictError, graphDigest, redactGraphActionField, reserveGraphEffect, storeGraphEffect } from "../db/graph-actions.ts";
 import { createTask, getDefaultState, getState, updateTask } from "../db/tasks.ts";
 import { notificationService, validateNotificationPayload } from "../notifications/service.ts";
 import { githubIssuesAdapter, validateGithubIssueRequest } from "./github-issues.ts";
@@ -51,7 +51,9 @@ function identity(context: GraphNodeContext): string {
 	return graphDigest({ routine: text(context.routineId, "routineId"), node: context.node.id, eventType: context.activation.eventType, operation: text(originalId, "event.id or operationId") });
 }
 function effectValue(effect: GraphEffect): GraphObject {
-	return { status: effect.status, logicalKey: effect.logicalKey, replayed: effect.replayed, ...(effect.receipt ? { receipt: effect.receipt } : {}), ...(effect.status === "planned" ? { destination: effect.destination, request: effect.request } : {}) };
+	// Downstream bindings see the same privacy-safe receipt before and after replay.
+	const receipt = effect.receipt ? JSON.parse(JSON.stringify(effect.receipt, redactGraphActionField)) as GraphObject : undefined;
+	return { status: effect.status, logicalKey: effect.logicalKey, replayed: effect.replayed, ...(receipt ? { receipt } : {}), ...(effect.status === "planned" ? { destination: effect.destination, request: effect.request } : {}) };
 }
 function certainty(error: unknown): GraphEffect["status"] {
 	if (error && typeof error === "object") {

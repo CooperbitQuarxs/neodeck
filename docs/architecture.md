@@ -291,7 +291,10 @@ operation continues. Its journal starts uncertain before dispatch; a late
 native receipt updates durable evidence without waking downstream nodes.
 The trace endpoint hydrates that effect evidence while retaining the run's
 aborted/failed status. Credential-key redaction also covers stored requests
-and receipts.
+and receipts. Downstream action bindings receive that same privacy-safe receipt
+on first execution and replay, including redacted card front matter. The
+created card itself retains its requested properties; receipt bindings do not
+expose credential properties from it.
 
 Bounded/nested iteration belongs to #159 and is not implemented by this action
 slice. Its per-occurrence identity and dry-run propagation must be added with
