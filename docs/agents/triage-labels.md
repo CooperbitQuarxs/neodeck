@@ -28,9 +28,17 @@ The shared names now include `accessibility`, `bug`, `documentation`,
 `needs-info`, `needs-triage`, `priority: p0` … `priority: p3`, all eight
 `difficulty:*` buckets, `frame: hours/days/weeks/months/years`, `stale: identical`,
 `stale: similar`, `wontfix`, `experiment`, and `spec`. Frame shorthand denotes five
-separate labels. Existing repository-specific names remain. Availability does
-not mean issues have been relabeled or closed. Composition, idea/spec/experiment,
-alternatives, and sizing are defined in [the tracker policy](issue-tracker.md).
+separate labels. Existing associations remain until reviewed, not as blanket
+recommendations for new assignments. Availability does not mean issues have
+been relabeled or closed. Composition, idea/spec/experiment, alternatives, and
+sizing are defined in [the tracker policy](issue-tracker.md).
+
+Deselected non-operational labels, including `rpc`, `t3c-npi`, `npi-deck`,
+`neopi-upstream`, `codex-review`, `sentinel-review-requested`, and the
+`effort:*`, `size:*`, `vouch:*`, and `wayfinder:*` families, are not recommended
+for new triage assignments. Preserve existing associations until reviewed
+cutover. Current required PR/readiness operational names remain in force until
+replacement is decided; this does not disable current gates.
 
 - `stale: identical` requires evidence that the requested behavior is already implemented essentially as specified; verify all acceptance before recommending closure.
 - `stale: similar` means a partial or different implementation, not automatic closure.

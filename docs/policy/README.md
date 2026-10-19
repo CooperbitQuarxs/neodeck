@@ -52,8 +52,8 @@ vocabulary are not finalized.
 - Priority: `priority: p0` … `priority: p3`. Estimates: eight `difficulty:*` intervals and `frame: hours`, `frame: days`, `frame: weeks`, `frame: months`, `frame: years`, with independent meanings and provenance in the tracker policy. Historical `effort:*` labels remain reviewable metadata, not compulsory assignments or literal durations.
 - Issue triage: `needs-triage`, `needs-info`, `wontfix`; preserve `ready-for-agent` and `ready-for-human` as legacy markers pending evidence-based reconciliation.
 - PR state remains `needs-review`, `ready-for-merge`, `review-stalled`. Accepted target `mergeable` awaits coordinated parent-policy/consumer migration; it changes neither merge permission nor review gates.
-- Other: `accessibility`, `baseline`, `upstream-sync`, `downstream`, `hotfix`, `entangled`, `neopi-upstream`, `stale: identical`, `stale: similar`, `codex-review`, `sentinel-review-requested`. Accepted target `upstream` means substantive upstream involvement; current operational `upstream-sync` remains until coordinated migration. Baseline retirement is undecided.
-- Wayfinding: `wayfinder:map`, `wayfinder:research`, `wayfinder:prototype`, `wayfinder:grilling`, `wayfinder:task`.
+- Other shared labels: `accessibility`, `downstream`, `hotfix`, `entangled`, `stale: identical`, `stale: similar`. Accepted target `upstream` means substantive upstream involvement; current operational `upstream-sync` remains until coordinated migration. `baseline` retirement is undecided.
+- Retained historical associations include `neopi-upstream`, `codex-review`, `sentinel-review-requested`, and `wayfinder:*`; these are not new triage recommendations. The deselected-label rule and preservation of current required operational names are in `docs/agents/triage-labels.md`.
 
 This documentation cutover neither relabels/closes issues nor removes existing
 labels. Preserve historical estimates and other metadata until reviewed.

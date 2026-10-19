@@ -45,7 +45,7 @@ they are not one mutually exclusive classification.
 - `spec` means the issue is or contains an implementation specification, optionally in a collapsible `<details>` section. Headings or checkboxes alone do not turn brainstorming into an agreed spec. It implies neither authorization, current agent activity, nor merge eligibility.
 - `experiment` composes with `idea`, `bug`, and other applicable labels. Authorized experimental work uses an `experimental/` topic branch; entering `nightly` or the default branch needs a separate owner decision. A label alone starts no work.
 - `entangled` identifies incompatible alternatives: choosing one supersedes the others. Ordinary dependencies or related issues are not entangled. Record the alternatives and supersession condition, and preserve the unresolved owner choice rather than AFK-implementing an alternative.
-- `neopi-upstream` remains the specific NeoPi dependency marker described below. Broader upstream involvement and held label renames are defined in `docs/agents/triage-labels.md`.
+- Existing `neopi-upstream` associations record historical NeoPi dependencies; link the dependency contract rather than assigning that deselected label anew. Broader upstream involvement and held label renames are defined in `docs/agents/triage-labels.md`.
 
 Publication authority remains in `docs/agents/issue-funnel.md`.
 
@@ -113,15 +113,16 @@ files a NeoPi issue and the NeoPi-side agent implements it there.
 
 - That issue is the contract: exact field names, capabilities, types, and events.
 - Amend the contract by commenting on the NeoPi issue before merging a change to it.
-- The consuming deck issue carries `neopi-upstream` and links the NeoPi issue.
+- The consuming deck issue links the NeoPi issue. Retain existing `neopi-upstream` associations pending reviewed cutover; do not recommend new triage assignments.
 - Unresolved disagreements go to the operator. Cross-project ADRs and product decisions remain owned by their project.
 
 ## Wayfinding operations
 
-`/wayfinder` uses an issue labelled `wayfinder:map`, with child issues linked
-as native sub-issues (or a task list plus `Part of #<map>` when unavailable).
-Children use the existing `wayfinder:research`, `wayfinder:prototype`,
-`wayfinder:grilling`, or `wayfinder:task` label in addition to house labels.
+Historical `/wayfinder` maps may carry `wayfinder:map` and children
+`wayfinder:research`, `wayfinder:prototype`, `wayfinder:grilling`, or
+`wayfinder:task`. Preserve existing associations; the deselected family is not
+recommended for new triage assignments. Link children as native sub-issues
+(or a task list plus `Part of #<map>` when unavailable).
 
 Dependencies use GitHub's native issue dependencies: POST
 `repos/PsychedelicShayna/neodeck/issues/<child>/dependencies/blocked_by` with

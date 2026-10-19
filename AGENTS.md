@@ -35,13 +35,13 @@ and display untouched during verification.
 
 GitHub Issues on `PsychedelicShayna/neodeck`; always target it explicitly because
 fork discovery can resolve to the upstream parent. Read
-`docs/agents/issue-tracker.md` for issue mechanics, effort sizing, legacy-label
-migration, NeoPi dependency contracts, and wayfinding.
+`docs/agents/issue-tracker.md` for issue mechanics, independent difficulty/frame
+estimates, historical metadata, NeoPi dependency contracts, and wayfinding.
 
 ### Triage labels
 
-Use the five canonical readiness labels, layered with type, priority, and
-`effort:*`. Read `docs/agents/triage-labels.md` when triaging.
+Read `docs/agents/triage-labels.md` for composable labels, evidence-led daily
+triage, legacy readiness markers, and held migrations.
 
 ### Issue Funnel
 
@@ -55,6 +55,7 @@ Single-context: one `CONTEXT.md` and `docs/adr/` at the repo root. Read
 
 ## Sizing work
 
-Whenever assessing effort or duration, estimate for an AI agent, not a human.
-Use the house `effort:*` taxonomy; the legacy difficulty/frame mapping and
-retention rules live in `docs/agents/issue-tracker.md#effort-and-legacy-sizing-migration`.
+Read `docs/agents/issue-tracker.md#sizing` for difficulty/frame estimates,
+provenance, and one-time agent-frame normalization. Preserve human-authored
+estimates and reviewed historical metadata; compulsory `effort:*` assignment
+is retired.
