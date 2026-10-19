@@ -7,7 +7,7 @@ const ITEMS: ReadonlyArray<{
 	label: string;
 	icon: typeof MessagesSquare;
 }> = [
-	{ to: "/", label: "Chat", icon: MessagesSquare },
+	{ to: "/chat", label: "Chat", icon: MessagesSquare },
 	{ to: "/tasks", label: "Tasks", icon: KanbanSquare },
 	{ to: "/advisors", label: "Advisors", icon: Eye },
 	{ to: "/mixtures", label: "Mixtures", icon: Network },
@@ -30,7 +30,6 @@ export function NavRail() {
 				<NavLink
 					key={item.to}
 					to={item.to}
-					end={item.to === "/"}
 					title={item.label}
 					aria-label={item.label}
 					className={({ isActive }) =>

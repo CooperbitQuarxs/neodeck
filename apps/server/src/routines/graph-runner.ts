@@ -1,4 +1,5 @@
 import {
+	INBOX_CARD_ADDED_EVENT, inboxCardAddedNodeType,
 	compileStructuredOutputSchema, isGraphValue, validateRoutineGraph,
 	type GraphActivation, type GraphEmission, type GraphExecutionResult, type GraphNode,
 	type GraphNodeInput, type GraphNodeRun, type GraphNodeType, type GraphOutput,
@@ -42,6 +43,11 @@ export class GraphNodeRegistry {
 	private readonly validators = new Map<string, (config: unknown) => ValidationResult>();
 
 	constructor() {
+		this.register({
+			definition: inboxCardAddedNodeType,
+			execute: ({ activation }) => activation.eventType === INBOX_CARD_ADDED_EVENT
+				? [{ port: "event", value: activation.event }] : [],
+		});
 		this.register({
 			definition: {
 				type: "event.source", label: "Event source", kind: "event", inputs: [],
