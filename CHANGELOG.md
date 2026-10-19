@@ -7,6 +7,7 @@ All notable changes to NPI deck (a fork of bjb2/omp-deck; entries before the for
 
 ### Added
 
+- **Agents execute assigned cards** (#101). Assignment starts an isolated NeoPi worker immediately, queues behind a configurable global limit of 12, and records the result on the card. Leading YAML preserves arbitrary properties and can select an existing linked worktree, model, role or mechanically read-only research. Owned temporary worktrees are removed after completion or cancellation; linked worktrees survive. Read-only workers restrict native SDK tools and use a Linux filesystem sandbox that fails closed when unavailable. Interrupted runs recover their owned artifacts without replaying possible side effects. UI, chat, inbox promotion, API and routine filing keep card properties without inferring project routing.
 - **Native provenance-carrying routine graphs** (#158). V2 graphs persist and run through the routine API independently of YAML or a canvas. One extensible registry supplies typed ports, configuration validation and node execution. Every output preserves its result and ordered recursive inputs; truthy strings and numbers are never coerced into literal `true`. Generic event sources carry the original event object, invalid connections fail before save or dispatch, and immutable run traces survive definition edits and database reopen. The legacy editors recognize graph routines without rewriting them as single actions or pipelines.
 
 - **Telegram inbox, groups and persistent session bindings** (#103). Authorized DMs file tasks through the inbox into kanban cards, decomposing explicit lists and preserving YAML card properties. Groups require both sender and chat allowlists, with command, mention or reply invocation. Chat/topic bindings, retained sessions and default card properties survive bridge restarts; `/chat` explicitly invokes NeoPi, and reset only detaches the binding. Settings → Messaging explains and configures the bridge. See `docs/telegram-parity.md` for the Hermes capability matrix and justified exclusions.
@@ -50,6 +51,11 @@ All notable changes to NPI deck (a fork of bjb2/omp-deck; entries before the for
 
 ### Fixed
 
+- Queued card assignments resume after a server restart; cancellations use the failure column, and deleted outcome columns no longer discard completed runs.
+- Card workers reach protected KB routes on IPv6 listeners, and assignments reject an active column that is also the completion column (#101).
+
+- Linked card worktrees are validated by OS-native canonical directory rather than Git's path spelling, including Windows 8.3 aliases and macOS aliases (#101). Card-run persistence uses connection-owned queries so strict database close can release its writes.
+- Knowledge-protocol tests provision the native SDK before admitting cases, keeping cold backend loading outside per-case hooks without increasing case deadlines (#101).
 - Routine foundation tests isolate each case's database, home and process ownership so an expired cleanup cannot close the next run's database (#185).
 - Native graph traces redact credential-key values in activation events, node configurations and recursively retained output results before persistence (#158). Execution retains original objects, while stored traces and their HTTP responses exclude those credential values without redacting token budgets or usage counters.
 - Oversized recursive graph traces stop at an 8 MiB serialization budget and report a terminal history error instead of blocking on unbounded SQLite payloads (#158).

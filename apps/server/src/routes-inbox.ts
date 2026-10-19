@@ -104,13 +104,14 @@ export function buildInboxRouter(): Hono {
 		// trace where the task originated even after the inbox is cleared out.
 		const stamp = new Date(item.createdAt).toISOString().slice(0, 10);
 		const provenance = `_Promoted from inbox · ${item.kind} · ${stamp} · ${item.id}_`;
-		const taskBody = item.body.trim().length > 0
-			? `${item.body}\n\n---\n${provenance}`
+		const content = body.body ?? item.body;
+		const taskBody = content.trim().length > 0
+			? `${content}\n\n---\n${provenance}`
 			: provenance;
 
 		try {
 			const out = inboxMutation(`promote:${item.id}`, c.req.header("Idempotency-Key"), (): PromoteInboxItemResponse => {
-				const task = createTask({ title: item.title, body: taskBody, stateId, ...(body.cwd !== undefined ? { cwd: body.cwd } : {}) });
+				const task = createTask({ title: item.title, body: taskBody, stateId, properties: body.properties, ...(body.cwd !== undefined ? { cwd: body.cwd } : {}) });
 				// Keep recurring-template promotion unchanged when no receipt key is supplied.
 				const inbox = body.markProcessed !== false
 					? updateInbox(item.id, { processed: true }) ?? item

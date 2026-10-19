@@ -1554,6 +1554,21 @@ export interface TaskState {
 	isDefault: boolean;
 }
 
+export interface CardRun {
+	id: string;
+	taskId: string;
+	status: "queued" | "running" | "completed" | "failed" | "cancelled";
+	assignedAt: string;
+	startedAt?: string;
+	finishedAt?: string;
+	cwd?: string;
+	ownedWorktree: boolean;
+	model?: string;
+	role?: string;
+	outcome?: string;
+	error?: string;
+}
+
 export interface Task {
 	id: string;
 	/** Monotonic deck-wide display number. Render as `T-${displayId}`. */
@@ -1575,11 +1590,15 @@ export interface Task {
 	 */
 	stateEnteredAt: string;
 	archivedAt?: string;
+	/** Latest persisted assignment and outcome, independent of card front matter. */
+	run?: CardRun;
 }
 
 export interface CreateTaskRequest {
 	title: string;
 	body?: string;
+	/** Merged into leading YAML; body remains the sole card-property store. */
+	properties?: Record<string, unknown>;
 	stateId?: string;
 	cwd?: string;
 }
@@ -1587,6 +1606,7 @@ export interface CreateTaskRequest {
 export interface UpdateTaskRequest {
 	title?: string;
 	body?: string;
+	properties?: Record<string, unknown>;
 	stateId?: string;
 	orderInState?: number;
 	/** `null` or blank clears the cwd (files the task as unassigned); omit to leave it unchanged. */
@@ -1694,6 +1714,9 @@ export interface PromoteInboxItemRequest {
 	/** Project assignment; linked worktree and other properties remain leading YAML in the inbox body. */
 	cwd?: string;
 	markProcessed?: boolean;
+	body?: string;
+	properties?: Record<string, unknown>;
+	cwd?: string;
 }
 
 export interface PromoteInboxItemResponse {
@@ -1899,6 +1922,7 @@ export type RoutineStep =
 						action: "create_task";
 						title: string;
 						body?: string;
+						properties?: Record<string, unknown>;
 						/** Task state id or case-insensitive state-name substring. Defaults to the default state. */
 						state_ref?: string;
 						cwd?: string;
@@ -1922,6 +1946,9 @@ export type RoutineStep =
 						state_ref?: string;
 						/** Defaults to true — promoted inbox items are marked processed. */
 						mark_processed?: boolean;
+						properties?: Record<string, unknown>;
+						body?: string;
+						cwd?: string;
 				  }
 				| {
 						type: "deck";
