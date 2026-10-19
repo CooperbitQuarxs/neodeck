@@ -45,7 +45,7 @@ jobs:
               branch="sync/promote-$date"
               existing=$(gh pr list --base "$BASE" --head "$branch" --state open --json number --jq '.[0].number // empty')
               if [ -n "$existing" ]; then
-                 gh pr edit "$existing" --add-label "human: pending" --add-label "review: codex" --add-label enhancement
+                 gh pr edit "$existing" --add-label "review: codex" --add-label enhancement
                  echo "number=$existing" >> "$GITHUB_OUTPUT"
                  exit 0
               fi
