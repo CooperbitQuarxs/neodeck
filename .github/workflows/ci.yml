@@ -34,6 +34,14 @@ jobs:
         with:
           bun-version: ${{ matrix.bun }}
 
+      - name: install Linux read-only sandbox prerequisite
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes bubblewrap
+          command -v bwrap
+          bwrap --version
+
       - name: bun install (frozen)
         run: bun install --frozen-lockfile
 
