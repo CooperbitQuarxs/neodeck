@@ -357,6 +357,9 @@ export async function startDeck(opts: StartDeckOptions = {}): Promise<DeckHandle
 		},
 	});
 
+	if (server.hostname === undefined || server.port === undefined) {
+		throw new Error("Card agent callbacks require a TCP listener");
+	}
 	cardAgents.setApiOrigin(localListenerOrigin(server.hostname, server.port));
 	await cardAgents.recover();
 	log.info(`listening on http://${server.hostname}:${server.port}`);
