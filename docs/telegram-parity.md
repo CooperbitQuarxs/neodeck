@@ -23,3 +23,10 @@ Reference: read-only inspection of the local `~/.hermes/hermes-agent` source on 
 - **Identity:** the configured Telegram bot (not the Captain's account, and never Hermes).
 - **Invocation:** authorized DMs default to task intake. Groups first require an allowed chat/sender and allowed, non-ignored topic, then a command, a leading standalone `@bot_username` invocation, reply or configured wake pattern unless global/per-chat/per-topic free response applies. A username inside prose, a URL or YAML is data, not an invocation; accepted text/captions remain unchanged. None bypasses identity/topic restrictions. `/chat` explicitly invokes NeoPi.
 - **Capabilities:** authorized senders share the Captain-configured deck authority; intake only files cards/inbox items. Explicit chat uses the existing deck session/tool policy, not a new unrestricted runner. Read-only card metadata describes future #101 execution; this bridge never claims to enforce an execution sandbox itself.
+
+Telegram message identity (chat/topic/message ID) supplies a durable
+`Idempotency-Key` for capture and each decomposed card index. The inbox API
+commits each create/promotion receipt in the same SQLite transaction as its
+mutation. Redelivery after a bridge/server restart returns the original result
+instead of creating another item/card, including a restart between creation and
+promotion. Unkeyed recurring-template promotions keep their existing behavior.

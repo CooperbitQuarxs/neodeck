@@ -38,16 +38,17 @@ export class DeckClient {
 	}
 
 	capture(title: string, body: string, source: string): Promise<InboxItem> {
-		return this.request("/api/inbox", { method: "POST", body: JSON.stringify({ kind: "capture", title, body, source }) });
+		return this.request("/api/inbox", { method: "POST", headers: { "Idempotency-Key": `${source}:capture` }, body: JSON.stringify({ kind: "capture", title, body, source }) });
 	}
 
 	async fileCards(cards: IntakeCard[], source: string): Promise<Task[]> {
 		const tasks: Task[] = [];
-		for (const card of cards) {
-			const item = await this.request<InboxItem>("/api/inbox", { method: "POST",
+		for (const [index, card] of cards.entries()) {
+			const headers = { "Idempotency-Key": `${source}:card:${index}` };
+			const item = await this.request<InboxItem>("/api/inbox", { method: "POST", headers,
 				body: JSON.stringify({ kind: "ticket", title: card.title, body: card.body, source }) });
 			const promoted = await this.request<PromoteInboxItemResponse>(`/api/inbox/${encodeURIComponent(item.id)}/promote`, {
-				method: "POST", body: JSON.stringify({ ...(card.cwd ? { cwd: card.cwd } : {}), ...(card.stateId ? { stateId: card.stateId } : {}) }),
+				method: "POST", headers, body: JSON.stringify({ ...(card.cwd ? { cwd: card.cwd } : {}), ...(card.stateId ? { stateId: card.stateId } : {}) }),
 			});
 			tasks.push(promoted.task);
 		}

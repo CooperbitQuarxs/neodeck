@@ -7,11 +7,14 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import type { PromoteInboxItemResponse } from "@npi-deck/protocol";
+import { Hono } from "hono";
+import { DeckClient } from "../../bridges/telegram/src/deck.ts";
 
 import { broadcastBus, type BroadcastFrame } from "./broadcast-bus.ts";
-import { createInbox } from "./db/inbox.ts";
+import { createInbox, listInbox } from "./db/inbox.ts";
 import { closeDb, openDb } from "./db/index.ts";
 import { buildInboxRouter } from "./routes-inbox.ts";
+import { listTasks } from "./db/tasks.ts";
 
 let dbDir: string | null = null;
 
@@ -75,4 +78,39 @@ describe("POST /inbox/:id/promote", () => {
 		const stored = await (await app.request(`/inbox/${item.id}`)).json() as { processedAt?: string };
 		expect(stored.processedAt).toBeUndefined();
 	});
+});
+
+test("Telegram redelivery after reopening SQLite reuses captures and every decomposed card, including partial intake", async () => {
+	let app = boot();
+	const serve = () => {
+		const routes = new Hono().route("/api", app);
+		return Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: routes.fetch });
+	};
+	let server = serve();
+	const client = () => new DeckClient(`http://127.0.0.1:${server.port}`, "ws://127.0.0.1:1");
+	const cards = [{ title: "Delivery first card", body: "First" }, { title: "Delivery second card", body: "Second" }];
+	const source = "telegram:-10:42:7";
+	try {
+		const original = await client().fileCards(cards, source);
+		const capture = await client().capture("Delivery capture", "Keep without promotion", `${source}:capture-message`);
+		// Simulate a crash after inbox creation but before promotion.
+		const partial = await fetch(`http://127.0.0.1:${server.port}/api/inbox`, {
+			method: "POST", headers: { "content-type": "application/json", "Idempotency-Key": `${source}:partial:card:0` },
+			body: JSON.stringify({ kind: "ticket", ...cards[0], source: `${source}:partial` }),
+		});
+		expect(partial.status).toBe(201);
+		await server.stop(true);
+		closeDb();
+		openDb({ path: path.join(dbDir!, "deck.db") });
+		app = buildInboxRouter();
+		server = serve();
+		const [replayed, parallelReplay] = await Promise.all([client().fileCards(cards, source), client().fileCards(cards, source)]);
+		expect(replayed.map(task => task.id)).toEqual(original.map(task => task.id));
+		expect(parallelReplay.map(task => task.id)).toEqual(original.map(task => task.id));
+		expect((await client().capture("Delivery capture", "Keep without promotion", `${source}:capture-message`)).id).toBe(capture.id);
+		const resumed = await client().fileCards([cards[0]!], `${source}:partial`);
+		expect(resumed).toHaveLength(1);
+		expect(listTasks().filter(task => task.title.startsWith("Delivery"))).toHaveLength(3);
+		expect(listInbox({ includeProcessed: true }).filter(item => item.source?.startsWith(source))).toHaveLength(4);
+	} finally { await server.stop(true); }
 });
