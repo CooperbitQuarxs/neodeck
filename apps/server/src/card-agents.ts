@@ -68,18 +68,32 @@ export class CardAgentRunner {
 		}
 		return undefined;
 	}
-	/** Recover owned artifacts, but never replay a possibly already-executed card after a crash. */
+	/** Replay only unstarted queued work; interrupted running cards are never replayed. */
 	async recover(): Promise<void> {
 		for (const entry of unfinishedCardRuns()) {
-			const interrupted = entry.run.status === "queued" || entry.run.status === "running";
+			if (this.assignments.has(entry.run.taskId)) continue;
+			const interrupted = entry.run.status === "running";
 			let error = interrupted ? "Card run interrupted by server shutdown" : entry.run.error;
 			let ownership = entry.ownership;
 			try { await cleanupCardWorkspace(ownership); ownership = {}; }
 			catch (cleanupError) { error = `${error ?? ""}; cleanup failed: ${String(cleanupError)}`; }
-			saveCardRun({
-				...entry.run, ...(interrupted ? { status: "cancelled" as const, finishedAt: new Date().toISOString(), outcome: "Interrupted" } : {}), ...(error ? { error } : {}),
+			if (entry.run.status === "queued" && !error) {
+				try {
+					const task = getTask(entry.run.taskId);
+					if (!task || task.archivedAt) throw new Error("Queued card is no longer available");
+					const properties = cardExecutionProperties(task.body);
+					const release = workRegistry.admit("card", entry.run.id);
+					const assignment: Assignment = { run: entry.run, task, properties, ownership, controller: new AbortController(), token: crypto.randomUUID(), release };
+					this.assignments.set(task.id, assignment);
+					this.queue.push(assignment);
+					continue;
+				} catch (failure) { error = String(failure); }
+			}
+			this.saveTerminal({
+				...entry.run, ...(interrupted || entry.run.status === "queued" ? { status: "cancelled" as const, finishedAt: new Date().toISOString(), outcome: "Interrupted" } : {}), ...(error ? { error } : {}),
 			}, ownership);
 		}
+		queueMicrotask(() => this.drain());
 	}
 	assign(taskId: string): CardRun {
 		if (this.closing) throw new Error("Card runner is shutting down");
@@ -120,6 +134,18 @@ export class CardAgentRunner {
 			});
 		}
 	}
+	private saveTerminal(run: CardRun, ownership?: CardRunOwnership): void {
+		// Persist the actual outcome even if the destination column was removed.
+		saveCardRun(run, ownership);
+		const task = getTask(run.taskId);
+		if (!task || task.archivedAt) return;
+		try {
+			moveTask(task.id, run.status === "completed" ? this.doneState() : this.config.cardAgentFailureState ?? "s_blocked", 0);
+		} catch (failure) {
+			run.error = `${run.error ? `${run.error}; ` : ""}Could not move card: ${String(failure)}`;
+			saveCardRun(run, ownership);
+		}
+	}
 	async cancel(taskId: string): Promise<CardRun | undefined> {
 		const assignment = this.assignments.get(taskId);
 		if (!assignment) return getTask(taskId)?.run;
@@ -131,7 +157,7 @@ export class CardAgentRunner {
 			assignment.run = { ...assignment.run, status: "cancelled", finishedAt: new Date().toISOString(), outcome: "Cancelled before execution" };
 			this.assignments.delete(taskId);
 			assignment.release();
-			saveCardRun(assignment.run);
+			this.saveTerminal(assignment.run);
 		}
 		return { ...assignment.run };
 	}
@@ -222,9 +248,7 @@ export class CardAgentRunner {
 			try { await cleanupCardWorkspace(assignment.ownership); assignment.ownership = {}; }
 			catch (cleanupError) { status = "failed"; error = `${error ?? ""}; cleanup failed: ${String(cleanupError)}`; }
 			run = assignment.run = { ...run, status, finishedAt: new Date().toISOString(), outcome, ...(error ? { error } : {}) };
-			const current = getTask(task.id);
-			if (current && !current.archivedAt) moveTask(task.id, status === "completed" ? this.doneState() : this.config.cardAgentFailureState ?? "s_blocked", 0);
-			saveCardRun(run, assignment.ownership);
+			this.saveTerminal(run, assignment.ownership);
 		}
 	}
 }

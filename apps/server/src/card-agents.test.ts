@@ -8,7 +8,7 @@ import { loadBackend, resolveBackendSelection, sdk } from "./backend/runtime.ts"
 import { CardAgentRunner } from "./card-agents.ts";
 import { cleanupCardWorkspace, readonlyCardCommand } from "./card-workspace.ts";
 import { closeDb, openDb } from "./db/index.ts";
-import { getTask, listTasks } from "./db/tasks.ts";
+import { createState, deleteState, getTask, listTasks } from "./db/tasks.ts";
 import { saveCardRun, unfinishedCardRuns } from "./db/card-runs.ts";
 import { buildTasksRouter } from "./routes-tasks.ts";
 import type { Config } from "./config.ts";
@@ -143,11 +143,59 @@ if (!fixtureRoot) {
   await Promise.all(cards.map(card => post(`/tasks/${card.id}/assign`)));
   await waitFor(() => held, "fixture provider entry"); expect(cards.filter(card => getTask(card.id)?.run?.status === "running")).toHaveLength(2); expect(cards.filter(card => getTask(card.id)?.run?.status === "queued")).toHaveLength(3);
   const cancelled = await post(`/tasks/${cards[4]!.id}/cancel`); expect((await cancelled.json() as { status: string }).status).toBe("cancelled");
+  expect(getTask(cards[4]!.id)?.stateId).toBe("s_blocked");
   let peak = 0; while (cards.some(card => ["queued", "running"].includes(getTask(card.id)?.run?.status ?? ""))) { peak = Math.max(peak, cards.filter(card => getTask(card.id)?.run?.status === "running").length); expect(peak).toBeLessThanOrEqual(2); await Bun.sleep(25); }
   expect(peak).toBe(2); for (const card of cards.slice(0, 4)) expect(getTask(card.id)?.run?.status).toBe("completed");
   const running = await create("HOLD cancellation", { "read-only": true }); held = false; await post(`/tasks/${running.id}/assign`); await waitFor(() => held, "running cancellation entry"); await post(`/tasks/${running.id}/cancel`);
   expect(getTask(running.id)?.run?.status).toBe("cancelled"); expect(existsSync(getTask(running.id)!.run!.cwd!)).toBe(false); expect(unfinishedCardRuns()).toEqual([]);
  }, 80_000);
+
+ test("recovery executes persisted queued assignments with their original ID but never replays running work", async () => {
+  const queued = await create("persisted queue recovery", { worktree: linked });
+  const interrupted = await create("persisted running recovery", { worktree: linked });
+  const assignedAt = "2026-10-13T00:00:00Z";
+  saveCardRun({ id: "persisted-queued", taskId: queued.id, status: "queued", assignedAt, ownedWorktree: false, model: "fixture/card" });
+  saveCardRun({ id: "persisted-running", taskId: interrupted.id, status: "running", assignedAt, ownedWorktree: false, model: "fixture/card" });
+  const recovered = new CardAgentRunner({ ...config, cardAgentConcurrency: 1 });
+  try {
+   await recovered.recover();
+   const complete = await finish(queued);
+   expect(complete.run?.id).toBe("persisted-queued");
+   expect(complete.run?.assignedAt).toBe(assignedAt);
+   expect(complete.run?.status).toBe("completed");
+   expect(getTask(interrupted.id)?.run?.status).toBe("cancelled");
+   expect(requests.some(request => JSON.stringify(request.messages).includes(interrupted.title))).toBe(false);
+  } finally { await recovered.dispose(); }
+ }, 50_000);
+
+ test("queued cancellation moves the card to the configured failure column", async () => {
+  const owner = new CardAgentRunner(config);
+  try {
+   const card = await create("cancel before admission", { worktree: linked });
+   owner.assign(card.id);
+   const cancelled = await owner.cancel(card.id);
+   expect(cancelled?.status).toBe("cancelled");
+   expect(getTask(card.id)?.stateId).toBe("s_blocked");
+   expect(requests.some(request => JSON.stringify(request.messages).includes(card.title))).toBe(false);
+  } finally { await owner.dispose(); }
+ });
+
+ test("deleted completion and failure columns do not discard terminal outcomes or ownership cleanup", async () => {
+  for (const completed of [true, false]) {
+   const destination = createState({ name: completed ? "temporary done" : "temporary failed" });
+   const owner = new CardAgentRunner({ ...config, ...(completed ? { cardAgentDoneState: destination.id } : { cardAgentFailureState: destination.id }) });
+   try {
+    const card = await create(completed ? "deleted done destination" : "deleted failed destination", { worktree: completed ? linked : path.join(fixtureRoot, "missing-worktree") });
+    owner.assign(card.id);
+    deleteState(destination.id);
+    const terminal = await finish(card);
+    expect(terminal.run?.status).toBe(completed ? "completed" : "failed");
+    expect(terminal.run?.error).toContain("Could not move card");
+    if (completed) expect(terminal.run?.outcome).toBe("Fixture card completed with a recorded outcome.");
+    expect(unfinishedCardRuns().some(entry => entry.run.taskId === card.id)).toBe(false);
+   } finally { await owner.dispose(); deleteState(destination.id); }
+  }
+ }, 70_000);
 
  test("native worker capabilities are fresh per run, isolated and revoked by completion, failure, cancellation, shutdown and recovery", async () => {
   const stale: string[] = [];

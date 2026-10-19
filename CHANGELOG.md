@@ -47,6 +47,8 @@ All notable changes to NPI deck (a fork of bjb2/omp-deck; entries before the for
 
 ### Fixed
 
+- Queued card assignments resume after a server restart; cancellations use the failure column, and deleted outcome columns no longer discard completed runs.
+
 - Linked card worktrees are validated by OS-native canonical directory rather than Git's path spelling, including Windows 8.3 aliases and macOS aliases (#101). Card-run persistence uses connection-owned queries so strict database close can release its writes.
 - Knowledge-protocol tests provision the native SDK before admitting cases, keeping cold backend loading outside per-case hooks without increasing case deadlines (#101).
 - Model registry initialization recovers after a failed probe before NeoPi loads, while concurrent probes and successful initialization still share one registry (#148).
