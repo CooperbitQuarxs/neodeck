@@ -142,6 +142,7 @@ export function RoutineBuilder({ routine, onSaved, onError }: Props) {
 	// separate from editable step ids; otherwise changing `id` remounts the
 	// active input and drops focus after every character.
 	function updateSpec(next: RoutineSpec, nextStepKeys?: string[]): void {
+		if (legacy && next.steps[0]?.type === "run") setLegacyCwd(next.steps[0].cwd ?? "");
 		if (nextStepKeys) setStepKeys(nextStepKeys);
 		else reconcileStepKeys(next);
 		setSpec(next);
@@ -450,7 +451,12 @@ export function RoutineBuilder({ routine, onSaved, onError }: Props) {
 									</select>
 								</label>
 								<label className="block text-xs text-ink-2">Working directory
-									<input aria-label="Working directory" value={legacyCwd} onChange={(e) => setLegacyCwd(e.target.value)} className="field mt-1 h-8 w-full px-2" />
+									<input aria-label="Working directory" value={legacyCwd} onChange={(e) => {
+										const cwd = e.target.value;
+										const action = spec.steps[0];
+										if (action?.type === "run") updateSpec({ ...spec, steps: [{ ...action, cwd }] });
+										else setLegacyCwd(cwd);
+									}} className="field mt-1 h-8 w-full px-2" />
 								</label>
 							</div>
 						) : <SettingsForm spec={spec} onChange={updateSpec} />}
