@@ -47,7 +47,7 @@ All notable changes to NPI deck (a fork of bjb2/omp-deck; entries before the for
 ### Fixed
 
 - Telegram group intake requires a leading standalone bot mention rather than usernames embedded in prose, URLs or YAML, and preserves accepted task text/caption metadata (#103).
-- Redelivered Telegram task/capture messages reuse durable inbox receipts across restarts instead of filing duplicate cards, including decomposed tasks (#103).
+- Telegram journals authorized task/capture updates before confirming delivery and reuses durable inbox receipts across restarts, preventing lost queued intake and duplicate decomposed cards (#103).
 - Unsupported Telegram attachments now receive their explanation for every captioned command, including `/help`; commands without arguments still run after the notice (#103).
 - **Telegram invocation and session parity** (#103). Add regex wake patterns, per-chat/topic free response and topic allow/ignore controls; sender and group authorization still run first. Retained sessions support title/ID search and number/title selection, and explicit chat refreshes topic-aware typing. Unsupported attachments now receive an explanation before their captions are processed. The Hermes capability matrix states the remaining exclusions without claiming unverified native session or web-approval equivalents.
 - Model registry initialization recovers after a failed probe before NeoPi loads, while concurrent probes and successful initialization still share one registry (#148).

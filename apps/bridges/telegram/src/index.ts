@@ -31,6 +31,8 @@ export class TelegramBridge {
 		await this.telegram.setCommands(["help", "task", "capture", "inbox", "chat", "session", "sessions", "bind", "resume", "new", "stop", "properties", "model", "title", "compact"]
 			.map((command) => ({ command, description: HELP.split("\n").find((line) => line.startsWith(`/${command}`))?.split(" — ")[1]?.slice(0, 100) ?? command })));
 		console.info("telegram bridge started", { deckApiBase: this.config.deckApiBase, allowedUsers: this.config.allowedUserIds.size, allowedGroups: this.config.allowedChatIds.size });
+		// Pending intake survives Telegram confirmation and is replayed in update order.
+		for (const update of this.store.pendingIntakes()) void this.dispatch(update);
 		while (!this.stopping) {
 			try {
 				for (const update of await this.telegram.getUpdates(this.offset, this.config.pollTimeoutSeconds)) {
@@ -49,17 +51,22 @@ export class TelegramBridge {
 
 	/** Public ingress seam for offline transport simulation; no polling or external sends required. */
 	dispatch(update: TelegramUpdate): Promise<void> {
-		this.offset = Math.max(this.offset ?? 0, update.update_id + 1);
 		const message = update.message;
-		if (!message) return Promise.resolve();
+		if (!message) { this.offset = Math.max(this.offset ?? 0, update.update_id + 1); return Promise.resolve(); }
 		if (!this.bot) throw new Error("Bot identity is required before dispatch.");
 		const text = invokedText(message, this.config, this.bot);
-		if (text === undefined) return Promise.resolve();
+		if (text === undefined) { this.offset = Math.max(this.offset ?? 0, update.update_id + 1); return Promise.resolve(); }
+		const command = parseCommand(text, this.bot.username);
+		const durableIntake = !command || command.name === "task" || command.name === "capture";
+		// Persist authorized intake before any subsequent poll can acknowledge it.
+		if (durableIntake) this.store.stageIntake(update);
+		this.offset = Math.max(this.offset ?? 0, update.update_id + 1);
 		const key = conversationKey(message);
 		// Abort must not wait behind the prompt it is cancelling.
 		if (parseCommand(text, this.bot.username)?.name === "stop") return this.handleMessage(message, text).catch((err) => this.reportError(message, err));
 		const next = (this.queues.get(key) ?? Promise.resolve())
 			.catch(() => undefined).then(() => this.handleMessage(message, text))
+			.then(() => { if (durableIntake) this.store.completeIntake(update.update_id); })
 			.catch((err) => this.reportError(message, err))
 			.finally(() => { if (this.queues.get(key) === next) this.queues.delete(key); });
 		this.queues.set(key, next);

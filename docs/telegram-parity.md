@@ -30,3 +30,8 @@ commits each create/promotion receipt in the same SQLite transaction as its
 mutation. Redelivery after a bridge/server restart returns the original result
 instead of creating another item/card, including a restart between creation and
 promotion. Unkeyed recurring-template promotions keep their existing behavior.
+Authorized task/capture updates are journaled in the bridge's SQLite database
+before its next poll can confirm them to Telegram. Successful intake clears the
+journal entry; interrupted/failed intake is replayed in update order after
+restart using the same server receipt keys. Polling and `/stop` remain responsive
+while a conversation queue is busy; pending ordinary chat turns are not replayed.

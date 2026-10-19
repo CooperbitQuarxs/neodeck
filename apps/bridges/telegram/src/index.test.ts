@@ -1,11 +1,14 @@
 import { describe, expect, test } from "bun:test";
-import type { SessionSummary, Task } from "@npi-deck/protocol";
+import type { InboxItem, SessionSummary, Task } from "@npi-deck/protocol";
 import { TelegramBridge } from "./index.ts";
 import { DeckClient } from "./deck.ts";
-import { TelegramApi, type TelegramMessage } from "./telegram.ts";
+import { TelegramApi, type TelegramMessage, type TelegramUpdate } from "./telegram.ts";
 import { TelegramBridgeStore } from "./store.ts";
 import type { TelegramBridgeConfig } from "./config.ts";
 import { parseProperties, type IntakeCard } from "./commands.ts";
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
 
 const config: TelegramBridgeConfig = {
 	botToken: "offline", allowedUserIds: new Set(["7"]), allowedChatIds: new Set(["-10"]), requireMention: true,
@@ -55,6 +58,65 @@ function harness(policy: TelegramBridgeConfig = config) {
 	const bridge = new TelegramBridge(policy, { telegram: new Transport("offline"), deck, store, identity: { id: 99, username: "deck_bot" } });
 	return { events, replies, typingThreads, filedCards, deck, store, bridge, downloads: () => downloads, failPrompt: () => { promptError = true; }, send: (input: TelegramMessage) => bridge.dispatch({ update_id: input.message_id, message: input }) };
 }
+
+test("poll confirmation never outruns durable pending intake and restart replays queued tasks and captures", async () => {
+	const root = fs.mkdtempSync(path.join(os.tmpdir(), "telegram-pending-intake-"));
+	const dbPath = path.join(root, "bridge.db");
+	const updates: TelegramUpdate[] = [
+		{ update_id: 101, message: { ...message, message_id: 101, text: "/task First durable task" } },
+		{ update_id: 102, message: { ...message, message_id: 102, text: "/task Queued durable task" } },
+		{ update_id: 103, message: { ...message, message_id: 103, text: "/capture Durable capture" } },
+	];
+	const gate = Promise.withResolvers<void>();
+	const replayed: string[] = [];
+	let broken = true;
+	let firstPoll = true;
+	let store = new TelegramBridgeStore(dbPath);
+	let bridge: TelegramBridge;
+	class Transport extends TelegramApi {
+		override async getMe() { return { id: 99, username: "deck_bot" }; }
+		override async setCommands() { return true; }
+		override async sendMessage(chatId: number | string) { return { message_id: 1, chat: { id: Number(chatId) } }; }
+		override async getUpdates(offset: number | undefined): Promise<TelegramUpdate[]> {
+			if (firstPoll) { firstPoll = false; return updates; }
+			await Promise.resolve();
+			expect(offset).toBe(104);
+			expect(store.pendingIntakes().map(update => update.update_id)).toEqual([101, 102, 103]);
+			bridge.stop();
+			gate.resolve();
+			return [];
+		}
+	}
+	class Deck extends DeckClient {
+		override async fileCards(cards: IntakeCard[]) {
+			await gate.promise;
+			if (broken) throw new Error("Interrupted before durable filing");
+			replayed.push(...cards.map(card => card.title));
+			return cards.map((card, index) => ({ ...card, displayId: index + 1 })) as Task[];
+		}
+		override async capture(title: string, body: string, source: string): Promise<InboxItem> {
+			if (broken) throw new Error("Interrupted capture");
+			replayed.push(title);
+			return { id: "capture", kind: "capture", title, body, source, createdAt: "2026-10-19T00:00:00Z" };
+		}
+	}
+	const deck = new Deck(config.deckApiBase, config.deckWsUrl);
+	try {
+		bridge = new TelegramBridge({ ...config, dbPath }, { telegram: new Transport("offline"), deck, store });
+		await bridge.run();
+		store = new TelegramBridgeStore(dbPath);
+		expect(store.pendingIntakes()).toEqual(updates);
+		broken = false;
+		class RecoveryTransport extends Transport {
+			override async getUpdates(): Promise<TelegramUpdate[]> { bridge.stop(); return []; }
+		}
+		bridge = new TelegramBridge({ ...config, dbPath }, { telegram: new RecoveryTransport("offline"), deck, store });
+		await bridge.run();
+		store = new TelegramBridgeStore(dbPath);
+		expect(store.pendingIntakes()).toEqual([]);
+		expect(replayed).toEqual(["First durable task", "Queued durable task", "Durable capture"]);
+	} finally { gate.resolve(); store.close(); fs.rmSync(root, { recursive: true, force: true }); }
+});
 
 describe("attachment intake boundaries", () => {
 	test("captioned unsupported media warns before a chat turn or task filing", async () => {

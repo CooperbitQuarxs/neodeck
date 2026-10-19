@@ -1,6 +1,7 @@
 import { Database } from "bun:sqlite";
 import * as fs from "node:fs";
 import * as path from "node:path";
+import type { TelegramUpdate } from "./telegram.ts";
 
 export interface ChatSessionMapping {
 	chatId: string;
@@ -46,7 +47,22 @@ export class TelegramBridgeStore {
 			);
 			INSERT OR IGNORE INTO telegram_session_history SELECT * FROM telegram_chat_sessions;
 			CREATE TABLE IF NOT EXISTS telegram_card_defaults (chat_id TEXT PRIMARY KEY, properties TEXT NOT NULL);
+			CREATE TABLE IF NOT EXISTS telegram_pending_intake (update_id INTEGER PRIMARY KEY, payload TEXT NOT NULL);
 		`);
+	}
+
+	stageIntake(update: TelegramUpdate): void {
+		this.db.query("INSERT OR IGNORE INTO telegram_pending_intake (update_id, payload) VALUES (?, ?)")
+			.run(update.update_id, JSON.stringify(update));
+	}
+
+	pendingIntakes(): TelegramUpdate[] {
+		return this.db.query<{ payload: string }, []>("SELECT payload FROM telegram_pending_intake ORDER BY update_id")
+			.all().map(row => JSON.parse(row.payload) as TelegramUpdate);
+	}
+
+	completeIntake(updateId: number): void {
+		this.db.query("DELETE FROM telegram_pending_intake WHERE update_id = ?").run(updateId);
 	}
 
 	get(chatId: string): ChatSessionMapping | undefined {
