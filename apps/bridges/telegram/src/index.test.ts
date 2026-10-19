@@ -110,7 +110,7 @@ describe("mention-gated task contents", () => {
 		const h = harness();
 		try {
 			const prose = "Investigate the literal '@deck_bot' without editing it";
-			await h.send({ ...message, text: prose });
+			await h.send({ ...message, text: prose, reply_to_message: { from: { id: 99 } } });
 			await h.send({ ...message, message_id: 2, caption: "---\nread-only: true\nowner: '@deck_bot'\n---\nResearch the '@deck_bot' identifier", reply_to_message: { from: { id: 99 } } });
 			expect(h.filedCards[0]).toEqual({ title: prose, body: prose });
 			const body = h.filedCards[1]!.body!;
@@ -119,6 +119,19 @@ describe("mention-gated task contents", () => {
 			expect(properties["read-only"]).toBe(true);
 			expect(h.filedCards[1]!.title).toBe("Research the '@deck_bot' identifier");
 			expect(body).toContain("Research the '@deck_bot' identifier");
+		} finally { h.bridge.close(); }
+	});
+	test("bot references in ambient prose, URLs and YAML do not invoke task intake", async () => {
+		const h = harness();
+		try {
+			for (const text of ["See https://t.me/deck_bot", "Investigate the literal '@deck_bot'", "---\nowner: '@deck_bot'\n---\nAmbient card example", "@deck_bot_other task"]) {
+				await h.send({ ...message, text });
+				await h.send({ ...message, text: undefined, caption: text });
+			}
+			expect(h.filedCards).toEqual([]);
+			const invocation = "@DeCk_BoT investigate the literal '@deck_bot'";
+			await h.send({ ...message, text: invocation });
+			expect(h.filedCards).toEqual([{ title: invocation, body: invocation }]);
 		} finally { h.bridge.close(); }
 	});
 });
