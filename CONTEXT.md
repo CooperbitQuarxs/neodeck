@@ -23,7 +23,7 @@ Project overview: [README.md](README.md). Policy and mechanics:
 | Difficulty | Complexity/uncertainty/risk estimate in eight bands over [0, 1], independent of time or priority |
 | Frame normalization | Agent duration estimates lowered exactly one unit once, with hours as floor; human estimates unchanged |
 | Review requirement | `review: codex` identifies the configured reviewer, not the result of a round |
-| Review state | Requested, open, closed, or stalled for a reviewer on the current PR head; old-head receipts do not pass the gate |
+| Review state | Requested, open, closed, or stalled evidence for a reviewer; a recorded round plus the review guide's fix assessment or base-only comparison can establish state on a later head |
 | Mergeable | All documented repository merge criteria pass; neither actor completion nor GitHub's no-conflicts flag alone, and not authority to merge |
 | Integration | `nightly`, where topic PRs merge and are verified without replacing the live installation |
 | Promotion | Owner-approved merge from `nightly` to `main`; NeoDeck fixes remain open until complete acceptance reaches `main` |

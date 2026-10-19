@@ -10,7 +10,7 @@ the Captain's answer.
 - Read `README.md` for project context and runtime layout; it is not agent policy.
 - Read `CONTEXT.md` for repository/tracker vocabulary before interpreting work.
 - Read `docs/agents/policy.md` before branches, commits, GitHub posts, PRs, or merges; `docs/agents/` is the home for agent policy and mechanics.
-- Before requesting review, answering findings, or merging, read `docs/agents/pr-review-bots.md`: every PR requires clean Code Review on the final head and every finding answered; request no new security passes.
+- Before requesting review, answering findings, or merging, read `docs/agents/pr-review-bots.md` for the one-round confidence gate, post-review fix/base-merge assessment, and factual disposition of every finding; request no new security passes.
 
 ## Fork maintenance
 

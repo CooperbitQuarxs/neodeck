@@ -39,7 +39,7 @@ remaining acceptance. Correct stale labels from evidence. The built-in commit
 role (`@commit`, resolved at runtime) performs reconciliation until a dedicated
 triage role is chosen; this policy does not install a scheduler or webhook.
 Daily triage adds `upstream` to a promotion proposal only when that proposal actually carries a `sync/` merge; the promotion workflow does not detect or apply upstream involvement.
-Daily, after fetching origin, list orphan topic branches from `git branch -r --no-merged origin/nightly`, excluding remote HEAD/default/integration refs and branches with an open PR (match the paginated open-PR inventory by head repository and branch).
+Daily, after `git fetch --prune origin`, list orphan topic branches from `git branch -r --no-merged origin/nightly`, excluding remote HEAD/default/integration refs and branches with an open PR (match the paginated open-PR inventory by head repository and branch).
 
 ## Duplicate reconciliation
 

@@ -88,14 +88,17 @@ iteration and remain revisable.
 | `review: codex` | Codex reviews this change (mention `@codex`) |
 | `review: requested (codex)` | A Codex round is requested on the current head |
 | `review: open (codex)` | Codex findings are unanswered on the current head |
-| `review: closed (codex)` | Codex's latest round on the current head is clean and every finding answered |
-| `review: stalled (codex)` *(proposal)* | Review loop ended with findings unresolved; summary posted |
+| `review: closed (codex)` | Completed recorded round and every finding dispositioned under the review guide's merge gate |
+| `review: stalled (codex)` | Missing/failed round or remaining gate blocker; summary posted |
 | `mergeable` | Meets this repository's documented merge criteria; who merges is policy |
 
 The reviewer family is configurable; this repository configures only `codex`.
 The token is after the colon or in parentheses; its login and trigger are
 mapped in [pr-review-bots.md](pr-review-bots.md). Triage assigns requirements;
 the PR author rechecks the actual diff. Every PR gets `review: codex`.
+A new head clears stale state and `mergeable` until the review guide's fix
+assessment or base-only comparison re-establishes them; another round is not
+automatically required.
 
 ## Composition
 
