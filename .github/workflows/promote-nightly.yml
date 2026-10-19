@@ -50,8 +50,16 @@ jobs:
               git config user.name "github-actions[bot]"
               git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
               git push --force origin "origin/$SOURCE:refs/heads/$branch"
+              upstream_labels=()
+              upstream_edit=(--remove-label upstream)
+              promotion_merges=$(git log --merges --format=%s "origin/$BASE..origin/$SOURCE")
+              if [[ "$promotion_merges" == *"sync/"* ]]; then
+                 upstream_labels+=(--label upstream)
+                 upstream_edit=(--add-label upstream)
+              fi
               existing=$(gh pr list --base "$BASE" --head "$branch" --state open --json number --jq '.[0].number // empty')
               if [ -n "$existing" ]; then
+                 gh pr edit "$existing" "${upstream_edit[@]}"
                  echo "number=$existing" >> "$GITHUB_OUTPUT"
                  exit 0
               fi
@@ -78,11 +86,6 @@ jobs:
                  echo "- [ ] Tested locally (not run: promotion PR)"
                  echo "- [ ] CHANGELOG updated (not applicable: promotion PR)"
               } > "$body"
-              upstream_labels=()
-              promotion_merges=$(git log --merges --format=%s "origin/$BASE..origin/$SOURCE")
-              if [[ "$promotion_merges" == *"sync/"* ]]; then
-                 upstream_labels+=(--label upstream)
-              fi
               url=$(gh pr create --base "$BASE" --head "$branch" \
                  --title "chore(promote): nightly into main $date" \
                  --body-file "$body" "${upstream_labels[@]}")
