@@ -56,6 +56,7 @@ All notable changes to NPI deck (a fork of bjb2/omp-deck; entries before the for
 
 - Confirmed graph messages replay and resume downstream work even when their notification channel is no longer available (#161).
 - Graph action receipt bindings retain the same credential-safe values on first execution and replay, preventing changed-request failures in downstream actions (#161).
+- Inbox graph simulations use separate run admission so integration with durable inbox intake cannot consume a pending live delivery (#161).
 - Restored typechecking and release publication by removing a duplicate inbox-promotion project field from the protocol.
 - Queued card assignments resume after a server restart; cancellations use the failure column, and deleted outcome columns no longer discard completed runs.
 - Card workers reach protected KB routes on IPv6 listeners, and assignments reject an active column that is also the completion column (#101).

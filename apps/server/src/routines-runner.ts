@@ -16,7 +16,7 @@ import { Cron } from "croner";
 import { parse as parseYaml } from "yaml";
 import * as path from "node:path";
 
-import type { GraphActivation, GraphExecutionResult, GraphObject, Routine, RoutineActionKind, RoutineSpec, RoutineTrigger } from "@npi-deck/protocol";
+import type { GraphActivation, GraphExecutionResult, GraphObject, Routine, RoutineActionKind, RoutineGraph, RoutineRun, RoutineSpec, RoutineTrigger } from "@npi-deck/protocol";
 
 import { logger } from "./log.ts";
 import {
@@ -205,8 +205,25 @@ export class RoutinesRunner {
 		const validation = this.graphRegistry.validate(graph);
 		if (!validation.valid) throw new Error(`invalid graph: ${JSON.stringify(validation.errors)}`);
 		const definition = structuredClone(graph);
-		const activationSnapshot = structuredClone(activation);
+		// Simulations start their own trace, never a durable event-delivery claim.
+		// Keep this return before live inbox admission when integrating #204.
+		if (options.dryRun) {
+			await this.executeGraphRun(routine, activation, definition, startRun(routine.id, trigger, activation.event), options);
+			return;
+		}
 		const run = startRun(routine.id, trigger, activation.event);
+		await this.executeGraphRun(routine, activation, definition, run, options);
+	}
+
+	private async executeGraphRun(
+		routine: Routine,
+		activation: GraphActivation,
+		definition: RoutineGraph,
+		run: RoutineRun,
+		options: { dryRun?: boolean },
+	): Promise<void> {
+		const graph = routine.graph!;
+		const activationSnapshot = structuredClone(activation);
 		const decision = this.concurrency.decide(routine.id, run.id, graph.concurrency ?? "skip");
 		const persist = (result: GraphExecutionResult, abortReason?: string) => finishGraphRun({
 			...result, id: run.id, routineId: routine.id, startedAt: run.startedAt,

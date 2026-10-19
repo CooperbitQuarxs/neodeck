@@ -286,6 +286,11 @@ and validates the same requests but records planned effects only: no card
 mutations, message sends, writing `gh` calls, fake target identities or live
 reservations. `RoutinesRunner.fire`/`fireGraphEvent` and `executeGraph` expose
 the same `dryRun` option. Traces identify simulation with `dryRun: true`.
+Simulation starts a separate trace before live event admission and must never
+claim or discard a pending inbox delivery. When integrating inbox intake (#204),
+forward `dryRun` through event activation, bypass live intake filtering/discard
+for simulations, and keep `admitInboxGraphEvent` exclusively after the simulation
+guard. A later live call must still admit the committed delivery exactly once.
 After possible remote dispatch, abort can settle the run while the provider
 operation continues. Its journal starts uncertain before dispatch; a late
 native receipt updates durable evidence without waking downstream nodes.

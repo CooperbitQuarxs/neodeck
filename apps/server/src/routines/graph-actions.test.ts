@@ -3,6 +3,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import type { GraphObject, GraphRunRecord, GraphValue, RoutineGraph } from "@npi-deck/protocol";
 import { closeDb, getDb, openDb } from "../db/index.ts";
+import { createInbox, getInbox } from "../db/inbox.ts";
 import { createGraphRoutine, getGraphRun, listRuns, updateGraphRoutine } from "../db/routines.ts";
 import { listTasks } from "../db/tasks.ts";
 import { cardExecutionProperties } from "../card-properties.ts";
@@ -106,6 +107,27 @@ test("dry-run validates the same request but consumes no live identity or fake r
 		expect(listTasks({ includeArchived: true })).toHaveLength(count); expect(sends).toBe(0); expect(remote).not.toHaveBeenCalled();
 		if (graph.nodes[1]!.type === "action.create-card") { await runner.fire(routine.id, "manual", { id: "dry-event" }); expect(trace(routine.id).status).toBe("success"); expect(listTasks({ includeArchived: true })).toHaveLength(count + 1); }
 	}
+});
+
+test("inbox event dry-run leaves the committed delivery available for one live run", async () => {
+	setup();
+	const graph = flow("action.create-card", { title: "Live inbox delivery" });
+	graph.nodes[0]!.config.eventType = "inbox.card_added";
+	const routine = createGraphRoutine({ name: "inbox simulation", graph }, runner.graphRegistry);
+	const card = createInbox({ kind: "capture", title: "Committed inbox event", body: "Keep the pending delivery" });
+	const activation = { eventType: "inbox.card_added", sourceNodeId: "source", event: { ...card } };
+	await runner.fireGraphEvent(routine.id, activation, { dryRun: true });
+	expect(trace(routine.id)).toMatchObject({ status: "success", dryRun: true, activation });
+	expect(action(trace(routine.id)).effects![0]!.status).toBe("planned");
+	expect(listTasks().filter(item => item.title === "Live inbox delivery")).toHaveLength(0);
+	expect(getInbox(card.id)).toEqual(card);
+	closeDb(); openDb({ path: path.join(home, "deck.db") });
+	await runner.fireGraphEvent(routine.id, activation);
+	expect(listRuns(routine.id)).toHaveLength(2);
+	expect(trace(routine.id)).toMatchObject({ status: "success", dryRun: false, activation });
+	expect(action(trace(routine.id)).effects![0]).toMatchObject({ status: "confirmed", replayed: false });
+	expect(listTasks().filter(item => item.title === "Live inbox delivery")).toHaveLength(1);
+	expect(getInbox(card.id)).toEqual(card);
 });
 
 test("actual upstream envelopes survive arbitrary false/zero/null/empty/truthy results into action and downstream", async () => {
