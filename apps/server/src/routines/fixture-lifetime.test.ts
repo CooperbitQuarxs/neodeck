@@ -9,8 +9,10 @@ const agentSource = 'const message = {role:"assistant", timestamp:1, model:"test
 
 test("an expired routine teardown is joined before its private worker releases a successor", () => {
 	const root = fs.mkdtempSync(path.join(os.tmpdir(), "deck-fixture-lifetime-"));
-	const file = path.join(root, "lifetime.test.ts");
+	const alias = path.join(root, "alias");
+	const file = path.join(alias, "lifetime.test.ts");
 	try {
+		fs.symlinkSync(root, alias, process.platform === "win32" ? "junction" : "dir");
 		fs.writeFileSync(file, `
 import { afterAll, afterEach, expect } from "bun:test";
 import * as fs from "node:fs";

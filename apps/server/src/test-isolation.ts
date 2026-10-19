@@ -9,7 +9,7 @@ const CASE_ENV = "NPI_DECK_ISOLATED_TEST_CASE";
 const launchKeys = new Set(["PATH", "PATHEXT", "SYSTEMROOT", "WINDIR", "COMSPEC"]);
 
 export function isIsolatedCase(file: string): boolean {
-	return process.env[FILE_ENV] === path.resolve(file) && process.env[CASE_ENV] !== undefined;
+	return process.env[FILE_ENV] === fs.realpathSync(file) && process.env[CASE_ENV] !== undefined;
 }
 
 export function runIsolatedCase(
@@ -49,7 +49,7 @@ export function runIsolatedCase(
 			HOMEDRIVE: drive,
 			HOMEPATH: home.slice(drive.length),
 			NPI_DECK_DB_PATH: path.join(directories.NPI_DECK_HOME, "deck.db"),
-			[FILE_ENV]: path.resolve(file),
+			[FILE_ENV]: fs.realpathSync(file),
 			[CASE_ENV]: name,
 			NO_COLOR: "1",
 			FORCE_COLOR: "0",
@@ -96,6 +96,6 @@ export function createIsolatedTest(file: string): (name: string, body: () => voi
 			if (!/^\s*1 pass\s*$/m.test(child.output) || !/^\s*0 fail\s*$/m.test(child.output)) {
 				throw new Error(`Isolated test ${JSON.stringify(name)} did not execute exactly one passing case\n${child.output}`);
 			}
-		}, (timeout ?? 5000) + 15_000);
+		}, (timeout ?? 5000) + 75_000);
 	};
 }

@@ -51,7 +51,9 @@ if (isIsolatedCase(import.meta.path)) {
 		})();
 		return cleanup;
 	});
-	afterAll(async () => { await cleanup; });
+	// Preserve the original afterEach failure, but join its still-running work
+	// before the worker exits. Slow cancellation must not add a second timeout.
+	afterAll(async () => { await cleanup; }, 60_000);
 }
 
 test("queue holds second invocation until first finishes, then releases the busy state", async () => {
