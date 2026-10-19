@@ -269,6 +269,7 @@ if (!fixtureRoot) {
   const task = await create("recovery"); const runtime = mkdtempSync(path.join(tmpdir(), "deck-card-recovery-"));
   saveCardRun({ id: "recovery", taskId: task.id, status: "completed", assignedAt: "2026-10-13T00:00:00Z", ownedWorktree: false, cwd: linked, outcome: "already completed" }, { runtimePath: runtime });
   await runner.recover(); expect(existsSync(runtime)).toBe(false); expect(existsSync(linked)).toBe(true); expect(getTask(task.id)?.run?.status).toBe("completed"); expect(getTask(task.id)?.run?.outcome).toBe("already completed"); expect(unfinishedCardRuns()).toEqual([]);
+  expect(getTask(task.id)?.stateId).toBe(task.stateId);
  });
 
  test("Linux defense denies host/worktree writes independently of the SDK tool gate", async () => {

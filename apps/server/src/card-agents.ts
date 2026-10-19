@@ -89,9 +89,11 @@ export class CardAgentRunner {
 					continue;
 				} catch (failure) { error = String(failure); }
 			}
-			this.saveTerminal({
+			const recovered: CardRun = {
 				...entry.run, ...(interrupted || entry.run.status === "queued" ? { status: "cancelled" as const, finishedAt: new Date().toISOString(), outcome: "Interrupted" } : {}), ...(error ? { error } : {}),
-			}, ownership);
+			};
+			if (interrupted || entry.run.status === "queued") this.saveTerminal(recovered, ownership);
+			else saveCardRun(recovered, ownership);
 		}
 		queueMicrotask(() => this.drain());
 	}
