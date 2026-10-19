@@ -28,7 +28,7 @@ For full context see [ATTRIBUTION.md](./ATTRIBUTION.md) and the task that drove 
 - `write-a-skill` — Overlaps `create-skill` + `skill-creator:skill-creator`.
 - `to-prd`, `to-issues` — Target GitHub issues + a per-repo config we don't run. Adapting them to the NPI deck kanban is a follow-up.
 - `edit-article`, `obsidian-vault`, `scaffold-exercises`, `migrate-to-shoehorn`, `setup-pre-commit`, `git-guardrails-claude-code`, `setup-matt-pocock-skills` — Personal-to-Matt or framework-coupled.
-- `improve-codebase-architecture`, `triage`, `grill-with-docs`, `tdd` — Depend on `docs/adr/` + `CONTEXT.md` conventions we don't have. Revisit if we adopt them.
+- `improve-codebase-architecture`, `triage`, `grill-with-docs`, `tdd` — Not bundled; repository vocabulary lives in root `CONTEXT.md` and decisions belong under `docs/agents/adr/` when present.
 - `in-progress/*` — Upstream marks them unstable; wait for graduation.
 
 ## Adding a new starter

@@ -1,6 +1,7 @@
 import { Database } from "bun:sqlite";
 import * as fs from "node:fs";
 import * as path from "node:path";
+import type { TelegramUpdate } from "./telegram.ts";
 
 export interface ChatSessionMapping {
 	chatId: string;
@@ -24,7 +25,7 @@ export class TelegramBridgeStore {
 	private readonly db: Database;
 
 	constructor(dbPath: string) {
-		fs.mkdirSync(path.dirname(dbPath), { recursive: true });
+		if (dbPath !== ":memory:") fs.mkdirSync(path.dirname(path.resolve(dbPath)), { recursive: true });
 		this.db = new Database(dbPath, { create: true, strict: true });
 		this.db.exec("PRAGMA journal_mode = WAL");
 		this.db.exec("PRAGMA synchronous = NORMAL");
@@ -38,6 +39,30 @@ export class TelegramBridgeStore {
 				updated_at   TEXT NOT NULL
 			)
 		`);
+		this.db.exec(`
+			CREATE TABLE IF NOT EXISTS telegram_session_history (
+				chat_id TEXT NOT NULL, session_id TEXT NOT NULL, session_file TEXT,
+				cwd TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+				PRIMARY KEY (chat_id, session_id)
+			);
+			INSERT OR IGNORE INTO telegram_session_history SELECT * FROM telegram_chat_sessions;
+			CREATE TABLE IF NOT EXISTS telegram_card_defaults (chat_id TEXT PRIMARY KEY, properties TEXT NOT NULL);
+			CREATE TABLE IF NOT EXISTS telegram_pending_intake (update_id INTEGER PRIMARY KEY, payload TEXT NOT NULL);
+		`);
+	}
+
+	stageIntake(update: TelegramUpdate): void {
+		this.db.query("INSERT OR IGNORE INTO telegram_pending_intake (update_id, payload) VALUES (?, ?)")
+			.run(update.update_id, JSON.stringify(update));
+	}
+
+	pendingIntakes(): TelegramUpdate[] {
+		return this.db.query<{ payload: string }, []>("SELECT payload FROM telegram_pending_intake ORDER BY update_id")
+			.all().map(row => JSON.parse(row.payload) as TelegramUpdate);
+	}
+
+	completeIntake(updateId: number): void {
+		this.db.query("DELETE FROM telegram_pending_intake WHERE update_id = ?").run(updateId);
 	}
 
 	get(chatId: string): ChatSessionMapping | undefined {
@@ -51,7 +76,7 @@ export class TelegramBridgeStore {
 
 	upsert(mapping: ChatSessionMapping): void {
 		this.db
-			.prepare<unknown, [string, string, string | null, string, string, string]>(
+			.query<unknown, [string, string, string | null, string, string, string]>(
 				`INSERT INTO telegram_chat_sessions (chat_id, session_id, session_file, cwd, created_at, updated_at)
 				 VALUES (?, ?, ?, ?, ?, ?)
 				 ON CONFLICT(chat_id) DO UPDATE SET
@@ -68,14 +93,34 @@ export class TelegramBridgeStore {
 				mapping.createdAt,
 				mapping.updatedAt,
 			);
+		this.db.query(`INSERT INTO telegram_session_history VALUES (?, ?, ?, ?, ?, ?)
+			ON CONFLICT(chat_id, session_id) DO UPDATE SET session_file = excluded.session_file, updated_at = excluded.updated_at`)
+			.run(mapping.chatId, mapping.sessionId, mapping.sessionFile ?? null, mapping.cwd, mapping.createdAt, mapping.updatedAt);
 	}
 
 	delete(chatId: string): void {
-		this.db.prepare<unknown, [string]>("DELETE FROM telegram_chat_sessions WHERE chat_id = ?").run(chatId);
+		this.db.query<unknown, [string]>("DELETE FROM telegram_chat_sessions WHERE chat_id = ?").run(chatId);
+	}
+
+	list(chatId: string): ChatSessionMapping[] {
+		return this.db.query<MappingRow, [string]>("SELECT * FROM telegram_session_history WHERE chat_id = ? ORDER BY updated_at DESC")
+			.all(chatId).map(fromRow);
+	}
+
+	getProperties(chatId: string): Record<string, unknown> {
+		const row = this.db.query<{ properties: string }, [string]>("SELECT properties FROM telegram_card_defaults WHERE chat_id = ?").get(chatId);
+		return row ? JSON.parse(row.properties) as Record<string, unknown> : {};
+	}
+
+	setProperties(chatId: string, properties: Record<string, unknown>): void {
+		this.db.query("INSERT INTO telegram_card_defaults VALUES (?, ?) ON CONFLICT(chat_id) DO UPDATE SET properties = excluded.properties")
+			.run(chatId, JSON.stringify(properties));
 	}
 
 	close(): void {
-		this.db.close();
+		// All ten fixed queries use Bun's connection-owned cache (below its 20-query limit).
+		// Do not leave uncached prepare() handles alive when closing on Windows.
+		this.db.close(true);
 	}
 }
 

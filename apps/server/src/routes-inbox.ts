@@ -8,7 +8,7 @@ import type {
 	UpdateInboxItemRequest,
 } from "@npi-deck/protocol";
 
-import { createInbox, deleteInbox, getInbox, listInbox, updateInbox } from "./db/inbox.ts";
+import { createInbox, deleteInbox, getInbox, inboxMutation, listInbox, updateInbox } from "./db/inbox.ts";
 import { createTask, getDefaultState, getState } from "./db/tasks.ts";
 
 const KINDS: ReadonlySet<InboxKind> = new Set([
@@ -42,7 +42,7 @@ export function buildInboxRouter(): Hono {
 		}
 		if (!body.title || !body.kind) return c.json({ error: "title and kind required" }, 400);
 		try {
-			const item = createInbox(body);
+			const item = inboxMutation("create", c.req.header("Idempotency-Key"), () => createInbox(body));
 			return c.json(item, 201);
 		} catch (err) {
 			return c.json({ error: String(err) }, 400);
@@ -95,6 +95,9 @@ export function buildInboxRouter(): Hono {
 		if (body.stateId && !getState(body.stateId)) {
 			return c.json({ error: `unknown stateId: ${body.stateId}` }, 400);
 		}
+		if (body.cwd !== undefined && typeof body.cwd !== "string") {
+			return c.json({ error: "cwd must be a string" }, 400);
+		}
 		const stateId = body.stateId ?? getDefaultState().id;
 
 		// Provenance footer keeps the link back to the inbox item so the user can
@@ -106,14 +109,14 @@ export function buildInboxRouter(): Hono {
 			: provenance;
 
 		try {
-			const task = createTask({ title: item.title, body: taskBody, stateId });
-			// markProcessed defaults to true. Caller passing `false` keeps the item
-			// in the unprocessed list (useful when promoting a recurring template).
-			const shouldMark = body.markProcessed !== false;
-			const inbox = shouldMark
-				? updateInbox(item.id, { processed: true }) ?? item
-				: item;
-			const out: PromoteInboxItemResponse = { task, inbox };
+			const out = inboxMutation(`promote:${item.id}`, c.req.header("Idempotency-Key"), (): PromoteInboxItemResponse => {
+				const task = createTask({ title: item.title, body: taskBody, stateId, ...(body.cwd !== undefined ? { cwd: body.cwd } : {}) });
+				// Keep recurring-template promotion unchanged when no receipt key is supplied.
+				const inbox = body.markProcessed !== false
+					? updateInbox(item.id, { processed: true }) ?? item
+					: item;
+				return { task, inbox };
+			});
 			return c.json(out, 201);
 		} catch (err) {
 			return c.json({ error: String(err) }, 400);

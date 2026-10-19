@@ -1,4 +1,5 @@
-import type { CreateSessionRequest, CreateSessionResponse, ImageAttachment, ServerFrame } from "@npi-deck/protocol";
+import type { CreateSessionRequest, CreateSessionResponse, ImageAttachment, ServerFrame, InboxItem, ListInboxResponse, ListSessionsResponse, ListModelsResponse, Task, PromoteInboxItemResponse } from "@npi-deck/protocol";
+import type { IntakeCard } from "./commands.ts";
 
 export class SessionNotActiveError extends Error {
 	constructor(sessionId: string) {
@@ -28,10 +29,42 @@ export class DeckClient {
 		});
 	}
 
-	async deleteSession(sessionId: string): Promise<void> {
-		const res = await fetch(`${this.apiBase}/api/sessions/${encodeURIComponent(sessionId)}`, { method: "DELETE" });
-		if (res.status === 404) return;
-		if (!res.ok) throw new Error(`deck delete session failed: ${res.status}`);
+	async listSessions(): Promise<ListSessionsResponse["sessions"]> {
+		return (await this.request<ListSessionsResponse>("/api/sessions", {})).sessions;
+	}
+
+	async listInbox(): Promise<InboxItem[]> {
+		return (await this.request<ListInboxResponse>("/api/inbox", {})).items;
+	}
+
+	capture(title: string, body: string, source: string): Promise<InboxItem> {
+		return this.request("/api/inbox", { method: "POST", headers: { "Idempotency-Key": `${source}:capture` }, body: JSON.stringify({ kind: "capture", title, body, source }) });
+	}
+
+	async fileCards(cards: IntakeCard[], source: string): Promise<Task[]> {
+		const tasks: Task[] = [];
+		for (const [index, card] of cards.entries()) {
+			const headers = { "Idempotency-Key": `${source}:card:${index}` };
+			const item = await this.request<InboxItem>("/api/inbox", { method: "POST", headers,
+				body: JSON.stringify({ kind: "ticket", title: card.title, body: card.body, source }) });
+			const promoted = await this.request<PromoteInboxItemResponse>(`/api/inbox/${encodeURIComponent(item.id)}/promote`, {
+				method: "POST", headers, body: JSON.stringify({ ...(card.cwd ? { cwd: card.cwd } : {}), ...(card.stateId ? { stateId: card.stateId } : {}) }),
+			});
+			tasks.push(promoted.task);
+		}
+		return tasks;
+	}
+
+	sessionAction(sessionId: string, action: "abort" | "compact", body: Record<string, unknown> = {}): Promise<unknown> {
+		return this.request(`/api/sessions/${encodeURIComponent(sessionId)}/${action}`, { method: "POST", body: JSON.stringify(body) });
+	}
+
+	updateSession(sessionId: string, body: Record<string, unknown>): Promise<unknown> {
+		return this.request(`/api/sessions/${encodeURIComponent(sessionId)}`, { method: "PATCH", body: JSON.stringify(body) });
+	}
+
+	models(sessionId: string): Promise<ListModelsResponse> {
+		return this.request(`/api/models?sessionId=${encodeURIComponent(sessionId)}`, {});
 	}
 
 	promptSession(args: {
@@ -39,7 +72,9 @@ export class DeckClient {
 		text: string;
 		images?: ImageAttachment[];
 		onText: (text: string) => void;
+		signal?: AbortSignal;
 	}): Promise<string> {
+		if (args.signal?.aborted) return Promise.reject(new Error("Prompt cancelled"));
 		return new Promise((resolve, reject) => {
 			const ws = new WebSocket(this.wsUrl);
 			let promptSent = false;
@@ -52,6 +87,7 @@ export class DeckClient {
 				if (settled) return;
 				settled = true;
 				if (idleTimer) clearTimeout(idleTimer);
+				args.signal?.removeEventListener("abort", abort);
 				try {
 					ws.close();
 				} catch {
@@ -61,6 +97,12 @@ export class DeckClient {
 				else if (output !== undefined) resolve(output.trim() || "Done.");
 				else resolve(latestText.trim() || (sawAssistant ? "" : "Turn complete."));
 			};
+			const abort = () => {
+				if (promptSent && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: "abort", sessionId: args.sessionId }));
+				finish(new Error("Prompt cancelled"));
+			};
+			args.signal?.addEventListener("abort", abort, { once: true });
+			if (args.signal?.aborted) { abort(); return; }
 			const armIdleTimer = () => {
 				if (idleTimer) clearTimeout(idleTimer);
 				idleTimer = setTimeout(
@@ -71,6 +113,7 @@ export class DeckClient {
 			armIdleTimer();
 
 			ws.onopen = () => {
+				if (settled) return;
 				ws.send(JSON.stringify({ type: "subscribe", sessionId: args.sessionId }));
 			};
 			ws.onerror = () => finish(new Error("deck websocket failed"));
@@ -78,6 +121,7 @@ export class DeckClient {
 				if (!settled) finish(new Error("deck websocket closed before turn ended"));
 			};
 			ws.onmessage = (ev) => {
+				if (settled) return;
 				let frame: ServerFrame;
 				try {
 					frame = JSON.parse(String(ev.data)) as ServerFrame;
