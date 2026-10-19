@@ -417,7 +417,7 @@ export function RoutineBuilder({ routine, onSaved, onError }: Props) {
 						selectedRunId={runOverlay.selectedRunId}
 						onSelectRun={runOverlay.setSelectedRunId}
 						stepRunsByStepId={runOverlay.stepRunsByStepId}
-						advanced={advanced && !legacy}
+						advanced={advanced}
 						allowAdd={!legacy}
 						allowDelete={!legacy}
 						allowConnect={!legacy}
