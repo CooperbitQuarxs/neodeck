@@ -17,8 +17,13 @@ export const TRIGGER_PAYLOAD_MAX_BYTES = 8 * 1024;
 
 const CREDENTIAL_KEY = /token|secret|passw|pwd|api[-_]?key|auth|signature|cookie|credential|session|bearer/i;
 
+/** Shared credential-key policy for persisted user payload fields. */
+export function redactCredentialField(key: string, value: unknown): unknown {
+	return CREDENTIAL_KEY.test(key) ? "[redacted]" : value;
+}
+
 export function encodeTriggerPayload(payload: Record<string, unknown>): string {
-	const json = JSON.stringify(payload, (key, value: unknown) => (CREDENTIAL_KEY.test(key) ? "[redacted]" : value));
+	const json = JSON.stringify(payload, redactCredentialField);
 	const bytes = Buffer.byteLength(json, "utf8");
 	if (bytes <= TRIGGER_PAYLOAD_MAX_BYTES) return json;
 	// Escaping inside `preview` can grow the head, so shrink it until the

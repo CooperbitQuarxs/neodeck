@@ -15,6 +15,9 @@
 // Re-export the V1 routine spec validator. JSON Schemas live in src/schemas/.
 export { compileStructuredOutputSchema, validateRoutineSpec } from "./validate";
 export type { ValidationError, ValidationResult } from "./validate";
+export * from "./graph";
+export { isGraphValue, validateRoutineGraph } from "./graph-validation";
+import type { RoutineGraph } from "./graph";
 // MIXTURES.toml document, validation report and mixture trace projections (#80).
 export * from "./mixtures";
 
@@ -1708,6 +1711,8 @@ export interface ListInboxResponse {
  */
 export interface PromoteInboxItemRequest {
 	stateId?: string;
+	/** Project assignment; linked worktree and other properties remain leading YAML in the inbox body. */
+	cwd?: string;
 	markProcessed?: boolean;
 	body?: string;
 	properties?: Record<string, unknown>;
@@ -1739,12 +1744,14 @@ export interface Routine {
 	lastRunAt?: string;
 	nextRunAt?: string;
 	// V1 additions — see "V1 routine spec" section below for the parsed-spec types.
-	/** 0 = V0 single-action routine (cron+actionKind+actionBody); 1 = V1 multi-step (specYaml). */
-	specVersion: 0 | 1;
+	/** 0 = legacy single-action; 1 = YAML pipeline; 2 = native graph. */
+	specVersion: 0 | 1 | 2;
 	/** Concurrency policy. V0 routines default to 'skip'; V1 routines set it explicitly in their spec. */
 	concurrency: RoutineConcurrency;
 	/** Full V1 spec source-of-truth. NULL/undefined for V0 routines. */
 	specYaml?: string;
+	/** Native V2 source of truth; never derived from or rendered into YAML. */
+	graph?: RoutineGraph;
 	/** Optional runtime budget caps. */
 	budget?: RoutineBudget;
 	/** IANA timezone for cron evaluation. NULL = system default. */
@@ -1753,15 +1760,15 @@ export interface Routine {
 	tags?: string[];
 }
 
-export interface CreateRoutineRequest {
+export type CreateRoutineRequest = {
 	name: string;
 	description?: string;
-	cron: string;
-	actionKind: RoutineActionKind;
-	actionBody: string;
-	actionCwd?: string;
 	enabled?: boolean;
-}
+} & (
+	| { cron: string; actionKind: RoutineActionKind; actionBody: string; actionCwd?: string; specYaml?: string; graph?: never }
+	| { graph: RoutineGraph; cron?: never; actionKind?: never; actionBody?: never; actionCwd?: never; specYaml?: never }
+	| { specYaml: string; graph?: never; cron?: string; actionKind?: RoutineActionKind; actionBody?: string; actionCwd?: string }
+);
 
 export interface UpdateRoutineRequest {
 	name?: string;
@@ -1771,6 +1778,8 @@ export interface UpdateRoutineRequest {
 	actionBody?: string;
 	actionCwd?: string;
 	enabled?: boolean;
+	specYaml?: string;
+	graph?: RoutineGraph;
 }
 
 export interface RoutineRun {
