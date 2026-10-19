@@ -49,6 +49,7 @@ All notable changes to NPI deck (a fork of bjb2/omp-deck; entries before the for
 
 ### Fixed
 
+- Routine foundation tests isolate each case's database, home and process ownership so an expired cleanup cannot close the next run's database (#185).
 - Native graph traces redact credential-key values in activation events, node configurations and recursively retained output results before persistence (#158). Execution retains original objects, while stored traces and their HTTP responses exclude those credential values without redacting token budgets or usage counters.
 - Oversized recursive graph traces stop at an 8 MiB serialization budget and report a terminal history error instead of blocking on unbounded SQLite payloads (#158).
 - The canvas keeps Save disabled when a legacy routine's command or prompt is blank, while preserving its single-action format and existing execution settings (#99).
