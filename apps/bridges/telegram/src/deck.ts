@@ -72,7 +72,9 @@ export class DeckClient {
 		text: string;
 		images?: ImageAttachment[];
 		onText: (text: string) => void;
+		signal?: AbortSignal;
 	}): Promise<string> {
+		if (args.signal?.aborted) return Promise.reject(new Error("Prompt cancelled"));
 		return new Promise((resolve, reject) => {
 			const ws = new WebSocket(this.wsUrl);
 			let promptSent = false;
@@ -85,6 +87,7 @@ export class DeckClient {
 				if (settled) return;
 				settled = true;
 				if (idleTimer) clearTimeout(idleTimer);
+				args.signal?.removeEventListener("abort", abort);
 				try {
 					ws.close();
 				} catch {
@@ -94,6 +97,12 @@ export class DeckClient {
 				else if (output !== undefined) resolve(output.trim() || "Done.");
 				else resolve(latestText.trim() || (sawAssistant ? "" : "Turn complete."));
 			};
+			const abort = () => {
+				if (promptSent && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: "abort", sessionId: args.sessionId }));
+				finish(new Error("Prompt cancelled"));
+			};
+			args.signal?.addEventListener("abort", abort, { once: true });
+			if (args.signal?.aborted) { abort(); return; }
 			const armIdleTimer = () => {
 				if (idleTimer) clearTimeout(idleTimer);
 				idleTimer = setTimeout(
@@ -104,6 +113,7 @@ export class DeckClient {
 			armIdleTimer();
 
 			ws.onopen = () => {
+				if (settled) return;
 				ws.send(JSON.stringify({ type: "subscribe", sessionId: args.sessionId }));
 			};
 			ws.onerror = () => finish(new Error("deck websocket failed"));
@@ -111,6 +121,7 @@ export class DeckClient {
 				if (!settled) finish(new Error("deck websocket closed before turn ended"));
 			};
 			ws.onmessage = (ev) => {
+				if (settled) return;
 				let frame: ServerFrame;
 				try {
 					frame = JSON.parse(String(ev.data)) as ServerFrame;

@@ -15,6 +15,7 @@ export class TelegramBridge {
 	private readonly store: TelegramBridgeStore;
 	private readonly queues = new Map<string, Promise<void>>();
 	private readonly sessionChoices = new Map<string, RetainedSession[]>();
+	private readonly chatControllers = new Map<string, Set<AbortController>>();
 	private offset: number | undefined;
 	private stopping = false;
 	private bot: BotIdentity | undefined;
@@ -63,12 +64,27 @@ export class TelegramBridge {
 		this.offset = Math.max(this.offset ?? 0, update.update_id + 1);
 		const key = conversationKey(message);
 		// Abort must not wait behind the prompt it is cancelling.
-		if (parseCommand(text, this.bot.username)?.name === "stop") return this.handleMessage(message, text).catch((err) => this.reportError(message, err));
+		if (command?.name === "stop") return this.stopChat(message).catch((err) => this.reportError(message, err));
+		const controller = command?.name === "chat" ? new AbortController() : undefined;
+		if (controller) {
+			const pending = this.chatControllers.get(key) ?? new Set<AbortController>();
+			pending.add(controller);
+			this.chatControllers.set(key, pending);
+		}
 		const next = (this.queues.get(key) ?? Promise.resolve())
-			.catch(() => undefined).then(() => this.handleMessage(message, text))
+			.catch(() => undefined).then(() => controller?.signal.aborted
+				? this.say(message, "Chat cancelled before start.")
+				: this.handleMessage(message, text, controller?.signal))
 			.then(() => { if (durableIntake) this.store.completeIntake(update.update_id); })
 			.catch((err) => this.reportError(message, err))
-			.finally(() => { if (this.queues.get(key) === next) this.queues.delete(key); });
+			.finally(() => {
+				if (this.queues.get(key) === next) this.queues.delete(key);
+				if (controller) {
+					const pending = this.chatControllers.get(key);
+					pending?.delete(controller);
+					if (!pending?.size) this.chatControllers.delete(key);
+				}
+			});
 		this.queues.set(key, next);
 		return next;
 	}
@@ -87,7 +103,7 @@ export class TelegramBridge {
 		for (const chunk of splitTelegramText(text)) await this.telegram.sendMessage(message.chat.id, chunk, message.message_id, threadRouting(message));
 	}
 
-	private async handleMessage(message: TelegramMessage, text: string): Promise<void> {
+	private async handleMessage(message: TelegramMessage, text: string, chatSignal?: AbortSignal): Promise<void> {
 		const key = conversationKey(message);
 		const command = parseCommand(text, this.bot!.username);
 		const args = command?.args ?? text;
@@ -138,11 +154,6 @@ export class TelegramBridge {
 				return this.say(message, `Saved inbox capture ${item.id}; not promoted to a card.`);
 			case "inbox":
 				return this.say(message, (await this.deck.listInbox()).map((item) => `${item.id} · ${item.kind} · ${item.title}`).join("\n") || "Inbox is clear.");
-			case "stop": {
-				const mapping = this.store.get(key);
-				if (mapping) await this.deck.sessionAction(mapping.sessionId, "abort");
-				return this.say(message, mapping ? "Abort requested for the bound session." : "No bound session to stop.");
-			}
 			case "title": case "model": case "compact": {
 				if (command.name === "title" && !args) {
 					const current = this.store.get(key);
@@ -163,7 +174,7 @@ export class TelegramBridge {
 				}
 				return this.say(message, `Session ${command.name} updated.`);
 			}
-			case "chat": return this.chat(message, args);
+			case "chat": return this.chat(message, args, chatSignal);
 			case "task": break;
 			case undefined: break;
 			default: return this.say(message, "Unknown bridge command. Use /help, or /chat /<native-command> for a NeoPi command.");
@@ -176,7 +187,17 @@ export class TelegramBridge {
 		return this.say(message, `Filed ${filed.length} kanban card${filed.length === 1 ? "" : "s"} through the inbox:\n${filed.map((card) => `T-${card.displayId} · ${card.title}`).join("\n")}${message.photo?.length ? "\nPhoto not attached to cards; use /chat with a photo for image analysis." : ""}`);
 	}
 
-	private async chat(message: TelegramMessage, text: string): Promise<void> {
+	private async stopChat(message: TelegramMessage): Promise<void> {
+		const key = conversationKey(message);
+		const pending = this.chatControllers.get(key);
+		const cancelled = (pending?.size ?? 0) > 0;
+		for (const controller of pending ?? []) controller.abort();
+		const mapping = this.store.get(key);
+		if (mapping) await this.deck.sessionAction(mapping.sessionId, "abort");
+		await this.say(message, cancelled ? "Cancellation requested for queued or active chat." : mapping ? "Abort requested for the bound session." : "No bound session to stop.");
+	}
+
+	private async chat(message: TelegramMessage, text: string, signal?: AbortSignal): Promise<void> {
 		const photos = message.photo ?? [];
 		if (!text && !photos.length) throw new Error("Usage: /chat <text>, or a photo captioned /chat");
 		let typingPending: Promise<void> | undefined;
@@ -194,11 +215,13 @@ export class TelegramBridge {
 			if (largest) images.push({ type: "image", ...await this.telegram.downloadPhoto(largest) });
 			const key = conversationKey(message);
 			let mapping = await this.ensureMapping(key);
+			if (signal?.aborted) { await this.say(message, "Chat cancelled before start."); return; }
 			const reply = new TelegramReply(this.telegram, message.chat.id, message.message_id, this.config.editIntervalMs, threadRouting(message));
-			const prompt = () => this.deck.promptSession({ sessionId: mapping.sessionId, text: text || "Please analyze this image.", ...(images.length ? { images } : {}), onText: (next) => reply.update(next) });
+			const prompt = () => this.deck.promptSession({ sessionId: mapping.sessionId, text: text || "Please analyze this image.", ...(images.length ? { images } : {}), signal, onText: (next) => reply.update(next) });
 			try {
 				await reply.finish(await prompt());
 			} catch (err) {
+				if (signal?.aborted) { await reply.finish("Chat cancelled."); return; }
 				if (!(err instanceof SessionNotActiveError)) { await reply.finish(`Bridge error: ${this.safeError(err)}`); return; }
 				mapping = await this.resumeMapping(mapping);
 				await reply.finish(await prompt());

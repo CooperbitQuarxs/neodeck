@@ -35,3 +35,6 @@ before its next poll can confirm them to Telegram. Successful intake clears the
 journal entry; interrupted/failed intake is replayed in update order after
 restart using the same server receipt keys. Polling and `/stop` remain responsive
 while a conversation queue is busy; pending ordinary chat turns are not replayed.
+`/stop` also cancels chats queued or awaiting session startup in its conversation.
+The cancellation signal follows subscription startup so a late ready frame
+cannot submit an already-cancelled prompt; later `/chat` commands remain usable.

@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, spyOn, test } from "bun:test";
 import type { InboxItem, SessionSummary, Task } from "@npi-deck/protocol";
 import { TelegramBridge } from "./index.ts";
 import { DeckClient } from "./deck.ts";
@@ -58,6 +58,62 @@ function harness(policy: TelegramBridgeConfig = config) {
 	const bridge = new TelegramBridge(policy, { telegram: new Transport("offline"), deck, store, identity: { id: 99, username: "deck_bot" } });
 	return { events, replies, typingThreads, filedCards, deck, store, bridge, downloads: () => downloads, failPrompt: () => { promptError = true; }, send: (input: TelegramMessage) => bridge.dispatch({ update_id: input.message_id, message: input }) };
 }
+
+test("stop in the same batch cancels an earlier queued chat before mapping or prompt startup", async () => {
+	const h = harness();
+	try {
+		await Promise.all([
+			h.send({ ...message, text: "/chat do not start" }),
+			h.send({ ...message, message_id: 2, text: "/stop" }),
+		]);
+		expect(h.events).not.toContain("resume");
+		expect(h.events).not.toContain("prompt");
+		expect(h.replies.some(reply => reply.includes("Cancellation requested"))).toBe(true);
+	} finally { h.bridge.close(); }
+});
+
+test("stop during mapping startup prevents its later prompt but does not cancel a subsequent chat", async () => {
+	const h = harness();
+	const entered = Promise.withResolvers<void>();
+	const created = Promise.withResolvers<{ sessionId: string; sessionFile: string; cwd: string }>();
+	const original = h.deck.createSession.bind(h.deck);
+	const spy = spyOn(h.deck, "createSession").mockImplementation(() => { entered.resolve(); return created.promise; });
+	try {
+		const pending = h.send({ ...message, text: "/chat blocked mapping" });
+		await entered.promise;
+		await h.send({ ...message, message_id: 2, text: "/stop" });
+		created.resolve({ sessionId: "created", sessionFile: "/sessions/created", cwd: "/project" });
+		await pending;
+		expect(h.events).not.toContain("prompt");
+		spy.mockImplementation(original);
+		await h.send({ ...message, message_id: 3, text: "/chat next allowed turn" });
+		expect(h.events.filter(event => event === "prompt")).toHaveLength(1);
+	} finally { created.resolve({ sessionId: "created", sessionFile: "/sessions/created", cwd: "/project" }); spy.mockRestore(); h.bridge.close(); }
+});
+
+test("cancelling an in-flight WebSocket subscription cannot submit a late prompt", async () => {
+	const subscribed = Promise.withResolvers<() => void>();
+	const prompts: string[] = [];
+	const server = Bun.serve({
+		hostname: "127.0.0.1", port: 0,
+		fetch(request, listener) { return listener.upgrade(request) ? undefined : new Response("upgrade required", { status: 400 }); },
+		websocket: { message(socket, raw) {
+			const frame = JSON.parse(String(raw)) as { type: string; sessionId: string };
+			if (frame.type === "subscribe") subscribed.resolve(() => { socket.send(JSON.stringify({ type: "subscribed", sessionId: frame.sessionId, snapshot: {} })); });
+			if (frame.type === "prompt") prompts.push(frame.sessionId);
+		} },
+	});
+	const controller = new AbortController();
+	const client = new DeckClient(`http://127.0.0.1:${server.port}`, `ws://127.0.0.1:${server.port}`);
+	try {
+		const pending = client.promptSession({ sessionId: "cancel-start", text: "must not submit", signal: controller.signal, onText() {} });
+		const lateSubscription = await subscribed.promise;
+		controller.abort();
+		lateSubscription();
+		await expect(pending).rejects.toThrow("Prompt cancelled");
+		expect(prompts).toEqual([]);
+	} finally { controller.abort(); await server.stop(true); }
+});
 
 test("poll confirmation never outruns durable pending intake and restart replays queued tasks and captures", async () => {
 	const root = fs.mkdtempSync(path.join(os.tmpdir(), "telegram-pending-intake-"));
