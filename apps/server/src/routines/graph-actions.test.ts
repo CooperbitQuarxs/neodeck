@@ -157,6 +157,37 @@ test("confirmed message receipt survives later failure, replay/restart and concu
 	await runner.fire(routine.id, "manual", { id: "new-event" }); expect(sends).toBe(2);
 });
 
+test("confirmed message replay recovers downstream after the destination disappears", async () => {
+	setup(); let sends = 0; let recover = false; channel(() => { sends++; });
+	runner.graphRegistry.register({
+		definition: { type: "recovery-gate", label: "Recovery gate", kind: "operation", inputs: [{ id: "in", type: "object" }], outputs: [{ id: "out", type: "object" }] },
+		execute: () => { if (!recover) throw new Error("downstream unavailable"); return [{ port: "out", value: {} }]; },
+	});
+	const graph = messageFlow();
+	graph.nodes.push({ id: "gate", type: "recovery-gate", config: {} }, { id: "downstream", type: "action.create-card", config: { request: { title: "Recovered downstream" } } });
+	graph.edges.push(
+		{ id: "gate", from: { nodeId: "action", port: "result" }, to: { nodeId: "gate", port: "in" } },
+		{ id: "downstream", from: { nodeId: "gate", port: "out" }, to: { nodeId: "downstream", port: "in" } },
+	);
+	const routine = createGraphRoutine({ name: "recovery", graph }, runner.graphRegistry);
+	await runner.fire(routine.id, "manual", { id: "recover-event" });
+	const confirmed = action(trace(routine.id)).effects![0]!.receipt;
+	expect(trace(routine.id).status).toBe("failed");
+	expect(action(trace(routine.id)).effects![0]!.status).toBe("confirmed");
+	closeDb(); openDb({ path: path.join(home, "deck.db") });
+	notificationService.unregister("isolated-recorder"); recover = true;
+	await runner.fire(routine.id, "manual", { id: "recover-event" });
+	expect(trace(routine.id).status).toBe("success");
+	expect(action(trace(routine.id)).effects![0]).toMatchObject({ status: "confirmed", replayed: true, receipt: confirmed });
+	expect(sends).toBe(1);
+	expect(listTasks().filter(card => card.title === "Recovered downstream")).toHaveLength(1);
+	(graph.nodes[1]!.config.request as GraphObject).payload = { kind: "routine_failed", level: "info", title: "Changed" };
+	updateGraphRoutine(routine.id, { graph }, runner.graphRegistry);
+	await runner.fire(routine.id, "manual", { id: "recover-event" });
+	expect(trace(routine.id).error).toContain("different request or destination");
+	expect(sends).toBe(1);
+});
+
 test("lost message acknowledgement is uncertain and never blindly retried", async () => {
 	setup(); let writes = 0; channel(() => { writes++; throw new Error("provider lost receipt with token SECRET"); });
 	const routine = createGraphRoutine({ name: "ambiguous", graph: messageFlow() }, runner.graphRegistry);

@@ -100,7 +100,7 @@ export function registerGraphActions(registry: GraphNodeRegistry): void {
 			let create: (() => GraphObject) | undefined;
 			let send: (() => Promise<GraphObject>) | undefined;
 			let reconcile: (() => Promise<GraphObject | undefined>) | undefined;
-			let unavailable: GraphObject | undefined;
+			let preflight: (() => GraphObject | undefined) | undefined;
 			if (type === "action.create-card") {
 				const card = cardRequest(request);
 				normalized = object(card, "card request"); destination = { stateId: card.stateId };
@@ -109,8 +109,10 @@ export function registerGraphActions(registry: GraphNodeRegistry): void {
 				keys(request, ["destination", "payload"], "message");
 				const channel = text(request.destination, "destination");
 				const payload = validateNotificationPayload(request.payload);
-				const preflight = notificationService.preflight(channel, payload);
-				if (preflight.status !== "ready") unavailable = object(preflight, "message preflight");
+				preflight = () => {
+					const result = notificationService.preflight(channel, payload);
+					return result.status === "ready" ? undefined : object(result, "message preflight");
+				};
 				normalized = request; destination = { channel };
 				send = async () => {
 					const result = await notificationService.deliver(channel, payload, context.signal);
@@ -128,6 +130,8 @@ export function registerGraphActions(registry: GraphNodeRegistry): void {
 				};
 			}
 			const effect: GraphEffect = { logicalKey, status: context.dryRun ? "planned" : "uncertain", destination, request: normalized, replayed: false };
+			// Existing reservations are immutable evidence, not new delivery attempts.
+			const unavailable = preflight && (context.dryRun || !getGraphEffect(logicalKey)) ? preflight() : undefined;
 			if (unavailable) {
 				effect.status = "not-dispatched"; effect.receipt = unavailable; context.recordEffect(effect);
 				throw new Error(`Message destination unavailable: ${unavailable.status}`);
