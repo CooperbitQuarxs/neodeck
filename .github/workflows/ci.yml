@@ -137,16 +137,25 @@ jobs:
         run: bun scripts/neopi-setup.ts --build-native
 
       - name: typecheck (all workspaces)
+        id: typecheck
+        continue-on-error: ${{ github.event_name == 'push' && github.ref == 'refs/heads/nightly' }}
         run: bun run typecheck
 
       - name: test (all workspaces)
+        id: tests
+        continue-on-error: ${{ github.event_name == 'push' && github.ref == 'refs/heads/nightly' }}
         run: bun test
 
       - name: web build
-        run: bun --cwd apps/web run build
+        shell: bash
+        run: |
+          set -euo pipefail
+          bun run --cwd apps/web build
+          test -d apps/web/dist
 
-      # Publish from the existing Ubuntu builder as soon as its own gates pass;
-      # macOS/Windows keep running independently. No second web build is needed.
+      # Nightly checks are informational; a successful web build can publish
+      # even when typecheck/tests fail. Stable releases keep both checks as gates.
+      # macOS/Windows run independently; reuse the existing Ubuntu web build.
       - name: Package checkout sources and the existing web build
         if: runner.os == 'Linux' && needs.release_metadata.outputs.publish == 'true'
         shell: bash
@@ -205,6 +214,12 @@ jobs:
           generate_release_notes: true
           body: |
             Source commit: `${{ needs.release_metadata.outputs.sha }}`.
+
+            Ubuntu typecheck: **${{ steps.typecheck.outcome }}**.
+            Ubuntu tests: **${{ steps.tests.outcome }}**.
+            [CI run and platform results](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}).
+            Nightly prereleases publish after a successful build/package even
+            when checks fail; stable releases require the Ubuntu checks to pass.
 
             `neodeck-checkout.tar.gz` contains the tracked source tree and the web
             bundle from this run's Ubuntu CI build, not a standalone executable

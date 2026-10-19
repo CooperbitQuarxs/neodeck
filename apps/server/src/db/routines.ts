@@ -18,8 +18,9 @@ import type {
 } from "@npi-deck/protocol";
 
 import { getDb, id, nowIso } from "./index.ts";
-import { encodeTriggerPayload, redactCredentialField } from "./trigger-payload.ts";
+import { encodeTriggerPayload } from "./trigger-payload.ts";
 import { finalizeRun } from "./routine-step-runs.ts";
+import { getGraphEffect, redactGraphActionField } from "./graph-actions.ts";
 
 interface RoutineRow {
 	id: string;
@@ -537,7 +538,7 @@ function encodeGraphTrace(record: GraphRunRecord): string {
 		}
 		if (ancestors.length >= MAX_GRAPH_TRACE_DEPTH) throw new GraphTraceLimitError(`Graph trace exceeds the ${MAX_GRAPH_TRACE_DEPTH}-level serialization depth budget`);
 		const insidePayload = payloadScopes[payloadScopes.length - 1] ?? false;
-		if (insidePayload) value = redactCredentialField(key, value);
+		if (insidePayload) value = redactGraphActionField(key, value);
 		// Charge each occurrence, including shared envelopes, before stringify expands it.
 		// One separator per member is conservative for first members and omitted values.
 		if (key.length > MAX_GRAPH_TRACE_BYTES || (typeof value === "string" && value.length > MAX_GRAPH_TRACE_BYTES)) throw new GraphTraceLimitError();
@@ -550,7 +551,7 @@ function encodeGraphTrace(record: GraphRunRecord): string {
 		if (bytes > MAX_GRAPH_TRACE_BYTES) throw new GraphTraceLimitError();
 		if (value !== null && typeof value === "object") {
 			ancestors.push(value);
-			payloadScopes.push(insidePayload || key === "result" || key === "config" || (this === record.activation && key === "event"));
+			payloadScopes.push(insidePayload || key === "result" || key === "config" || key === "request" || key === "receipt" || (this === record.activation && key === "event"));
 		}
 		return value;
 	});
@@ -594,5 +595,15 @@ export function getGraphRun(runId: string): GraphRunRecord | undefined {
 	const row = getDb().query<{ graph_run_json: string | null }, [string]>(
 		"SELECT graph_run_json FROM routine_runs WHERE id = ?",
 	).get(runId);
-	return row?.graph_run_json ? JSON.parse(row.graph_run_json) as GraphRunRecord : undefined;
+	if (!row?.graph_run_json) return undefined;
+	const record = JSON.parse(row.graph_run_json) as GraphRunRecord;
+	// Late provider confirmations survive cancellation without reactivating the run.
+	if (!record.dryRun) for (const node of record.nodeRuns) {
+		node.effects = node.effects?.map(effect => {
+			if (effect.status !== "uncertain") return effect;
+			const durable = getGraphEffect(effect.logicalKey);
+			return durable ? { ...durable, replayed: effect.replayed } : effect;
+		});
+	}
+	return record;
 }

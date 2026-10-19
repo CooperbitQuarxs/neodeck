@@ -239,6 +239,11 @@ export function buildRoutinesRouter(runner: RoutinesRunner): Hono {
 			const validation = runner.graphRegistry.validate(r.graph);
 			if (!validation.valid) return c.json({ error: "invalid graph", details: validation.errors }, 400);
 		}
+		const dryRun = c.req.query("dryRun");
+		const operationId = c.req.query("operationId");
+		if (dryRun !== undefined && dryRun !== "true" && dryRun !== "false") return c.json({ error: "dryRun must be true or false" }, 400);
+		if (operationId !== undefined && !operationId.trim()) return c.json({ error: "operationId must be nonempty" }, 400);
+		if (r.specVersion !== 2 && (dryRun !== undefined || operationId !== undefined)) return c.json({ error: "graph execution options require a native routine" }, 400);
 		let payload: Record<string, unknown> = {};
 		try {
 			const text = await c.req.text();
@@ -252,7 +257,7 @@ export function buildRoutinesRouter(runner: RoutinesRunner): Hono {
 			// ignore — manual runs may be triggered with empty body
 		}
 		void runner
-			.fire(id, "manual", payload)
+			.fire(id, "manual", payload, { dryRun: dryRun === "true", operationId })
 			.catch((err) => log.warn("manual fire failed", err));
 		return c.json({ ok: true, queued: true }, 202);
 	});

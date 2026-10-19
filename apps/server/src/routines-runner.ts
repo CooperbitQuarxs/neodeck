@@ -16,7 +16,7 @@ import { Cron } from "croner";
 import { parse as parseYaml } from "yaml";
 import * as path from "node:path";
 
-import { INBOX_CARD_ADDED_EVENT, type GraphActivation, type GraphExecutionResult, type GraphObject, type Routine, type RoutineActionKind, type RoutineSpec, type RoutineTrigger } from "@npi-deck/protocol";
+import { INBOX_CARD_ADDED_EVENT, type GraphActivation, type GraphExecutionResult, type GraphObject, type Routine, type RoutineActionKind, type RoutineGraph, type RoutineRun, type RoutineSpec, type RoutineTrigger } from "@npi-deck/protocol";
 
 import { logger } from "./log.ts";
 import {
@@ -36,6 +36,7 @@ import { routineAgentCommand } from "./routines/agent-command.ts";
 import { workRegistry } from "./work-registry.ts";
 import { executeGraph, GraphNodeRegistry } from "./routines/graph-runner.ts";
 import { admitInboxGraphEvent, discardInboxGraphEvent, inboxGraphEventsFor, pendingInboxGraphEvents, recoverInboxGraphEvents, subscribeInboxGraphEvents } from "./db/inbox-graph-events.ts";
+import { registerGraphActions } from "./routines/graph-actions.ts";
 
 const log = logger("routines-runner");
 
@@ -65,7 +66,9 @@ export class RoutinesRunner {
 	private readonly runs = new Map<string, { abort: AbortController; finished: Promise<void> }>();
 	readonly concurrency = new ConcurrencyController();
 	readonly graphRegistry = new GraphNodeRegistry();
-	constructor(private readonly agentCommand: () => string[] = () => routineAgentCommand([])) {}
+	constructor(private readonly agentCommand: () => string[] = () => routineAgentCommand([])) {
+		registerGraphActions(this.graphRegistry);
+	}
 	get busy(): boolean { return this.runs.size > 0; }
 	get workSnapshot(): Array<{ runId: string; routineId: string }> {
 		return [...this.runs.keys()].map((key) => ({ routineId: key.split(":")[0]!, runId: key.split(":")[1]! }));
@@ -151,6 +154,7 @@ export class RoutinesRunner {
 		routineId: string,
 		trigger: "cron" | "manual" | "webhook" | "event" = "manual",
 		payload: Record<string, unknown> = {},
+		options: { dryRun?: boolean; operationId?: string } = {},
 	): Promise<void> {
 		if (this.closing) throw new Error("routine admissions closed");
 		const routine = getRoutine(routineId);
@@ -161,7 +165,7 @@ export class RoutinesRunner {
 		if (!routine.enabled && (trigger === "cron" || trigger === "webhook" || trigger === "event")) return;
 
 		if (routine.specVersion === 2) {
-			await this.fireGraph(routine, { eventType: trigger, event: payload as GraphObject }, trigger);
+			await this.fireGraph(routine, { eventType: trigger, event: payload as GraphObject, ...(options.operationId ? { operationId: options.operationId } : {}) }, trigger, options);
 		} else if (routine.specVersion === 1 && routine.specYaml) {
 			await this.fireV1(routine, trigger, payload);
 		} else {
@@ -177,9 +181,9 @@ export class RoutinesRunner {
 	}
 
 	/** Inbox notifications can replay; only a committed per-source delivery may start. */
-	async fireGraphEvent(routineId: string, activation: GraphActivation): Promise<void> {
-		if (activation.eventType !== INBOX_CARD_ADDED_EVENT) {
-			await this.fireGraphActivation(routineId, activation, "event");
+	async fireGraphEvent(routineId: string, activation: GraphActivation, options: { dryRun?: boolean } = {}): Promise<void> {
+		if (options.dryRun || activation.eventType !== INBOX_CARD_ADDED_EVENT) {
+			await this.fireGraphActivation(routineId, activation, "event", options);
 			return;
 		}
 		for (const delivery of inboxGraphEventsFor(routineId, activation)) {
@@ -191,7 +195,7 @@ export class RoutinesRunner {
 				discardInboxGraphEvent(routineId, delivery.activation);
 				continue;
 			}
-			await this.fireGraphActivation(routineId, delivery.activation, "event");
+			await this.fireGraphActivation(routineId, delivery.activation, "event", options);
 		}
 	}
 
@@ -207,12 +211,13 @@ export class RoutinesRunner {
 		routineId: string,
 		activation: GraphActivation,
 		trigger: "cron" | "event",
+		options: { dryRun?: boolean } = {},
 	): Promise<void> {
 		if (this.closing) throw new Error("routine admissions closed");
 		const routine = getRoutine(routineId);
 		if (!routine || routine.specVersion !== 2) throw new Error("native graph routine required");
 		if (!routine.enabled) return;
-		await this.fireGraph(routine, activation, trigger);
+		await this.fireGraph(routine, activation, trigger, options);
 		setRoutineSchedule(routineId, {
 			lastRunAt: new Date().toISOString(),
 			nextRunAt: earliestNextRun(this.crons.get(routineId) ?? []),
@@ -223,21 +228,40 @@ export class RoutinesRunner {
 		routine: Routine,
 		activation: GraphActivation,
 		trigger: "cron" | "manual" | "webhook" | "event",
+		options: { dryRun?: boolean } = {},
 	): Promise<void> {
 		if (!routine.graph) throw new Error(`native routine ${routine.id} has no graph`);
 		const graph = routine.graph;
 		const validation = this.graphRegistry.validate(graph);
 		if (!validation.valid) throw new Error(`invalid graph: ${JSON.stringify(validation.errors)}`);
 		const definition = structuredClone(graph);
-		const activationSnapshot = structuredClone(activation);
+		// Simulations start their own trace, never a durable event-delivery claim.
+		// Keep this return before live inbox admission when integrating #204.
+		if (options.dryRun) {
+			await this.executeGraphRun(routine, activation, definition, startRun(routine.id, trigger, activation.event), options);
+			return;
+		}
 		const start = () => startRun(routine.id, trigger, activation.event);
 		const run = trigger === "event" && activation.eventType === INBOX_CARD_ADDED_EVENT
 			? admitInboxGraphEvent(routine.id, activation, definition, start) : start();
 		if (!run) return;
+		await this.executeGraphRun(routine, activation, definition, run, options);
+	}
+
+	private async executeGraphRun(
+		routine: Routine,
+		activation: GraphActivation,
+		definition: RoutineGraph,
+		run: RoutineRun,
+		options: { dryRun?: boolean },
+	): Promise<void> {
+		const graph = routine.graph!;
+		const activationSnapshot = structuredClone(activation);
 		const decision = this.concurrency.decide(routine.id, run.id, graph.concurrency ?? "skip");
 		const persist = (result: GraphExecutionResult, abortReason?: string) => finishGraphRun({
 			...result, id: run.id, routineId: routine.id, startedAt: run.startedAt,
 			endedAt: new Date().toISOString(), graph: definition, activation: activationSnapshot,
+			dryRun: options.dryRun === true,
 		}, abortReason);
 		if (decision.kind === "skip") {
 			persist({ status: "aborted", nodeRuns: [], outputs: [], error: "concurrency_skipped" }, "concurrency_skipped");
@@ -255,7 +279,7 @@ export class RoutinesRunner {
 				}
 				if (decision.kind === "queue") workRegistry.transition("routine-queued", "routine-run", key);
 				const result = await executeGraph(graph, activation, this.graphRegistry, {
-					runId: run.id, signal: decision.abort.signal,
+					runId: run.id, signal: decision.abort.signal, routineId: routine.id, dryRun: options.dryRun,
 				});
 				persist(result);
 			} catch (err) {
