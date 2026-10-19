@@ -4,7 +4,7 @@
 
 The [`omp`](https://github.com/can1357/oh-my-pi) terminal agent is excellent at the actual coding. But terminals weren't built for everything that comes with running an agent for hours a day: keeping track of what it's working on, glancing at it from another room, picking up where it left off tomorrow, deciding whether to let it execute the thing it just proposed.
 
-pi is known for its flexibility and omp applies some opinions on how to leverage it more effectively. NPI deck is best understood as a web interface for omp with a small set of additional opinions applied on top of omp. 
+NeoDeck is [NeoPi](https://github.com/PsychedelicShayna/neopi)'s orchestration and integration frontend for cards, routines, inbox, and messaging; [NeoCode](https://github.com/PsychedelicShayna/neocode) is its graphical frontend.
 
 > **Status:** v0.5.0 — cross-platform CI matrix, Linux container builds and boots, Mac/Linux launcher. See [CHANGELOG.md](./CHANGELOG.md).
 
