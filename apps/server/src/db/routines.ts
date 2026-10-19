@@ -518,20 +518,33 @@ export function getRun(runId: string): RoutineRun | undefined {
 	return row ? rowToRun(row) : undefined;
 }
 
+const MAX_GRAPH_TRACE_BYTES = 8 * 1024 * 1024;
+class GraphTraceLimitError extends Error {
+	constructor() { super(`Graph trace exceeds the ${MAX_GRAPH_TRACE_BYTES}-byte serialization budget`); }
+}
+
 /** Redact user data during serialization, without copying or changing live envelopes. */
 function encodeGraphTrace(record: GraphRunRecord): string {
 	const ancestors: object[] = [];
 	const payloadScopes: boolean[] = [];
+	let bytes = 0;
 	return JSON.stringify(record, function (this: object, key: string, value: unknown) {
 		while (ancestors.length && ancestors[ancestors.length - 1] !== this) {
 			ancestors.pop();
 			payloadScopes.pop();
 		}
 		const insidePayload = payloadScopes[payloadScopes.length - 1] ?? false;
-		if (insidePayload) {
-			const protectedValue = redactCredentialField(key, value);
-			if (protectedValue !== value) return protectedValue;
+		if (insidePayload) value = redactCredentialField(key, value);
+		// Charge each occurrence, including shared envelopes, before stringify expands it.
+		// One separator per member is conservative for first members and omitted values.
+		if (key.length > MAX_GRAPH_TRACE_BYTES || (typeof value === "string" && value.length > MAX_GRAPH_TRACE_BYTES)) throw new GraphTraceLimitError();
+		if (ancestors.length) bytes += Array.isArray(this) ? 1 : Buffer.byteLength(JSON.stringify(key)) + 2;
+		if (value !== null && typeof value === "object") bytes += 2;
+		else {
+			const encoded = JSON.stringify(value);
+			if (encoded !== undefined) bytes += Buffer.byteLength(encoded);
 		}
+		if (bytes > MAX_GRAPH_TRACE_BYTES) throw new GraphTraceLimitError();
 		if (value !== null && typeof value === "object") {
 			ancestors.push(value);
 			payloadScopes.push(insidePayload || key === "result" || key === "config" || (this === record.activation && key === "event"));
@@ -545,12 +558,18 @@ export function finishGraphRun(record: GraphRunRecord, abortReason?: string): vo
 	getDb().transaction(() => {
 		const run = getRun(record.id);
 		if (!run || run.routineId !== record.routineId) throw new Error("graph trace run does not match routine");
-		getDb().query("UPDATE routine_runs SET graph_run_json = ? WHERE id = ?")
-			.run(encodeGraphTrace(record), record.id);
+		let trace: string | null = null;
+		let traceError: string | undefined;
+		try { trace = encodeGraphTrace(record); }
+		catch (failure) {
+			if (!(failure instanceof GraphTraceLimitError)) throw failure;
+			traceError = failure.message;
+		}
+		getDb().query("UPDATE routine_runs SET graph_run_json = ? WHERE id = ?").run(trace, record.id);
 		finalizeRun(record.id, {
 			endedAt: record.endedAt,
-			exitCode: record.status === "success" ? 0 : 1,
-			error: record.error,
+			exitCode: !traceError && record.status === "success" ? 0 : 1,
+			error: traceError ? `${record.error ? `${record.error}; ` : ""}${traceError}` : record.error,
 			...(record.status === "aborted" ? {
 				abortedAt: record.endedAt,
 				abortReason: abortReason ?? record.abortReason ?? "cancelled",

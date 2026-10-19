@@ -219,6 +219,11 @@ recursive provenance. Execution still receives the original objects; structural
 fields such as token budgets and usage counters are not redacted. Later edits
 do not replace a historical trace; reopening the database preserves the stored
 JSON values and recursive provenance.
+Trace serialization has an 8 MiB conservative byte budget, charged during
+expansion of every recursive envelope occurrence. Oversized traces are not
+stored or served; run history instead records a terminal serialization-budget
+failure while retaining execution usage and step aggregates. No partial or
+truncated provenance is presented as a complete trace.
 
 ## Theming
 

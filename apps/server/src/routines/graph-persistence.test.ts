@@ -252,6 +252,33 @@ test("stored graph traces redact user credential fields without mutating executi
 	expect(getGraphRun(record.id)).toEqual(trace);
 });
 
+test("recursive provenance cannot expand a moderate activation into an unbounded persisted trace", async () => {
+	const run = setup();
+	run.graphRegistry.register({ definition: definition("pass"), execute: ({ inputs }) => [{ port: "out", value: inputs[0]!.output.result }] });
+	const native = graph();
+	let previous = "source";
+	for (let index = 0; index < 100; index++) {
+		const nodeId = `pass-${index}`;
+		native.nodes.push({ id: nodeId, type: "pass", config: {} });
+		connect(native, `edge-${index}`, previous, nodeId, previous === "source" ? "event" : "out");
+		previous = nodeId;
+	}
+	const saved = createGraphRoutine({ name: "bounded-trace", graph: native }, run.graphRegistry);
+	await run.fire(saved.id, "manual", { payload: "x".repeat(8 * 1024) });
+	const record = listRuns(saved.id)[0]!;
+	expect(record.endedAt).toBeDefined();
+	expect(record.exitCode).toBe(1);
+	expect(record.error).toContain("Graph trace exceeds");
+	expect(record.stepCountTotal).toBe(101);
+	expect(getGraphRun(record.id)).toBeUndefined();
+	const row = getDb().query<{ bytes: number | null }, [string]>("SELECT length(graph_run_json) AS bytes FROM routine_runs WHERE id = ?").get(record.id)!;
+	expect(row.bytes).toBeNull();
+	const api = buildRoutinesRouter(run);
+	const listing = await (await api.request(`/routines/${saved.id}/runs`)).json() as { runs: RoutineRun[] };
+	expect(listing.runs[0]?.error).toContain("serialization budget");
+	expect((await api.request(`/routines/${saved.id}/runs/${record.id}/graph`)).status).toBe(404);
+});
+
 test("native failures and usage-budget aborts finalize traces and existing run aggregates", async () => {
 	const run = setup();
 	run.graphRegistry.register({ definition: definition("fail"), execute: () => { throw new Error("real handler failure"); } });
