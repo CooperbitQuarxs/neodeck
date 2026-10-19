@@ -47,6 +47,7 @@ All notable changes to NPI deck (a fork of bjb2/omp-deck; entries before the for
 
 ### Fixed
 
+- Telegram's in-memory store avoids filesystem setup on Windows, and closing persistent bindings releases database files without waiting for garbage collection (#103).
 - Telegram group intake requires a leading standalone bot mention rather than usernames embedded in prose, URLs or YAML, and preserves accepted task text/caption metadata (#103).
 - Telegram journals authorized task/capture updates before confirming delivery and reuses durable inbox receipts across restarts, preventing lost queued intake and duplicate decomposed cards (#103).
 - Unsupported Telegram attachments now receive their explanation for every captioned command, including `/help`; commands without arguments still run after the notice (#103).

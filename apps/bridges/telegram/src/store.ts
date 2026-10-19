@@ -25,7 +25,7 @@ export class TelegramBridgeStore {
 	private readonly db: Database;
 
 	constructor(dbPath: string) {
-		fs.mkdirSync(path.dirname(dbPath), { recursive: true });
+		if (dbPath !== ":memory:") fs.mkdirSync(path.dirname(path.resolve(dbPath)), { recursive: true });
 		this.db = new Database(dbPath, { create: true, strict: true });
 		this.db.exec("PRAGMA journal_mode = WAL");
 		this.db.exec("PRAGMA synchronous = NORMAL");
@@ -76,7 +76,7 @@ export class TelegramBridgeStore {
 
 	upsert(mapping: ChatSessionMapping): void {
 		this.db
-			.prepare<unknown, [string, string, string | null, string, string, string]>(
+			.query<unknown, [string, string, string | null, string, string, string]>(
 				`INSERT INTO telegram_chat_sessions (chat_id, session_id, session_file, cwd, created_at, updated_at)
 				 VALUES (?, ?, ?, ?, ?, ?)
 				 ON CONFLICT(chat_id) DO UPDATE SET
@@ -93,13 +93,13 @@ export class TelegramBridgeStore {
 				mapping.createdAt,
 				mapping.updatedAt,
 			);
-		this.db.prepare(`INSERT INTO telegram_session_history VALUES (?, ?, ?, ?, ?, ?)
+		this.db.query(`INSERT INTO telegram_session_history VALUES (?, ?, ?, ?, ?, ?)
 			ON CONFLICT(chat_id, session_id) DO UPDATE SET session_file = excluded.session_file, updated_at = excluded.updated_at`)
 			.run(mapping.chatId, mapping.sessionId, mapping.sessionFile ?? null, mapping.cwd, mapping.createdAt, mapping.updatedAt);
 	}
 
 	delete(chatId: string): void {
-		this.db.prepare<unknown, [string]>("DELETE FROM telegram_chat_sessions WHERE chat_id = ?").run(chatId);
+		this.db.query<unknown, [string]>("DELETE FROM telegram_chat_sessions WHERE chat_id = ?").run(chatId);
 	}
 
 	list(chatId: string): ChatSessionMapping[] {
@@ -113,12 +113,14 @@ export class TelegramBridgeStore {
 	}
 
 	setProperties(chatId: string, properties: Record<string, unknown>): void {
-		this.db.prepare("INSERT INTO telegram_card_defaults VALUES (?, ?) ON CONFLICT(chat_id) DO UPDATE SET properties = excluded.properties")
+		this.db.query("INSERT INTO telegram_card_defaults VALUES (?, ?) ON CONFLICT(chat_id) DO UPDATE SET properties = excluded.properties")
 			.run(chatId, JSON.stringify(properties));
 	}
 
 	close(): void {
-		this.db.close();
+		// All ten fixed queries use Bun's connection-owned cache (below its 20-query limit).
+		// Do not leave uncached prepare() handles alive when closing on Windows.
+		this.db.close(true);
 	}
 }
 

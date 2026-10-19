@@ -9,6 +9,16 @@ function mapping(chatId: string, sessionId: string): ChatSessionMapping {
 	return { chatId, sessionId, sessionFile: `/isolated/${sessionId}.jsonl`, cwd: "/isolated", createdAt: "2026-10-13T00:00:00Z", updatedAt: "2026-10-13T00:00:00Z" };
 }
 
+test("in-memory intake receipts close strictly without filesystem setup", () => {
+	const store = new TelegramBridgeStore(":memory:");
+	try {
+		store.stageIntake({ update_id: 17 });
+		expect(store.pendingIntakes()).toEqual([{ update_id: 17 }]);
+		store.completeIntake(17);
+		expect(store.pendingIntakes()).toEqual([]);
+	} finally { store.close(); }
+});
+
 test("bindings and defaults survive reopen; reset preserves only that lane's resumable history", () => {
 	const dir = mkdtempSync(join(tmpdir(), "deck-telegram-store-"));
 	const path = join(dir, "bridge.db");
@@ -39,8 +49,10 @@ test("legacy DM bindings gain resumable history without changing their session",
 	try {
 		const db = new Database(path);
 		db.exec("CREATE TABLE telegram_chat_sessions (chat_id TEXT PRIMARY KEY, session_id TEXT NOT NULL, session_file TEXT, cwd TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)");
-		db.prepare("INSERT INTO telegram_chat_sessions VALUES (?, ?, ?, ?, ?, ?)").run("7", "stable", "/stable.jsonl", "/project", "created", "updated");
-		db.close();
+		const insert = db.prepare("INSERT INTO telegram_chat_sessions VALUES (?, ?, ?, ?, ?, ?)");
+		try { insert.run("7", "stable", "/stable.jsonl", "/project", "created", "updated"); }
+		finally { insert.finalize(); }
+		db.close(true);
 		const store = new TelegramBridgeStore(path);
 		try {
 			expect(store.get("7")?.sessionId).toBe("stable");
