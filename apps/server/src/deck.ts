@@ -195,7 +195,6 @@ export async function startDeck(opts: StartDeckOptions = {}): Promise<DeckHandle
 
 	const { CardAgentRunner } = await import("./card-agents.ts");
 	const cardAgents = new CardAgentRunner(config);
-	await cardAgents.recover();
 	const bridge = new InProcessAgentBridge({
 		idleTimeoutMs: config.idleTimeoutMs,
 	});
@@ -358,6 +357,7 @@ export async function startDeck(opts: StartDeckOptions = {}): Promise<DeckHandle
 	});
 
 	cardAgents.setApiOrigin(`http://${server.hostname === "0.0.0.0" ? "127.0.0.1" : server.hostname}:${server.port}`);
+	await cardAgents.recover();
 	log.info(`listening on http://${server.hostname}:${server.port}`);
 	if (bootDeadline) clearTimeout(bootDeadline);
 	if (pending) rmSync(transactionFile, { force: true });
