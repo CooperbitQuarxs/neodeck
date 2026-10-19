@@ -34,22 +34,25 @@ contracts only); Acceptance; Suggested labels. Preserve the brief's pronouns.
 Skip product fluff, speculative implementation claims, and omnibus tickets
 unless an ordered umbrella only links its children.
 
-## Dual taxonomy
+## Composable labels
 
-Every funnel issue carries a suitable type, exactly one `effort:*`, and exactly
-one `priority:*`. `entangled` is only for true alternative clusters: shipping
-one supersedes the others. Use existing labels only; label creation requires
-a separate Captain decision. Effort migration is in `issue-tracker.md`.
+Each funnel issue carries a suitable type and one `priority:*`; leave uncertain
+classification for evidence-led triage. Use the interim meanings and estimate
+provenance in `issue-tracker.md`, not compulsory `effort:*` assignment or an
+automatic historical-label conversion. Use existing labels only; label creation
+requires a separate Captain decision.
 
-Readiness (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`,
-`wontfix`) is orthogonal: preserve house labels when applying readiness.
-Funnel issues may initially be house-only; triage applies readiness for pickup.
+Keep undecided ideas distinct from implementation specifications and explicit
+authorization. `spec` records specification presence, not permission or pickup;
+`experiment` does not start work. Preserve unresolved alternative choices and
+legacy readiness assignments according to `triage-labels.md`.
 
 ## Dedupe and amend
 
-- New issue when no open issue owns the subject.
-- Comment-amend when already filed; published bodies change only on Captain order.
-- Label-only when the contract is fine but taxonomy is broken; preserve legacy sizing labels during the documented migration.
+- New issue when no open issue owns the subject; compare bodies, relevant comments, and linked work rather than title similarity.
+- Comment-amend when already filed; published bodies change only on Captain order. Preserve source attribution and links to the brief, evidence, and related issue/PR contracts.
+- Label-only when the contract is fine but taxonomy is broken; propose evidence-backed additions/removals through `triage-labels.md`, preserving historical metadata until reviewed.
+- Before closing a verified duplicate, preserve useful unique context in an attributed canonical-issue comment and crosslink.
 - Entangled bodies identify sibling issues and the supersession condition. Close siblings only once the selected alternative actually ships and closure is authorized.
 
 ## Publish

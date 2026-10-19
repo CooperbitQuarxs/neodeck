@@ -43,13 +43,20 @@ promotion is separate from tagging and does not reinstall the live snapshot.
 
 ## Labels
 
-- Type and GitHub defaults: `bug`, `enhancement`, `documentation`, `question`, `duplicate`, `invalid`, `good first issue`, `help wanted`.
-- Priority: `priority: p0` … `priority: p3`. Effort: `effort: tiny`, `effort: small`, `effort: medium`, `effort: large`, `effort: very large`.
-- Issue triage (`docs/agents/triage-labels.md`): `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`.
-- PR state: `needs-review`, `ready-for-merge`, `review-stalled`.
-- Other: `accessibility`, `baseline`, `upstream-sync`, `hotfix`, `entangled`, `neopi-upstream`, `codex-review`, `sentinel-review-requested`.
+The interim tracker policy is in `docs/agents/issue-tracker.md`; evidence-led
+daily reconciliation, available additions, and held migrations are in
+`docs/agents/triage-labels.md`. The complete setup skill and participation
+vocabulary are not finalized.
+
+- Type and GitHub defaults: `bug`, `enhancement`, `documentation`, `question`, `duplicate`, `invalid`, `good first issue`, `help wanted`; composable `idea`, `experiment`, and specification-presence `spec` are also available.
+- Priority: `priority: p0` … `priority: p3`. Estimates: eight `difficulty:*` intervals and `frame: hours`, `frame: days`, `frame: weeks`, `frame: months`, `frame: years`, with independent meanings and provenance in the tracker policy. Historical `effort:*` labels remain reviewable metadata, not compulsory assignments or literal durations.
+- Issue triage: `needs-triage`, `needs-info`, `wontfix`; preserve `ready-for-agent` and `ready-for-human` as legacy markers pending evidence-based reconciliation.
+- PR state remains `needs-review`, `ready-for-merge`, `review-stalled`. Accepted target `mergeable` awaits coordinated parent-policy/consumer migration; it changes neither merge permission nor review gates.
+- Other: `accessibility`, `baseline`, `upstream-sync`, `downstream`, `hotfix`, `entangled`, `neopi-upstream`, `stale: identical`, `stale: similar`, `codex-review`, `sentinel-review-requested`. Accepted target `upstream` means substantive upstream involvement; current operational `upstream-sync` remains until coordinated migration. Baseline retirement is undecided.
 - Wayfinding: `wayfinder:map`, `wayfinder:research`, `wayfinder:prototype`, `wayfinder:grilling`, `wayfinder:task`.
-- Legacy taxonomy: the eight `difficulty:*` buckets and `frame: hours`, `frame: days`, `frame: weeks`, `frame: months`, `frame: years` remain available during migration. `effort:*` replaces their sizing role; the mapping is in `docs/agents/issue-tracker.md`. Mars relabels open issues first; deleting legacy labels is a later Captain decision.
+
+This documentation cutover neither relabels/closes issues nor removes existing
+labels. Preserve historical estimates and other metadata until reviewed.
 
 ## Where the rest lives
 
