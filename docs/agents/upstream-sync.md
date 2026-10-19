@@ -8,7 +8,7 @@ remote. Until that answer, fetch and inspect releases using the explicit
 
 Syncs land on `sync/<date>` through a PR into `nightly`, never directly on
 `main` or `nightly`. Promotion into `main` is separate
-(`docs/policy/README.md` › Promotion). The fetched remote branch is the source
+(`docs/agents/policy.md` › Promotion). The fetched remote branch is the source
 of truth, not a local checkout or another feature worktree.
 
 ## 1. Preserve and establish the baseline

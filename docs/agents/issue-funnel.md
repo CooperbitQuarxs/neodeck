@@ -12,11 +12,12 @@ specification ingestion.
 
 ## Boot
 
-Read this file, `docs/agents/issue-tracker.md`, and
+Read this file, `docs/agents/issue-tracker.md`, `docs/agents/triage.md`, and
 `docs/agents/triage-labels.md`. Read queue, ledger, and brief artifacts only
 when the assignment names them; operator briefs beat older handoff bullets.
-List open issues with `gh issue list --repo PsychedelicShayna/neodeck --state open`
-and read relevant issues for local style and duplication. Resume at the next
+Fetch all open issues with the paginated inventory in
+`docs/agents/issue-tracker.md#conventions`; read relevant issues for local style
+and duplication. Resume at the next
 unpublished assigned item; held items stay held. Do not drain an unassigned queue.
 
 ## Reconstruct and author
@@ -34,23 +35,25 @@ contracts only); Acceptance; Suggested labels. Preserve the brief's pronouns.
 Skip product fluff, speculative implementation claims, and omnibus tickets
 unless an ordered umbrella only links its children.
 
-## Dual taxonomy
+## Composable labels
 
-Every funnel issue carries a suitable type, exactly one `effort:*`, and exactly
-one `priority:*`. `entangled` is only for true alternative clusters: shipping
-one supersedes the others. Use existing labels only; label creation requires
-a separate Captain decision. Effort migration is in `issue-tracker.md`.
+Each funnel issue carries a suitable kind and one assessed priority; uncertain
+classification uses `needs-triage`. Follow `triage.md` for classification and
+`issue-tracker.md#sizing` for estimate provenance and one-time frame normalization.
+Use existing labels; creating definitions requires a separate Captain decision.
 
-Readiness (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`,
-`wontfix`) is orthogonal: preserve house labels when applying readiness.
-Funnel issues may initially be house-only; triage applies readiness for pickup.
+Keep undecided ideas distinct from implementation specifications and explicit
+authorization. `spec` records specification presence, not permission or pickup;
+`experiment` does not start work. Preserve unresolved choices and use the actor
+states defined in `triage-labels.md`.
 
 ## Dedupe and amend
 
-- New issue when no open issue owns the subject.
-- Comment-amend when already filed; published bodies change only on Captain order.
-- Label-only when the contract is fine but taxonomy is broken; preserve legacy sizing labels during the documented migration.
-- Entangled bodies identify sibling issues and the supersession condition. Close siblings only once the selected alternative actually ships and closure is authorized.
+- New issue when no open issue owns the subject; compare bodies, relevant comments, and linked work rather than title similarity.
+- Comment-amend when already filed; published bodies change only on Captain order. Preserve source attribution and links to the brief, evidence, and related issue/PR contracts.
+- Label-only when the contract is fine but taxonomy is broken; apply evidence-backed deltas through `triage.md`, preserving useful source and estimate provenance.
+- Before closing a verified duplicate, preserve useful unique context in an attributed canonical-issue comment and crosslink.
+- Entangled records identify sibling issues and the supersession condition. Present concise differences/pros/cons for the Captain's choice; close alternatives with the recorded decision only when authorized.
 
 ## Publish
 

@@ -1,7 +1,7 @@
 # Contributing to npi-deck
 
-Thanks for your interest. npi-deck is a small enough project that there is no
-heavyweight process — but a few conventions keep the codebase tidy.
+Thanks for your interest. [Repository policy](docs/agents/policy.md) defines
+branches, signed commits, pull requests, review, and promotion.
 
 ## Repo layout
 
@@ -46,8 +46,8 @@ The fix is a parallel checkout via `git worktree`, env-isolated:
 
 ```sh
 # from the existing checkout
-git worktree add ../npi-deck-dev -b dev/<feature>
-cd ../npi-deck-dev
+git fetch origin && git worktree add ../neodeck-wt-feature -b feat/feature origin/nightly
+cd ../neodeck-wt-feature
 bun install
 cat > .env <<'EOF'
 NPI_DECK_PORT=8889
@@ -75,8 +75,8 @@ Codex on every dev iteration. Set it to a fresh dir only when the change
 under test touches `auth.db` and you need to repeatedly clear the
 no-credentials state.
 
-Merge the branch back when ready; `git worktree remove ../npi-deck-dev`
-tears down the tree but keeps the branch and its commits.
+Open a PR into `nightly`; after it merges, remove the worktree and local branch
+as described in the repository policy. Promotion to `main` belongs to the owner.
 
 ### What survives vs. dies on restart
 
@@ -161,9 +161,10 @@ look at `apps/web/src/lib/reducer.test.ts` for the pattern.
 
 ## Commits
 
-Conventional Commits welcome but not enforced. Keep messages descriptive —
-"fix bug" is not enough; "fix: kanban refetch missed broadcast on inbox-promote"
-is.
+Follow [commit policy](docs/agents/policy.md#commits): Conventional Commits,
+descriptive prose, actual-model attribution, verified signatures, and one logical
+change per commit. Follow [review mechanics](docs/agents/pr-review-bots.md) before
+requesting a scoped Code Review or merging.
 
 ## Filing issues
 
