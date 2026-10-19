@@ -1,7 +1,8 @@
 # NPI deck
 
-Web cockpit and agent fleet console for NeoPi (`npi`). Repository:
-`PsychedelicShayna/neodeck`, fork of `Shreyans13/omp-deck`. The old
+NeoDeck is [NeoPi](https://github.com/PsychedelicShayna/neopi)'s orchestration and integration frontend; [NeoCode](https://github.com/PsychedelicShayna/neocode) is its graphical frontend.
+
+Repository: `PsychedelicShayna/neodeck`, fork of `Shreyans13/omp-deck`. The old
 `bjb2/omp-deck` no longer exists; changing the local upstream remote awaits
 the Captain's answer.
 
