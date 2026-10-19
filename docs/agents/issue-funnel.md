@@ -15,8 +15,9 @@ specification ingestion.
 Read this file, `docs/agents/issue-tracker.md`, `docs/agents/triage.md`, and
 `docs/agents/triage-labels.md`. Read queue, ledger, and brief artifacts only
 when the assignment names them; operator briefs beat older handoff bullets.
-List open issues with `gh issue list --repo PsychedelicShayna/neodeck --state open`
-and read relevant issues for local style and duplication. Resume at the next
+Fetch all open issues with the paginated inventory in
+`docs/agents/issue-tracker.md#conventions`; read relevant issues for local style
+and duplication. Resume at the next
 unpublished assigned item; held items stay held. Do not drain an unassigned queue.
 
 ## Reconstruct and author

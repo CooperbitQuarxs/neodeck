@@ -11,7 +11,7 @@ and closure, and [triage-labels.md](triage-labels.md) for vocabulary.
 
 - Create: `gh issue create --repo PsychedelicShayna/neodeck --title "..." --body-file <path>`.
 - Read: `gh issue view <number> --repo PsychedelicShayna/neodeck --comments`, including labels.
-- List: `gh issue list --repo PsychedelicShayna/neodeck --state <state> --json number,title,body,labels,comments` with task-specific filters.
+- Complete open-issue inventory: `gh api --paginate --slurp 'repos/PsychedelicShayna/neodeck/issues?state=open&per_page=100' | jq '[.[][] | select(has("pull_request") | not)]'`. The REST issues endpoint includes PRs, hence the filter. Read issue comments separately. For a narrowed task query, `gh issue list` is useful, but its default limit of 30 is not an exhaustive inventory.
 - Apply or remove existing labels: `gh issue edit <number> --repo PsychedelicShayna/neodeck --add-label "..."` or `--remove-label "..."`.
 - Closure follows [triage](triage.md#closure): verify full acceptance and promotion to `main`; a nightly merge alone does not satisfy it. The Issue Funnel's publication authority is defined in `docs/agents/issue-funnel.md`.
 - Every GitHub comment and PR body, including review triggers, opens with `> [!NOTE]` and `> <actual Model Name> on behalf of PsychedelicShayna`. Follow [review mechanics](pr-review-bots.md) for scoped requests.

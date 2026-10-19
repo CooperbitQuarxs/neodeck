@@ -19,8 +19,10 @@ This records classification in progress, not implementation ownership.
    links, estimator/original unit, unresolved questions, and closure proposal.
    Keep these first-pass labels provisional until the comparison pass finishes.
 2. Read and compare against **all open issues**, including already-triaged ones,
-   to find duplicates, incompatible alternatives, and dependencies. Check the
-   upstream tracker at `Shreyans13/omp-deck` for upstream involvement; inspect
+   to find duplicates, incompatible alternatives, and dependencies. Use the
+   paginated inventory in [tracker conventions](issue-tracker.md#conventions),
+   not the first 30 results from a default `gh issue list`. Fetch upstream with
+   the same pagination/filter using `Shreyans13/omp-deck`; inspect
    linked NeoPi contract issues separately. Compare bodies and discussion, not
    titles alone. Check linked PRs' actual merge state and full acceptance; a
    closed unmerged PR or an author's completion claim is not implementation proof.
