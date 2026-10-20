@@ -1,10 +1,7 @@
 # Synchronizing an upstream release
 
-Upstream is `Shreyans13/omp-deck` (GitHub's fork parent). The old
-`bjb2/omp-deck` no longer exists. The existing `upstream` remote still names
-it: its replacement awaits the Captain's answer. Do not silently rewrite the
-remote. Until that answer, fetch and inspect releases using the explicit
-`https://github.com/Shreyans13/omp-deck.git` URL.
+Active upstream is `Shreyans13/omp-deck` (`upstream` remote). Original
+`bjb2/omp-deck` credits are historical provenance, not a release source.
 
 Syncs land on `sync/<date>` through a PR into `nightly`, never directly on
 `main` or `nightly`. Promotion into `main` is separate

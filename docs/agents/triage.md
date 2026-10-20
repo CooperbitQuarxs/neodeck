@@ -21,7 +21,7 @@ This records classification in progress, not implementation ownership.
 2. Read and compare against **all open issues**, including already-triaged ones,
    to find duplicates, incompatible alternatives, and dependencies. Use the
    paginated inventory in [tracker conventions](issue-tracker.md#conventions),
-   not the first 30 results from a default `gh issue list`. Fetch upstream with
+   not the first 30 results from `gh issue list -R PsychedelicShayna/neodeck`. Fetch upstream with
    the same pagination/filter using `Shreyans13/omp-deck`; inspect
    linked NeoPi contract issues separately. Compare bodies and discussion, not
    titles alone. Check linked PRs' actual merge state and full acceptance; a

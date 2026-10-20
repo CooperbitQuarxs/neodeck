@@ -1,8 +1,8 @@
 # Maintaining fork behavior across upstream updates
 
 NPI deck is the `PsychedelicShayna/neodeck` fork of `Shreyans13/omp-deck`.
-The old `bjb2/omp-deck` repository no longer exists; leave the local upstream
-remote unchanged until the Captain decides its replacement.
+The active `upstream` remote targets `Shreyans13/omp-deck`; original
+`bjb2/omp-deck` author/fork credits remain historical provenance.
 
 ## Placement of new behavior
 

@@ -31,7 +31,7 @@ Review the diff and its changes to <behavior>.
 List defects independent of the diff separately under Baseline observations.
 ```
 
-Post with `gh pr comment <number> --repo PsychedelicShayna/neodeck --body-file <file>`.
+Post with `gh pr comment <number> -R PsychedelicShayna/neodeck --body-file <file>`.
 Optional labels describe the requested round and observed result under
 [triage-labels.md](triage-labels.md#review-and-merge); they are not requirements.
 Delegate watching to a cheap poller without waiting or requesting another round.
