@@ -4,11 +4,35 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { migrate } from "./migrate-omp-deck.ts";
+import { migrate, within } from "./migrate-omp-deck.ts";
 import { readManagedEnvFile } from "../apps/server/src/env-store.ts";
 
 const fixtures: string[] = [];
 afterEach(() => { for (const fixture of fixtures.splice(0)) rmSync(fixture, { recursive: true, force: true }); });
+
+for (const [name, paths, root] of [
+	["POSIX", path.posix, "/fixtures"],
+	["Windows", path.win32, "C:\\fixtures"],
+	["Windows UNC", path.win32, "\\\\server\\share\\fixtures"],
+] as const) {
+	test(`${name} containment accepts descendants without accepting outside paths`, () => {
+		expect(within(root, root, paths)).toBe(true);
+		expect(within(paths.join(root, "legacy", ".omp-deck"), root, paths)).toBe(true);
+		expect(within(paths.join(root, "..cache", "uploads"), root, paths)).toBe(true);
+		expect(within(paths.join(root, "legacy"), root + paths.sep, paths)).toBe(true);
+		expect(within(paths.dirname(root), root, paths)).toBe(false);
+		expect(within(root + "-other", root, paths)).toBe(false);
+		expect(within(paths.join(root, "..", "outside", "uploads"), root, paths)).toBe(false);
+	});
+}
+
+test("Windows containment handles drive roots, mixed separators, casing and different volumes", () => {
+	expect(within("C:\\fixtures\\legacy", "C:\\", path.win32)).toBe(true);
+	expect(within("c:/FIXTURES/legacy/.omp-deck", "C:\\fixtures", path.win32)).toBe(true);
+	expect(within("D:\\fixtures\\legacy", "C:\\fixtures", path.win32)).toBe(false);
+	expect(within("\\\\server\\other\\fixtures\\legacy", "\\\\server\\share\\fixtures", path.win32)).toBe(false);
+	expect(within("\\\\other\\share\\fixtures\\legacy", "\\\\server\\share\\fixtures", path.win32)).toBe(false);
+});
 
 test("backs up WAL, migrates companion files and rewrites only legacy-root paths; a plain rerun is refused and a forced one changes nothing", async () => {
 	const base = mkdtempSync(path.join(os.tmpdir(), "npi-migration-test-"));
@@ -155,6 +179,19 @@ function legacyFixture(prefix: string): { base: string; home: string; target: st
 	db.close();
 	return { base, home, target: path.join(base, "deck") };
 }
+
+test("fixture containment refuses configured paths in a sibling with a matching prefix", async () => {
+	const { base, home, target } = legacyFixture("npi-migration-boundary-test-");
+	const envFile = path.join(home, ".config", "omp-deck", ".env");
+	for (const key of ["OMP_DECK_DATA_DIR", "OMP_DECK_DB_PATH", "OMP_DECK_UPLOADS_ROOT", "TELEGRAM_BRIDGE_DB_PATH"]) {
+		writeFileSync(envFile, `${key}=${path.join(base + "-outside", "state")}\n`);
+		const source = snapshot(home);
+		await expect(migrate(["--from", home, "--apply"], { NPI_DECK_HOME: target })).rejects.toThrow("outside its parent directory");
+		expect(snapshot(home)).toEqual(source);
+		expect(existsSync(target)).toBe(false);
+		expect(existsSync(`${target}.omp-deck-staging`)).toBe(false);
+	}
+});
 
 const crashAfterDeckDb = { afterInstall: (relative: string) => { if (relative === "deck.db") throw new Error("simulated crash"); } };
 
