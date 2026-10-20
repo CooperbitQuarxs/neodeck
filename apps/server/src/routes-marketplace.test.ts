@@ -6,8 +6,8 @@
  * anything that fell back to NeoPi's defaults would write into the user's real
  * registry (`~/.omp/marketplaces.json`, `~/.omp/plugins/`), and NeoPi fixes its
  * home at load. So the fixture tests run in a child `bun test` whose HOME,
- * XDG_* and agent dir are temp dirs, and this process checks that its own
- * default registry paths were not touched while the child ran.
+ * Windows profile selectors, XDG_* and agent dir are temp dirs. This process
+ * checks that its own default registry paths were not touched while the child ran.
  */
 import { afterAll, beforeEach, expect, test } from "bun:test";
 import { lstatSync, mkdirSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
@@ -17,6 +17,7 @@ import * as path from "node:path";
 import type { MarketplaceUpdatesResponse, UpgradePluginResponse } from "@npi-deck/protocol";
 import { loadBackend, resolveBackendSelection, sdk } from "./backend/runtime.ts";
 import { MarketplaceService } from "./marketplace-service.ts";
+import { isolateFixtureHome } from "./fixture-home.ts";
 import { spawnOwnedSync } from "./owned-process.ts";
 import { buildMarketplaceRouter } from "./routes-marketplace.ts";
 
@@ -75,8 +76,8 @@ if (!fixtureRoot) {
 			for (const [key, value] of Object.entries(process.env)) {
 				if (value !== undefined && !/(_API_KEY|_TOKEN|_SECRET)$/.test(key) && !/^(PI_|OMP_|NPI_DECK_)/.test(key)) env[key] = value;
 			}
+			isolateFixtureHome(env, home);
 			Object.assign(env, {
-				HOME: home,
 				XDG_CONFIG_HOME: path.join(home, ".config"),
 				XDG_DATA_HOME: path.join(home, ".local/share"),
 				XDG_STATE_HOME: path.join(home, ".local/state"),
@@ -97,6 +98,7 @@ if (!fixtureRoot) {
 		expect(snapshotDefaults()).toEqual(before);
 	}, 120_000);
 } else {
+	if (os.homedir() !== path.join(fixtureRoot, "home")) throw new Error(`fixture child home escapes isolation: ${os.homedir()}`);
 	const defaults = defaultRegistryPaths();
 	for (const [key, value] of Object.entries(defaults)) {
 		if (!value.startsWith(fixtureRoot)) throw new Error(`fixture child is not isolated: NeoPi's default ${key} is ${value}`);

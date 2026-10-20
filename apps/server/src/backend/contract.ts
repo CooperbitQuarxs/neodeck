@@ -8,8 +8,8 @@
  *
  * The tree is chosen the way the server chooses it (NPI_DECK_BACKEND, else
  * activeBackend in config.yml). The checks run in a child process whose HOME,
- * XDG dirs, cwd and PI_CODING_AGENT_DIR point into a fresh temp dir, with
- * credential and PI_/OMP_/NPI_DECK_ env vars dropped and a dummy openrouter
+ * Windows profile selectors, XDG dirs, cwd and PI_CODING_AGENT_DIR point into
+ * a fresh temp dir, with credential and PI_/OMP_/NPI_DECK_ env vars dropped and a dummy openrouter
  * key so model resolution works without a real account. No check makes a
  * provider request.
  *
@@ -27,6 +27,7 @@ import type { AgentSession, CreateAgentSessionOptions } from "@oh-my-pi/pi-codin
 
 import { MANIFEST, manifestRows, type FeatureSpec, type ModuleSpecifier } from "./manifest.ts";
 import { InProcessAgentBridge } from "../bridge/in-process.ts";
+import { isolateFixtureHome } from "../fixture-home.ts";
 import { spawnOwnedSync } from "../owned-process.ts";
 import { feature, formatDiagnostic, loadBackend, resolveBackendSelection, resolveManifest, sdk } from "./runtime.ts";
 
@@ -42,8 +43,8 @@ if (!process.env.NPI_DECK_CONTRACT_ROOT) {
 	for (const [key, value] of Object.entries(process.env)) {
 		if (value !== undefined && !/(_API_KEY|_TOKEN|_SECRET)$/.test(key) && !/^(PI_|OMP_|NPI_DECK_)/.test(key)) env[key] = value;
 	}
+	isolateFixtureHome(env, home);
 	Object.assign(env, {
-		HOME: home,
 		XDG_CONFIG_HOME: path.join(home, ".config"),
 		XDG_DATA_HOME: path.join(home, ".local/share"),
 		XDG_STATE_HOME: path.join(home, ".local/state"),
@@ -67,6 +68,7 @@ if (!process.env.NPI_DECK_CONTRACT_ROOT) {
 
 const tmp = process.env.NPI_DECK_CONTRACT_ROOT;
 const agentDir = process.env.PI_CODING_AGENT_DIR!;
+if (os.homedir() !== path.join(tmp, "home")) throw new Error(`contract child home escapes isolation: ${os.homedir()}`);
 const selection = resolveBackendSelection();
 
 interface Check {
