@@ -155,7 +155,8 @@ test("actual upstream envelopes survive arbitrary false/zero/null/empty/truthy r
 
 test("invalid resolved card metadata/state/generic object values fail before mutations", async () => {
 	setup(); const before = listTasks({ includeArchived: true }).length;
-	for (const request of [{ title: "bad", unsupported: true }, { title: "bad", properties: { "read-only": "yes" } }, { title: "bad", properties: { worktree: false } }, { title: "bad", stateId: "missing" }, { title: 0 }, { title: "bad", archived: "yes" }]) {
+	const requests: GraphObject[] = [{ title: "bad", unsupported: true }, { title: "bad", properties: { "read-only": "yes" } }, { title: "bad", properties: { worktree: false } }, { title: "bad", stateId: "missing" }, { title: 0 }, { title: "bad", archived: "yes" }];
+	for (const request of requests) {
 		const routine = createGraphRoutine({ name: "invalid", graph: flow("action.create-card", request) }, runner.graphRegistry);
 		await runner.fire(routine.id, "manual", { id: "event" }); expect(trace(routine.id).status).toBe("failed"); expect(action(trace(routine.id)).inputs).toHaveLength(1);
 	}
@@ -395,7 +396,7 @@ test("privacy-safe card receipts keep downstream requests identical after restar
 	expect(trace(routine.id).status).toBe("success");
 	expect(action(trace(routine.id)).effects![0]).toMatchObject({ replayed: true, receipt });
 	expect(listTasks().filter(card => card.title === "Stable downstream")).toEqual([downstream]);
-	expect(downstream.body).toBe(receipt.body);
+	expect<GraphValue | undefined>(downstream.body).toBe(receipt.body);
 	expect(downstream.body).toContain("[redacted]");
 	expect(downstream.body).not.toContain("private-replay-password");
 	expect(listTasks().find(card => card.title === "Private source")!.body).toContain("private-replay-password");
