@@ -18,7 +18,7 @@ function recordedTree(options?: FakeTreeOptions): string {
 	const root = tempDir("npi-deck-probe-tree-");
 	roots.push(root);
 	const tree = fakeNeoPiTree(path.join(root, "tree"), options);
-	writeFileSync(path.join(tree, MODERN), fakeAddon("probe"));
+	writeFileSync(path.join(tree, MODERN), fakeAddon("probe", options?.nativeVersionFormat));
 	writeNativeRecord(tree, {
 		inputs: nativeInputsFingerprint(tree)!,
 		platform: FAKE_PLATFORM,
@@ -69,9 +69,11 @@ test("refuses unprepared candidate before importing SDK modules", async () => {
 	} finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("accepts the initial native record before checking the fake tree's missing SDK exports", async () => {
-	expect(await refusal(recordedTree())).toContain("missing required SDK surface");
-});
+for (const format of ["legacy", "stamp"] as const) {
+	test(`accepts the ${format} native record before checking the fake tree's missing SDK exports`, async () => {
+		expect(await refusal(recordedTree({ nativeVersionFormat: format }))).toContain("missing required SDK surface");
+	});
+}
 
 // quarantined: flaky on Windows, tracked by #198
 test.skipIf(process.platform === "win32")("refuses a Bun older than the tree's engines.bun", async () => {
@@ -85,15 +87,17 @@ test("refuses an addon without a fingerprint record", async () => {
 	expect(await refusal(tree)).toContain("no fingerprint record");
 });
 
-test("refuses a recorded addon once the tree's native inputs change, though its sentinel still matches", async () => {
-	const tree = recordedTree();
-	writeFileSync(path.join(tree, "Cargo.lock"), "version = 4\n# bumped\n");
-	commitAll(tree, "bump lock");
-	expect(await refusal(tree)).toContain("native inputs changed");
-});
+for (const format of ["legacy", "stamp"] as const) {
+	test(`refuses a ${format} addon once native inputs change, though its release still matches`, async () => {
+		const tree = recordedTree({ nativeVersionFormat: format });
+		writeFileSync(path.join(tree, "Cargo.lock"), "version = 4\n# bumped\n");
+		commitAll(tree, "bump lock");
+		expect(await refusal(tree)).toContain("native inputs changed");
+	});
 
-test("refuses an addon replaced after it was recorded", async () => {
-	const tree = recordedTree();
-	writeFileSync(path.join(tree, MODERN), fakeAddon("swapped"));
-	expect(await refusal(tree)).toContain("the recorded addon is sha256");
-});
+	test(`refuses a ${format} addon replaced after it was recorded`, async () => {
+		const tree = recordedTree({ nativeVersionFormat: format });
+		writeFileSync(path.join(tree, MODERN), fakeAddon("swapped", format));
+		expect(await refusal(tree)).toContain("the recorded addon is sha256");
+	});
+}

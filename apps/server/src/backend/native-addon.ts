@@ -1,7 +1,7 @@
 /**
  * Provenance of a NeoPi tree's `pi_natives` addon and the Bun engine gate.
  *
- * The version sentinel (`__piNativesV18_3_2`) is shared by every commit of a release, so it
+ * The release identity (current version stamp or legacy sentinel) is shared by every commit of a release, so it
  * cannot tell a stale addon from a matching one. A fingerprint of the native build inputs
  * can: scripts/neopi-setup.ts records, per tree, which addon bytes were built (or reused)
  * for which inputs, platform and CPU variant, and the backend probe re-checks that record.
@@ -27,6 +27,7 @@ export const NATIVE_INPUTS = [
 	"rust-toolchain.toml",
 	".cargo",
 	"scripts/bazel-natives.ts",
+	"scripts/stamp-native-version.ts",
 	"scripts/host-detect*",
 	"BUILD.bazel",
 	"MODULE.bazel",
@@ -70,13 +71,16 @@ export interface NativeExpectation {
 	packageVersion: string;
 }
 
-export function versionSentinel(packageVersion: string): string {
+function versionSentinel(packageVersion: string): string {
 	return `__piNativesV${packageVersion.replace(/[^A-Za-z0-9]/g, "_")}`;
 }
 
-/** Exact identifier-boundary match, mirroring packages/natives/native/version-sentinel.js. */
-export function containsSentinel(bytes: Uint8Array, expected: string): boolean {
+/** Exact release identity, matching NeoPi's post-link stamp and pre-stamp export contracts. */
+export function containsNativeVersion(bytes: Uint8Array, version: string): boolean {
+	if (!version || version.includes("\0")) return false;
 	const buffer = Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+	if (buffer.indexOf(Buffer.from(`PI_NATIVES_VERSION_STAMP:${version}\0`, "utf8")) !== -1) return true;
+	const expected = versionSentinel(version);
 	let offset = 0;
 	while (offset < buffer.length) {
 		const index = buffer.indexOf(expected, offset, "latin1");

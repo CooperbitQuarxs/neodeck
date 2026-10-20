@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { readFileSync, rmSync, writeFileSync } from "node:fs";
 import * as path from "node:path";
 import { fakeAddon, fakeNeoPiTree, FAKE_PLATFORM, FAKE_VERSION, tempDir, type FakeTreeOptions } from "../../../../scripts/fake-neopi-tree.ts";
-import { loadedAddonProblem, nativeInputsFingerprint, sha256, type NativeRecord } from "./native-addon.ts";
+import { containsNativeVersion, loadedAddonProblem, nativeInputsFingerprint, sha256, type NativeRecord } from "./native-addon.ts";
 
 const NATIVE = "packages/natives/native";
 const roots: string[] = [];
@@ -21,6 +21,32 @@ function edit(tree: string, file: string, change: (text: string) => string): voi
 	writeFileSync(full, change(readFileSync(full, "utf8")));
 }
 
+describe("native release identity", () => {
+	for (const format of ["legacy", "stamp"] as const) {
+		test(`accepts only the exact ${format} release`, () => {
+			const bytes = Buffer.from(fakeAddon("release", format, "18.10.3"));
+			expect(containsNativeVersion(bytes, "18.10.3")).toBe(true);
+			expect(containsNativeVersion(bytes, "18.10")).toBe(false);
+			expect(containsNativeVersion(bytes, "18.10.30")).toBe(false);
+			expect(containsNativeVersion(bytes, "")).toBe(false);
+			expect(containsNativeVersion(bytes, "18.10.3\0")).toBe(false);
+		});
+	}
+
+	test("rejects an unstamped build, missing NUL terminator, and longer versions", () => {
+		for (const content of [
+			"__piNativesBuildVersion",
+			"PI_NATIVES_VERSION_STAMP:",
+			"PI_NATIVES_VERSION_STAMP:18.10.3",
+			"PI_NATIVES_VERSION_STAMP:18.10.30\0",
+			"__piNativesV18_10_30\0",
+			"__piNativesV18_10_3_suffix\0",
+		]) {
+			expect(containsNativeVersion(Buffer.from(content), "18.10.3")).toBe(false);
+		}
+	});
+});
+
 test("fingerprints a worktree root but refuses its native-input subdirectory", () => {
 	const tree = fakeTree();
 	expect(nativeInputsFingerprint(tree)).toBeString();
@@ -31,6 +57,7 @@ describe.skipIf(process.platform === "win32")("native input fingerprint", () => 
 	test("covers the build recipe: the native build driver, host detection, Bazel config and the build:native script", () => {
 		for (const [file, change] of [
 			["scripts/bazel-natives.ts", (text: string) => `${text}// tweak\n`],
+			["scripts/stamp-native-version.ts", (text: string) => `${text}// tweak\n`],
 			["scripts/host-detect.ts", (text: string) => `${text}// tweak\n`],
 			["BUILD.bazel", (text: string) => `${text}# tweak\n`],
 			[".bazelversion", () => "9.0.0\n"],
