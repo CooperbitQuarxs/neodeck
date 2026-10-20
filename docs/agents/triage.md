@@ -38,6 +38,7 @@ claims, linked merged PRs, review receipts and replies, promotion state, and
 remaining acceptance. Correct stale labels from evidence. The built-in commit
 role (`@commit`, resolved at runtime) performs reconciliation until a dedicated
 triage role is chosen; this policy does not install a scheduler or webhook.
+Each pass also checks open issues against merged PR bodies (`Fixes`/`Closes`) and upstream changelog entries since the last sync, marking work fixed by our own merges `agent: finished` and commenting with the PR and nightly SHA as evidence, closing only when the existing acceptance and promotion requirements allow, and commenting "fixed upstream in <version>, lands with the next sync" on those fixed upstream.
 Daily triage adds `upstream` to a promotion proposal only when that proposal actually carries a `sync/` merge; the promotion workflow does not detect or apply upstream involvement.
 Daily, after `git fetch --prune origin`, list orphan topic branches from `git branch -r --no-merged origin/nightly`, excluding remote HEAD/default/integration refs and branches with an open PR (match the paginated open-PR inventory by head repository and branch).
 
