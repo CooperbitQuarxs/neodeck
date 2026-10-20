@@ -21,6 +21,12 @@ function edit(tree: string, file: string, change: (text: string) => string): voi
 	writeFileSync(full, change(readFileSync(full, "utf8")));
 }
 
+test("fingerprints a worktree root but refuses its native-input subdirectory", () => {
+	const tree = fakeTree();
+	expect(nativeInputsFingerprint(tree)).toBeString();
+	expect(nativeInputsFingerprint(path.join(tree, "packages/natives"))).toBeNull();
+});
+
 describe.skipIf(process.platform === "win32")("native input fingerprint", () => {
 	test("covers the build recipe: the native build driver, host detection, Bazel config and the build:native script", () => {
 		for (const [file, change] of [

@@ -9,7 +9,7 @@
  * The record is local bookkeeping, not authentication: anyone who can write the tree can
  * write a record. It catches stale and swapped addons, not forged records.
  */
-import { existsSync, lstatSync, mkdirSync, readFileSync, readlinkSync, realpathSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, readFileSync, readlinkSync, realpathSync, statSync, writeFileSync } from "node:fs";
 import * as path from "node:path";
 import { spawnOwnedSync } from "../owned-process.ts";
 
@@ -119,7 +119,12 @@ function git(root: string, args: string[]): string | null {
  */
 export function nativeInputsFingerprint(root: string): string | null {
 	const top = git(root, ["rev-parse", "--show-toplevel"])?.trim();
-	if (!top || realpathSync(top) !== realpathSync(root)) return null;
+	if (!top) return null;
+	// Windows Git expands 8.3 aliases while Bun's realpathSync can retain them.
+	// Compare directory identity, not the spelling of the two paths.
+	const rootStat = statSync(root, { bigint: true });
+	const topStat = statSync(top, { bigint: true });
+	if (rootStat.dev !== topStat.dev || rootStat.ino !== topStat.ino) return null;
 	const excludes = GENERATED_BINDINGS.map(file => `:(exclude)${file}`);
 	const listing = git(root, ["ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", ...NATIVE_INPUTS, ...excludes]);
 	if (listing === null) return null;

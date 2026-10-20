@@ -1,9 +1,10 @@
 import { afterEach, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { commitAll, fakeAddon, fakeNeoPiTree, FAKE_PLATFORM, FAKE_VERSION, tempDir, type FakeTreeOptions } from "../../../../scripts/fake-neopi-tree.ts";
-import { NATIVE_RECORD, nativeInputsFingerprint, sha256, writeNativeRecord } from "./native-addon.ts";
+import { spawnOwnedSync } from "../owned-process.ts";
+import { GENERATED_BINDINGS, NATIVE_INPUTS, NATIVE_RECORD, nativeInputsFingerprint, readNativeRecord, sha256, writeNativeRecord } from "./native-addon.ts";
 import { preflight } from "./probe.ts";
 
 const MODERN = `packages/natives/native/pi_natives.${FAKE_PLATFORM}-modern.node`;
@@ -27,6 +28,26 @@ function recordedTree(options?: FakeTreeOptions): string {
 		provenance: "built",
 		source: path.join(tree, MODERN),
 	});
+	if (!readNativeRecord(tree)) {
+		const commands = [
+			["rev-parse", "--show-toplevel"],
+			["ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", ...NATIVE_INPUTS, ...GENERATED_BINDINGS.map(file => `:(exclude)${file}`)],
+		];
+		const git = commands.map(args => {
+			const result = spawnOwnedSync(["git", "-C", tree, ...args], { stdout: "pipe", stderr: "pipe" });
+			return { args, exitCode: result.exitCode, stdout: result.stdout.toString(), stderr: result.stderr.toString() };
+		});
+		const top = git[0]!.stdout.trim();
+		console.error("rejected native record fixture", JSON.stringify({
+			tree,
+			realTree: realpathSync(tree),
+			realTop: top ? realpathSync(top) : null,
+			record: JSON.parse(readFileSync(path.join(tree, NATIVE_RECORD), "utf8")),
+			packageJson: readFileSync(path.join(tree, "package.json"), "utf8"),
+			git,
+		}));
+	}
+	expect(readNativeRecord(tree)?.inputs).toBeString();
 	return tree;
 }
 
@@ -46,6 +67,10 @@ test("refuses unprepared candidate before importing SDK modules", async () => {
 		if (result.ok) throw new Error("unprepared backend unexpectedly passed preflight");
 		expect(result.reason).toContain("tree not prepared: node_modules missing");
 	} finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("accepts the initial native record before checking the fake tree's missing SDK exports", async () => {
+	expect(await refusal(recordedTree())).toContain("missing required SDK surface");
 });
 
 // quarantined: flaky on Windows, tracked by #198
