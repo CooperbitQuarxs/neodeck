@@ -55,6 +55,7 @@ All notable changes to NPI deck (a fork of bjb2/omp-deck; entries before the for
 
 ### Fixed
 
+- Routine and webhook regression fixtures use the native shell on Windows and POSIX without interpreting marker paths as shell syntax ([#174](https://github.com/PsychedelicShayna/neodeck/issues/174)).
 - Legacy-state migration accepts Windows fixture descendants while retaining outside-path and symlink protections ([#167](https://github.com/PsychedelicShayna/neodeck/issues/167)).
 - Mixture saves and removals no longer fail on Windows when directory fsync is unsupported; file contents still sync before replacement ([#170](https://github.com/PsychedelicShayna/neodeck/issues/170)).
 - Real-backend tests establish private home, agent and storage directories before the first SDK import, including on Windows ([#176](https://github.com/PsychedelicShayna/npi-deck/issues/176)).

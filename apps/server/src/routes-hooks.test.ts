@@ -11,6 +11,7 @@ import { initializeOwnedGeneration, stopOwnedProcesses } from "./owned-process.t
 import { buildHooksRouter, REPLAY_WINDOW_SECS } from "./routes-hooks.ts";
 import { buildRoutinesRouter } from "./routes-routines.ts";
 import { RoutinesRunner } from "./routines-runner.ts";
+import { createShellFixture } from "./routines/shell-fixture.ts";
 
 const SECRET = "hook-secret";
 const BODY = JSON.stringify({ key: "value" });
@@ -68,10 +69,11 @@ function setup(enabled: boolean, registration: "current" | "pre-upgrade" = "curr
 	initializeOwnedGeneration();
 	const marker = path.join(home, "fired");
 	const hookPath = `/hooks/test-${crypto.randomUUID()}`;
+	const shell = createShellFixture(home);
 	const spec = {
 		version: 1, name: "hooked", concurrency: "skip",
 		trigger: [{ webhook: { path: hookPath, secret_env: "HOOK_SECRET" } }],
-		steps: [{ id: "write", type: "run", command: `echo yes > '${marker}'` }],
+		steps: [{ id: "write", type: "run", cwd: shell.cwd, command: shell.command("write", { marker, bytes: "yes", newline: true }) }],
 	} as RoutineSpec;
 	const routine = createV1Routine({ name: `hooked-${crypto.randomUUID()}`, spec, specYaml: JSON.stringify(spec), enabled });
 	if (registration === "current") {

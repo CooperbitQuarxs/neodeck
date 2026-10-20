@@ -8,6 +8,7 @@ import { listStepRuns } from "../db/routine-step-runs.ts";
 import { createRoutine, createV1Routine, getRoutine, listRuns, updateV1Routine } from "../db/routines.ts";
 import { RoutineTestFixtures } from "./test-fixture.ts";
 import { createIsolatedTest, isIsolatedCase } from "../test-isolation.ts";
+import { createShellFixture } from "./shell-fixture.ts";
 
 const isolatedTest = createIsolatedTest(import.meta.path);
 const fixtures = new RoutineTestFixtures();
@@ -30,7 +31,8 @@ if (isIsolatedCase(import.meta.path)) {
 test("queue holds second invocation until first finishes, then releases the busy state", async ({ home, runner }) => {
 	const marker = path.join(home, "marker");
 	const release = path.join(home, "release");
-	const r = routine(spec([{ id: "wait", type: "run", command: `echo start >> '${marker}'; until test -f '${release}'; do sleep .05; done; echo end >> '${marker}'` }], "queue"));
+	const shell = createShellFixture(home);
+	const r = routine(spec([{ id: "wait", type: "run", cwd: shell.cwd, command: shell.command("hold", { marker, release }) }], "queue"));
 	const first = runner.fire(r.id);
 	for (let i = 0; i < 60 && !fs.existsSync(marker); i++) await Bun.sleep(25);
 	expect(fs.existsSync(marker)).toBe(true);
@@ -77,7 +79,8 @@ test("run-duration budget preempts a longer step deadline and its child group", 
 
 test("disabled webhook does not execute, successful webhook persists payload", async ({ home, runner }) => {
 	const marker = path.join(home, "webhook");
-	const s = spec([{ id: "write", type: "run", command: `echo yes > '${marker}'` }]);
+	const shell = createShellFixture(home);
+	const s = spec([{ id: "write", type: "run", cwd: shell.cwd, command: shell.command("write", { marker, bytes: "yes", newline: true }) }]);
 	const disabled = routine(s, false);
 	await runner.fire(disabled.id, "webhook", { key: "forbidden" });
 	expect(fs.existsSync(marker)).toBe(false);
@@ -90,7 +93,8 @@ test("disabled webhook does not execute, successful webhook persists payload", a
 
 test("every trigger kind stores a bounded, parseable payload while its steps still see the full input", async ({ home, runner }) => {
 	const marker = path.join(home, "seen");
-	const r = routine(spec([{ id: "write", type: "run", command: `echo '{{ trigger.tag }}' >> '${marker}'` }], "parallel"));
+	const shell = createShellFixture(home);
+	const r = routine(spec([{ id: "write", type: "run", cwd: shell.cwd, command: shell.command("write", { marker, append: true, newline: true }, "{{ trigger.tag }}") }], "parallel"));
 	// The blob precedes the tag, so only the full in-memory payload still carries the tag.
 	const payload = { blob: "\"x\"".repeat(40_000), tag: "tail-marker" };
 	for (const trigger of ["cron", "webhook", "event", "manual"] as const) await runner.fire(r.id, trigger, payload);
@@ -108,7 +112,8 @@ test("every trigger kind stores a bounded, parseable payload while its steps sti
 
 test("a large payload's credential is redacted before truncation while its step still receives it", async ({ home, runner }) => {
 	const marker = path.join(home, "credential");
-	const r = routine(spec([{ id: "write", type: "run", command: `echo '{{ trigger.client_secret }}' > '${marker}'` }]));
+	const shell = createShellFixture(home);
+	const r = routine(spec([{ id: "write", type: "run", cwd: shell.cwd, command: shell.command("write", { marker, newline: true }, "{{ trigger.client_secret }}") }]));
 	// The credential comes first, so an unredacted preview would carry it.
 	const payload = { client_secret: "cs-live-value", blob: "z".repeat(50_000) };
 	await runner.fire(r.id, "manual", payload);
@@ -122,7 +127,8 @@ test("a large payload's credential is redacted before truncation while its step 
 
 test("disabled routine ignores cron and event triggers but still runs manually", async ({ home, runner }) => {
 	const marker = path.join(home, "disabled");
-	const r = routine(spec([{ id: "write", type: "run", command: `echo ran >> '${marker}'` }]), false);
+	const shell = createShellFixture(home);
+	const r = routine(spec([{ id: "write", type: "run", cwd: shell.cwd, command: shell.command("write", { marker, bytes: "ran", append: true, newline: true }) }]), false);
 	for (const trigger of ["cron", "event"] as const) await runner.fire(r.id, trigger, { source: "deck_inbox" });
 	expect(fs.existsSync(marker)).toBe(false);
 	expect(listRuns(r.id)).toHaveLength(0);
@@ -132,13 +138,14 @@ test("disabled routine ignores cron and event triggers but still runs manually",
 });
 
 test("abort and continue run only once despite a retained retry block", async ({ home, runner }) => {
+	const shell = createShellFixture(home);
 	for (const mode of ["abort", "continue"] as const) {
 		const attemptsFile = path.join(home, `attempts-${mode}`);
 		const nextFile = path.join(home, `next-${mode}`);
 		const r = routine(spec([
-			{ id: "fail", type: "run", command: `echo attempted >> '${attemptsFile}'; exit 7`,
+			{ id: "fail", type: "run", cwd: shell.cwd, command: shell.command("write", { marker: attemptsFile, bytes: "attempted", append: true, newline: true, exitCode: 7 }),
 				on_failure: mode, retry: { times: 3, backoff: "linear", max_delay_secs: 0 } },
-			{ id: "next", type: "run", command: `echo reached > '${nextFile}'` },
+			{ id: "next", type: "run", cwd: shell.cwd, command: shell.command("write", { marker: nextFile, bytes: "reached", newline: true }) },
 		]));
 		await runner.fire(r.id);
 		expect(fs.readFileSync(attemptsFile, "utf8").trim().split("\n")).toEqual(["attempted"]);
@@ -153,10 +160,12 @@ test("abort and continue run only once despite a retained retry block", async ({
 
 test("continue ignores retry policy and cancellation during retry backoff prevents next attempt", async ({ home, runner }) => {
 	const marker = path.join(home, "attempts");
-	const r = routine(spec([{ id: "fail", type: "run", command: `echo attempt >> '${marker}'; exit 7`, retry: { times: 3, backoff: "linear", max_delay_secs: 1 }, on_failure: "continue" }]));
+	const shell = createShellFixture(home);
+	const command = shell.command("write", { marker, bytes: "attempt", append: true, newline: true, exitCode: 7 });
+	const r = routine(spec([{ id: "fail", type: "run", cwd: shell.cwd, command, retry: { times: 3, backoff: "linear", max_delay_secs: 1 }, on_failure: "continue" }]));
 	await runner.fire(r.id);
 	expect(fs.readFileSync(marker, "utf8").trim().split("\n")).toHaveLength(1);
-	const retry = routine(spec([{ id: "fail", type: "run", command: `echo attempt >> '${marker}'; exit 7`, retry: { times: 3, backoff: "linear", max_delay_secs: 2 }, on_failure: "retry" }]));
+	const retry = routine(spec([{ id: "fail", type: "run", cwd: shell.cwd, command, retry: { times: 3, backoff: "linear", max_delay_secs: 2 }, on_failure: "retry" }]));
 	const running = runner.fire(retry.id);
 	for (let i = 0; i < 40 && fs.readFileSync(marker, "utf8").trim().split("\n").length < 2; i++) await Bun.sleep(25);
 	await runner.dispose();
@@ -165,8 +174,9 @@ test("continue ignores retry policy and cancellation during retry backoff preven
 	expect(listRuns(retry.id)[0]?.abortReason).toBe("cancelled");
 });
 
-test("multi-cron next run remains the earliest after a manual run", async ({ runner }) => {
-	const s = spec([{ id: "fast", type: "run", command: "true" }]);
+test("multi-cron next run remains the earliest after a manual run", async ({ home, runner }) => {
+	const shell = createShellFixture(home);
+	const s = spec([{ id: "fast", type: "run", cwd: shell.cwd, command: shell.command("success") }]);
 	s.trigger = [{ cron: "0 0 1 1 *" }, { cron: "* * * * *" }];
 	const r = routine(s);
 	runner.schedule(r);
@@ -179,8 +189,9 @@ test("multi-cron next run remains the earliest after a manual run", async ({ run
 	expect(new Date(after!).getTime() - Date.now()).toBeLessThan(61_000);
 });
 
-test("disabling a cron routine clears next run, and a manual run while disabled does not restore it", async ({ runner }) => {
-	const s = spec([{ id: "fast", type: "run", command: "true" }]);
+test("disabling a cron routine clears next run, and a manual run while disabled does not restore it", async ({ home, runner }) => {
+	const shell = createShellFixture(home);
+	const s = spec([{ id: "fast", type: "run", cwd: shell.cwd, command: shell.command("success") }]);
 	s.trigger = [{ cron: "* * * * *" }];
 	const r = routine(s);
 	runner.schedule(r);
@@ -196,8 +207,9 @@ test("disabling a cron routine clears next run, and a manual run while disabled 
 test("legacy shell routines also queue before spawning and drain on shutdown", async ({ home, runner }) => {
 	const marker = path.join(home, "legacy");
 	const release = path.join(home, "release");
-	const r = createRoutine({ name: "legacy", cron: "", actionKind: "bash",
-		actionBody: `echo start >> '${marker}'; until test -f '${release}'; do sleep .05; done; echo end >> '${marker}'` });
+	const shell = createShellFixture(home);
+	const r = createRoutine({ name: "legacy", cron: "", actionKind: "bash", actionCwd: shell.cwd,
+		actionBody: shell.command("hold", { marker, release }) });
 	getDb().query("UPDATE routines SET concurrency = 'queue' WHERE id = ?").run(r.id);
 	const first = runner.fire(r.id);
 	for (let i = 0; i < 60 && !fs.existsSync(marker); i++) await Bun.sleep(25);
@@ -214,8 +226,9 @@ test("legacy shell routines also queue before spawning and drain on shutdown", a
 test("skip leaves only the admitted run executing; parallel admits both", async ({ home, runner }) => {
 	const marker = path.join(home, "modes");
 	const release = path.join(home, "release");
-	const command = `echo start >> '${marker}'; until test -f '${release}'; do sleep .05; done; echo end >> '${marker}'`;
-	const skip = routine(spec([{ id: "hold", type: "run", command }], "skip"));
+	const shell = createShellFixture(home);
+	const command = shell.command("hold", { marker, release });
+	const skip = routine(spec([{ id: "hold", type: "run", cwd: shell.cwd, command }], "skip"));
 	const first = runner.fire(skip.id);
 	for (let i = 0; i < 60 && !fs.existsSync(marker); i++) await Bun.sleep(25);
 	await runner.fire(skip.id);
@@ -225,7 +238,7 @@ test("skip leaves only the admitted run executing; parallel admits both", async 
 	await first;
 	fs.unlinkSync(release);
 	fs.writeFileSync(marker, "");
-	const parallel = routine(spec([{ id: "hold", type: "run", command }], "parallel"));
+	const parallel = routine(spec([{ id: "hold", type: "run", cwd: shell.cwd, command }], "parallel"));
 	const a = runner.fire(parallel.id);
 	const b = runner.fire(parallel.id);
 	for (let i = 0; i < 80 && fs.readFileSync(marker, "utf8").trim().split("\n").filter(Boolean).length < 2; i++) await Bun.sleep(25);
@@ -238,8 +251,9 @@ test("skip leaves only the admitted run executing; parallel admits both", async 
 test("cancel-previous kills the running child before the replacement finishes", async ({ home, runner }) => {
 	const marker = path.join(home, "cancel");
 	const release = path.join(home, "release");
-	const r = routine(spec([{ id: "hold", type: "run",
-		command: `echo start >> '${marker}'; until test -f '${release}'; do sleep .05; done; echo end >> '${marker}'`,
+	const shell = createShellFixture(home);
+	const r = routine(spec([{ id: "hold", type: "run", cwd: shell.cwd,
+		command: shell.command("hold", { marker, release }),
 	}], "cancel-previous"));
 	const first = runner.fire(r.id);
 	for (let i = 0; i < 60 && !fs.existsSync(marker); i++) await Bun.sleep(25);
@@ -323,7 +337,8 @@ process.stdout.write(JSON.stringify({type: "agent_end", messages: [message]}) + 
 	expect(fs.readFileSync(marker, "utf8").trim().split("\n")).toEqual(["backend-a", "backend-a"]);
 	expect(selections).toBe(1);
 	expect(run.backend).toEqual({ path: path.join(home, "backend-a", "cli.ts"), commit: null, version: null });
-	const deckOnly = routine(spec([{ id: "local", type: "run", command: "true" }]));
+	const shell = createShellFixture(home);
+	const deckOnly = routine(spec([{ id: "local", type: "run", cwd: shell.cwd, command: shell.command("success") }]));
 	await runner.fire(deckOnly.id);
 	expect(listRuns(deckOnly.id)[0]?.backend).toBeUndefined();
 }, undefined, home => [process.execPath, path.join(home, ++selections === 1 ? "backend-a" : "backend-b", "cli.ts")]);
