@@ -19,13 +19,13 @@
  * Env NPI_DECK_HOME overrides ~/.npi-deck.
  *
  * Steps: worktree (idempotent) → Bun engine gate → frozen install (unless skipped) → gen:tool-views →
- * native addon (version sentinel + fingerprint of its native inputs, platform, CPU variant and
+ * native addon (release stamp or legacy sentinel + fingerprint of its native inputs, platform, CPU variant and
  * file sha256, recorded in <tree>/node_modules/.npi-deck/native-addon.json) →
  * register in <home>/config.yml → tsconfig.neopi.json.
  *
  * An addon is reused only when its recorded (or, for an unrecorded addon inside another
  * checkout, that checkout's) native-input fingerprint equals this tree's; a mismatch needs
- * a matching --native-dir or --build-native, even when the version sentinel is the same.
+ * a matching --native-dir or --build-native, even when the release version is the same.
  */
 import {
 	copyFileSync,
@@ -47,13 +47,12 @@ import {
 	addonProvenance,
 	addonTarget,
 	bunEngineProblem,
-	containsSentinel,
+	containsNativeVersion,
 	NATIVE_RECORD,
 	nativeInputsFingerprint,
 	nativeRecordMismatches,
 	readNativeRecord,
 	sha256,
-	versionSentinel,
 	writeNativeRecord,
 	type Evidence,
 	type NativeExpectation,
@@ -171,7 +170,6 @@ run(["bun", "run", "gen:tool-views"], tree);
 const packageVersion = (JSON.parse(readFileSync(path.join(tree, "packages/natives/package.json"), "utf8")) as {
 	version: string;
 }).version;
-const sentinel = versionSentinel(packageVersion);
 // Ask the tree's own loader which files it would try, in order (variant, platform tag, dirs).
 const loaderState = (await import(path.join(tree, "packages/natives/native/loader-state.js"))) as {
 	initLoaderContext(): {
@@ -192,7 +190,7 @@ const want: NativeExpectation = {
 	packageVersion,
 };
 step(
-	`native addon: need sentinel ${sentinel}, native inputs ${treeInputs.slice(0, 12)}, ` +
+	`native addon: need release ${packageVersion} stamp or legacy sentinel, native inputs ${treeInputs.slice(0, 12)}, ` +
 		`${ctx.platformTag}${ctx.selectedVariant ? ` ${ctx.selectedVariant}` : ""}; loader tries ${ctx.addonFilenames.join(", ")}`,
 );
 const ownRecord = readNativeRecord(tree);
@@ -217,7 +215,7 @@ interface Assessment {
 function assess(file: string, loadName: string, allowDerived: boolean): Assessment {
 	const bytes = readFileSync(file);
 	const bytesSha = sha256(bytes);
-	if (!containsSentinel(bytes, sentinel)) return { record: null, evidence: null, bytesSha, problems: [`lacks ${sentinel}`] };
+	if (!containsNativeVersion(bytes, packageVersion)) return { record: null, evidence: null, bytesSha, problems: [`lacks release ${packageVersion} stamp or legacy sentinel`] };
 	if (ownRecord?.sha256 === bytesSha) {
 		const problems = nativeRecordMismatches(ownRecord, loadName, bytesSha, want);
 		if (problems.length === 0) return { record: ownRecord, evidence: "own-record", bytesSha, problems };
@@ -313,7 +311,7 @@ if (!verified) {
 		run(buildCmd, tree);
 		const file = builtAddon(builtSince);
 		const bytes = readFileSync(file);
-		if (!containsSentinel(bytes, sentinel)) die(`build:native wrote ${file}, which lacks ${sentinel}`);
+		if (!containsNativeVersion(bytes, packageVersion)) die(`build:native wrote ${file}, which lacks release ${packageVersion} stamp or legacy sentinel`);
 		// Same fingerprint, computed the same way, before and after: the build must not move its own inputs.
 		const after = nativeInputsFingerprint(tree);
 		if (after !== treeInputs) {
@@ -327,7 +325,7 @@ if (!verified) {
 		verified = { file, record, evidence: "own-record" };
 	} else {
 		die(
-			`no pi_natives addon matching this tree (${sentinel}, native inputs ${treeInputs.slice(0, 12)}) in: ${searchDirs.join(", ") || "(no --native-dir)"}\n` +
+			`no pi_natives addon matching this tree (release ${packageVersion}, native inputs ${treeInputs.slice(0, 12)}) in: ${searchDirs.join(", ") || "(no --native-dir)"}\n` +
 				`Build one (cold Rust build) with:\n  (cd ${tree} && ${buildCmd.join(" ")})\n` +
 				"or re-run with --build-native, or point --native-dir at a matching build.",
 		);

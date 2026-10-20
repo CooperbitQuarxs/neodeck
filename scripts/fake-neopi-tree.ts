@@ -22,6 +22,8 @@ export interface FakeTreeOptions {
 	crate?: string;
 	/** Addon filenames the fake loader fails to load, falling back to the next candidate. */
 	failLoad?: string[];
+	/** Release identity written by the fake build. */
+	nativeVersionFormat?: "legacy" | "stamp";
 }
 
 const GIT_ENV = {
@@ -54,9 +56,12 @@ function put(root: string, file: string, content: string): void {
 	writeFileSync(path.join(root, file), content);
 }
 
-/** Addon bytes: the sentinel at an identifier boundary, plus a label that makes each build distinct. */
-export function fakeAddon(label: string): string {
-	return `\0${FAKE_SENTINEL}\0${label}\0`;
+/** Addon bytes carrying a release identity, plus a label that makes each build distinct. */
+export function fakeAddon(label: string, format: "legacy" | "stamp" = "legacy", version = FAKE_VERSION): string {
+	const identity = format === "stamp"
+		? `PI_NATIVES_VERSION_STAMP:${version}`.padEnd(64, "\0")
+		: `__piNativesV${version.replace(/[^A-Za-z0-9]/g, "_")}`;
+	return `\0${identity}\0${label}\0`;
 }
 
 function bindingsJs(stamp: string): string {
@@ -116,12 +121,13 @@ export function nativeAddonStatus() {
 		`import * as path from "node:path";
 const native = path.join(import.meta.dir, "../packages/natives/native");
 const stamp = String(Date.now());
-await Bun.write(path.join(native, "${names[0]}"), ${JSON.stringify(fakeAddon("built"))} + stamp);
+await Bun.write(path.join(native, "${names[0]}"), ${JSON.stringify(fakeAddon("built", options.nativeVersionFormat))} + stamp);
 await Bun.write(path.join(native, "index.js"), ${JSON.stringify(bindingsJs("STAMP"))}.replace("STAMP", stamp));
 await Bun.write(path.join(native, "index.d.ts"), "// generated: " + stamp + "\\n");
 `,
 	);
 	put(root, "scripts/host-detect.ts", "export const avx2 = true;\n");
+	put(root, "scripts/stamp-native-version.ts", "// post-link version stamp\n");
 	put(root, "BUILD.bazel", "# natives targets\n");
 	put(root, ".bazelversion", "8.0.0\n");
 	put(root, "crates/pi-natives/src/lib.rs", options.crate ?? "pub fn natives() {}\n");

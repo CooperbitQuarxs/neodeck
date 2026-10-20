@@ -46,6 +46,19 @@ function builtDonor(root: string, options?: FakeTreeOptions): string {
 }
 
 describe.skipIf(process.platform === "win32")("neopi-setup native addon provenance", () => {
+	for (const format of ["legacy", "stamp"] as const) {
+		test(`builds and reuses an addon carrying the ${format} release identity`, () => {
+			const root = scratch();
+			const target = tree(root, "target", { nativeVersionFormat: format });
+			const built = setup(root, target, "--build-native");
+			expect(built.code).toBe(0);
+			expect(record(target).provenance).toBe("built");
+			const reused = setup(root, target);
+			expect(reused.code).toBe(0);
+			expect(record(target).provenance).toBe("built");
+		});
+	}
+
 	test("reuses a donor addon whose checkout has the same native inputs, and records its fingerprint", () => {
 		const root = scratch();
 		const donor = builtDonor(root);

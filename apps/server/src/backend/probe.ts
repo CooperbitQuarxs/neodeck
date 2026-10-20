@@ -8,14 +8,13 @@ import { MANIFEST } from "./manifest.ts";
 import { resolveManifest, formatDiagnostic, type BackendIdentity, type FeatureStatus } from "./runtime.ts";
 import {
 	bunEngineProblem,
-	containsSentinel,
+	containsNativeVersion,
 	loadedAddonProblem,
 	NATIVE_RECORD,
 	nativeInputsFingerprint,
 	nativeRecordMismatches,
 	readNativeRecord,
 	sha256,
-	versionSentinel,
 } from "./native-addon.ts";
 import type { FeatureName } from "./manifest.ts";
 export type ProbeResult =
@@ -31,7 +30,6 @@ async function inspect(tree: string): Promise<ProbeResult> {
 	const engine = bunEngineProblem(tree);
 	if (engine) throw new Error(engine);
 	const packageVersion = (JSON.parse(readFileSync(path.join(tree, "packages/natives/package.json"), "utf8")) as { version: string }).version;
-	const sentinel = versionSentinel(packageVersion);
 	const loaderFile = path.join(tree, "packages/natives/native/loader-state.js");
 	if (!existsSync(loaderFile)) throw new Error("tree not prepared: native loader-state.js missing");
 	const loader = (await import(loaderFile)) as {
@@ -39,9 +37,9 @@ async function inspect(tree: string): Promise<ProbeResult> {
 	};
 	const ctx = loader.initLoaderContext();
 	const candidate = ctx.candidates.find(existsSync);
-	if (!candidate) throw new Error(`tree not prepared: native addon missing (need ${sentinel})`);
+	if (!candidate) throw new Error(`tree not prepared: native addon missing (need release ${packageVersion})`);
 	const bytes = readFileSync(candidate);
-	if (!containsSentinel(bytes, sentinel)) throw new Error(`native addon ${candidate} lacks ${sentinel}`);
+	if (!containsNativeVersion(bytes, packageVersion)) throw new Error(`native addon ${candidate} lacks release ${packageVersion} stamp or legacy sentinel`);
 	const fix = `re-run scripts/neopi-setup.ts --path ${tree}`;
 	const record = readNativeRecord(tree);
 	if (!record) throw new Error(`native addon ${candidate} has no fingerprint record (${NATIVE_RECORD}); ${fix}`);
