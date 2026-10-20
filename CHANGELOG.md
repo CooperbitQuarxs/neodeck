@@ -7,6 +7,10 @@ All notable changes to NPI deck (a fork of bjb2/omp-deck; entries before the for
 
 ### Added
 
+- **Neo design language.** The deck now wears the language NeoPi's `/stats`, `/collab` and `/share` pages share: black chassis, one inset panel, hairline edges, cyan → pink accent, Inter. `Neo` (dark) is the default theme and `Neo light` its twin; Paper, Slate and Horizon stay selectable. Reference: `docs/design/neo-design-language.md`.
+- **New shell and navigation.** A glass topbar with the `NeoPi / deck / Page` lockup, an engine status chip, and a grouped sidebar (Work, Automate, Agents, Library, Connect, Office) with `g` + letter jumps. `/` is a Home page with linked counts and the newest inbox items; chat lives at `/threads` (`/chat` still works).
+- **Planned areas have real pages.** People, GitHub and Flows say what they will be and that they are not built; NeoPi shows the attached engine and the daemon, hosted-thread and dictation plans; Telegram shows live bridge status.
+- Routine editor: the save bar is always visible (it sat below the fold on every tab) and the minimap no longer covers the canvas.
 - A macOS routine-hook probe records native process ownership, output endpoints, signals and EOF for the deadline and duration-budget failures. Run it manually or by pushing a disposable `ci/mac-hook-probe-run/**` branch without promoting nightly to main ([#166](https://github.com/PsychedelicShayna/neodeck/issues/166)).
 - **Inbox-first graph intake** ([#160](https://github.com/PsychedelicShayna/neodeck/issues/160)). Fresh navigation opens Inbox; Chat and Kanban remain one click away. The `inbox: card added` source delivers each committed card once per configured flow/source, keeps the original card in run provenance, and prevents duplicate intake across notifications and restarts.
 - **Reusable native graph actions:** create cards with their stored properties, send to explicit notification channels and file GitHub issues while retaining upstream provenance, durable replay receipts and write-free dry-runs ([#161](https://github.com/PsychedelicShayna/neodeck/issues/161)).

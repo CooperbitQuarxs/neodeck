@@ -7,7 +7,7 @@ import { useCallback, useEffect, useState } from "react";
  * reload still lands on the saved theme.
  */
 
-export type ThemeId = "paper" | "slate" | "horizon";
+export type ThemeId = "neo" | "neo-light" | "paper" | "slate" | "horizon";
 
 export interface ThemeDefinition {
 	id: ThemeId;
@@ -20,6 +20,32 @@ export interface ThemeDefinition {
 }
 
 export const THEMES: ThemeDefinition[] = [
+	{
+		id: "neo",
+		label: "Neo",
+		description: "The NeoPi web language: black chassis, inset panel, cyan → pink accent. Default.",
+		swatchTokens: [
+			{ token: "paper", label: "Page" },
+			{ token: "paper-2", label: "Card" },
+			{ token: "ink", label: "Ink" },
+			{ token: "accent", label: "Accent" },
+		],
+		metaThemeColor: "#000000",
+		colorScheme: "dark",
+	},
+	{
+		id: "neo-light",
+		label: "Neo light",
+		description: "The same language on white paper, for daylight and projectors.",
+		swatchTokens: [
+			{ token: "paper", label: "Page" },
+			{ token: "paper-2", label: "Card" },
+			{ token: "ink", label: "Ink" },
+			{ token: "accent", label: "Accent" },
+		],
+		metaThemeColor: "#f2f2f3",
+		colorScheme: "light",
+	},
 	{
 		id: "paper",
 		label: "Paper",
@@ -78,10 +104,10 @@ function readStoredTheme(): ThemeId | undefined {
 }
 
 function systemPreferredTheme(): ThemeId {
-	if (typeof window !== "undefined" && window.matchMedia?.("(prefers-color-scheme: dark)").matches) {
-		return "slate";
+	if (typeof window !== "undefined" && window.matchMedia?.("(prefers-color-scheme: light)").matches) {
+		return "neo-light";
 	}
-	return "paper";
+	return "neo";
 }
 
 function activeAttribute(): ThemeId {
@@ -110,22 +136,22 @@ export interface UseThemeResult {
 
 export function useTheme(): UseThemeResult {
 	const [active, setActive] = useState<ThemeId>(() =>
-		typeof document === "undefined" ? "paper" : activeAttribute(),
+		typeof document === "undefined" ? "neo" : activeAttribute(),
 	);
 	const [stored, setStored] = useState<ThemeId | undefined>(() =>
 		typeof window === "undefined" ? undefined : readStoredTheme(),
 	);
 	const [systemPreferred, setSystemPreferred] = useState<ThemeId>(() =>
-		typeof window === "undefined" ? "paper" : systemPreferredTheme(),
+		typeof window === "undefined" ? "neo" : systemPreferredTheme(),
 	);
 
 	// React to the OS toggling between light and dark while the app is open.
 	// We only follow it when the user hasn't pinned a choice.
 	useEffect(() => {
 		if (typeof window === "undefined" || !window.matchMedia) return;
-		const mql = window.matchMedia("(prefers-color-scheme: dark)");
+		const mql = window.matchMedia("(prefers-color-scheme: light)");
 		const onChange = (): void => {
-			const next: ThemeId = mql.matches ? "slate" : "paper";
+			const next: ThemeId = mql.matches ? "neo-light" : "neo";
 			setSystemPreferred(next);
 			if (!readStoredTheme()) {
 				applyTheme(next);
