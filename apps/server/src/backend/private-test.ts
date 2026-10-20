@@ -2,6 +2,7 @@ import { test } from "bun:test";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+import { isolateFixtureHome } from "../fixture-home.ts";
 import { spawnOwnedSync } from "../owned-process.ts";
 import { resolveBackendSelection } from "./runtime.ts";
 
@@ -20,11 +21,8 @@ export function runPrivateBackendTest(file: string, extraEnv: Record<string, str
 		for (const [key, value] of Object.entries(process.env)) {
 			if (value !== undefined && !/(_API_KEY|_TOKEN|_SECRET)$/i.test(key) && !/^(PI_|OMP_|NPI_DECK_|XDG_)/i.test(key) && !/^(HOME|USERPROFILE|HOMEDRIVE|HOMEPATH|TMPDIR|TMP|TEMP)$/i.test(key)) env[key] = value;
 		}
-		const drive = path.parse(home).root;
+		isolateFixtureHome(env, home);
 		Object.assign(env, {
-			HOME: home, USERPROFILE: home,
-			HOMEDRIVE: process.platform === "win32" ? drive.replace(/[\\/]$/, "") : "",
-			HOMEPATH: process.platform === "win32" ? home.slice(drive.length - 1) : home,
 			XDG_CONFIG_HOME: path.join(home, ".config"),
 			XDG_DATA_HOME: path.join(home, ".local/share"),
 			XDG_STATE_HOME: path.join(home, ".local/state"),
