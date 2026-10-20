@@ -92,6 +92,29 @@ describe("KbService with .kbignore", () => {
 		expect((await kb.search("needle", 50)).results.map((r) => r.path)).toContain("drafts/idea.md");
 	});
 
+	test("parent directory notifications respect directory-only exclusions without hiding replacement files", () => {
+		const kb = new KbService({ root });
+		// Windows reports `change: drafts` as well as the new child's event.
+		expect(kb.isWatchEventIgnored("drafts")).toBe(true);
+		expect(kb.isWatchEventIgnored("drafts\\another.md")).toBe(true);
+		expect(kb.isWatchEventIgnored(".kbignore")).toBe(false);
+		expect(kb.isWatchEventIgnored("")).toBe(false);
+
+		rmSync(path.join(root, "drafts"), { recursive: true });
+		// A deleted entry has unknown type, so its notification still refreshes.
+		expect(kb.isWatchEventIgnored("drafts")).toBe(false);
+		put("drafts", "a visible file, not an excluded directory");
+		expect(kb.isWatchEventIgnored("drafts")).toBe(false);
+	});
+
+	test("directory notifications follow edited ignore rules after invalidation", () => {
+		const kb = new KbService({ root });
+		expect(kb.isWatchEventIgnored("drafts")).toBe(true);
+		writeFileSync(path.join(root, ".kbignore"), "", "utf8");
+		kb.invalidate();
+		expect(kb.isWatchEventIgnored("drafts")).toBe(false);
+	});
+
 	test("the watcher ignores excluded paths and reloads on .kbignore edits", async () => {
 		const prev = process.env.NPI_DECK_WATCH_KB;
 		delete process.env.NPI_DECK_WATCH_KB;
