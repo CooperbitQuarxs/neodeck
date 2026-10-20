@@ -201,9 +201,9 @@ stable input order.
 optional selected source node. The built-in `event.source` emits that event
 through its `event` port; one activation runs each matching source once.
 Unselected sources and disconnected branches produce skipped records, not
-invented values. Execution is a deterministic DAG; inbox subscriptions, gate
-and operation catalogues, external actions, iteration and canvas authoring have
-their own slices and do not change this envelope contract.
+invented values. Execution is a deterministic DAG; gate and operation catalogues,
+external actions, iteration and canvas authoring have their own slices and do not
+change this envelope contract.
 
 Create and update through `POST /api/routines` and
 `PATCH /api/routines/:id` with `graph`, and execute through the existing run
@@ -228,6 +228,125 @@ Trace nesting is bounded at 256 levels during serialization, independently of
 the JavaScript engine's stack behavior. Other JSON serialization failures use
 the same terminal-history path without discarding execution aggregates.
 History error excerpts are capped at 8,192 characters, including the diagnostic.
+
+### Inbox intake
+
+Fresh navigation opens Inbox (`/inbox`); Chat is `/chat` and Kanban remains
+available at `/tasks`. Explicit deep links and the first-run onboarding gate
+keep their meaning.
+
+The production registry includes `inbox.card_added`, labelled **inbox: card
+added**, with no inputs, an object-valued `event` output and a config schema
+requiring `{ "eventType": "inbox.card_added" }`. A generic `event.source` with
+that event type can subscribe too. Wire its output to ordinary registered graph
+operations/actions; intake is not a separate kind-specific classifier or filing
+pipeline. Model operations report actual usage through `recordUsage`.
+
+`db/inbox.ts::createInbox` commits the card and its `inbox_graph_events`
+deliveries in one transaction. The card snapshot includes all currently
+persisted inbox properties (including an empty body/source and YAML in the body).
+Each enabled native flow/source configured at creation gets one durable delivery,
+keyed by `(card id, routine id, source node id)`. No title/body deduplication is
+used. Transaction rollback drops both the delivery and its after-commit wakeup;
+HTTP idempotency receipts therefore cannot produce an extra event. Internal
+deck creation and graph-created cards use the same boundary, with a new card ID
+for each genuine new card. Reads, edits, promotion, processing, deletion and
+websocket refreshes do not emit creation events.
+
+After commit, the runner calls `fireGraphEvent`, selecting each intended source
+explicitly. Notification payloads only identify the delivery: execution reads
+the original committed snapshot, not a subsequent edit or caller replacement.
+Admission atomically claims the durable delivery and starts its run before any
+async graph work. Replays and concurrent notifications cannot start a second
+run. The existing enabled-state, concurrency, cancellation and graph-budget
+controls apply, including visible concurrency-skipped/aborted runs; admission
+is not a claim that filing or any downstream effect succeeded.
+
+Restart drains only committed **pending deliveries**, never an inbox list.
+Disabled flows get no deliveries for new cards; deliveries whose source was
+removed, changed or disabled before dispatch are discarded, not held until
+re-enable. Already admitted work is **not retried** after a crash because an
+external effect may have happened: the interrupted run becomes visibly aborted
+with `server_restarted`, its admitted graph/activation snapshot, and no invented
+node results. Per-source receipts remain even when an inbox card is deleted.
+This is at-most-once admission, not a promise of exactly-once external effects
+or completion across a crash; individual action nodes own effect receipts.
+### Native action nodes
+
+The production catalogue includes `action.create-card`, `action.send-message`
+and `action.file-issue`. Each accepts multiple generic `in` envelopes and emits
+one `result` envelope. Its config is `{ request: { ... }, operationId?: ... }`.
+Request fields can be literal JSON or explicit envelope bindings, for example
+`{"$from":{"nodeId":"source","path":["result","title"]}}`. Bindings can select
+an upstream port or incoming `inputPort`; missing paths fail rather than
+silently becoming empty strings. The action result holds `status`, `logicalKey`,
+`replayed` and a real `receipt`; original inputs remain in the executor's
+recursive envelopes, including on failure or cancellation.
+
+- Create-card requests support `title`, `body`, `stateId`, `cwd`, `properties`,
+  `orderInState` and `archived`. Leading YAML and arbitrary stored properties
+  survive; execution properties (`read-only`, `worktree`, `model`, `role`) use
+  the same validation as card execution. Unknown top-level properties fail.
+  The receipt is the persisted card, including id/displayId and parsed front
+  matter. Creation, requested ordering/archive and journal confirmation share
+  one DB transaction. `cwd` is not a linked-worktree declaration.
+- Send-message requests use `{destination: "<registered channel id>", payload:
+  {kind, level, title, ...}}`. Only one explicit destination is addressed.
+  Current kinds are `routine_failed`, `task_shipped`, `auth_fallback`; disabled,
+  missing and rejecting destinations fail visibly. Browser delivery confirms
+  fan-out dispatch, **not** provider acceptance or recipient reading. A channel
+  may return an accepted receipt with a native identity. Telegram is not
+  implicitly available as a server notification channel.
+- File-issue requests require explicit `host`, `owner`, `repo`, `title`, `body`;
+  optional `labels`, `assignees`, numeric `milestone` and
+  `attribution: {agent, onBehalfOf: "PsychedelicShayna"}` are supported. Existing
+  `gh` authentication is used, never tokens in graph config. GitHub bodies
+  retain valid agent attribution or receive NeoDeck's Captain attribution.
+  A hidden operation marker enables read-only reconciliation. Acceptance
+  requires the native issue id, number, URL and matching repository; mere
+  command completion is insufficient. No classifier/repository policy is built
+  into the action.
+
+`GraphActivation.operationId`, config `operationId`, or the original `event.id`
+(including `event.card.id`) supplies stable logical identity. Actions reject
+events without one: a new run/time is never evidence of a new intended write.
+The key scopes routine, action node, event type and operation; its immutable
+fingerprint covers the complete resolved request and destination. Replaying
+with changed content/destination fails. An intentional repeat needs a new
+operation identity. Reservations and receipts persist in `graph_actions`
+independently of run success. Concurrent same-process dispatches await the
+same settlement; interrupted remote reservations remain uncertain, never
+blindly retried. GitHub can reconcile a matching marker using search plus
+native identity lookup; a missing search result does not authorize retry.
+Providers without an idempotency/reconciliation API cannot promise exactly
+once. Definitive rejection and not-dispatched results are distinguished from
+uncertainty. A new operation identity is required to try a failed logical
+write again.
+
+Native `POST /api/routines/:id/run?dryRun=true&operationId=<stable-id>` resolves
+and validates the same requests but records planned effects only: no card
+mutations, message sends, writing `gh` calls, fake target identities or live
+reservations. `RoutinesRunner.fire`/`fireGraphEvent` and `executeGraph` expose
+the same `dryRun` option. Traces identify simulation with `dryRun: true`.
+Simulation starts a separate trace before live event admission and must never
+claim or discard a pending inbox delivery. When integrating inbox intake (#204),
+forward `dryRun` through event activation, bypass live intake filtering/discard
+for simulations, and keep `admitInboxGraphEvent` exclusively after the simulation
+guard. A later live call must still admit the committed delivery exactly once.
+After possible remote dispatch, abort can settle the run while the provider
+operation continues. Its journal starts uncertain before dispatch; a late
+native receipt updates durable evidence without waking downstream nodes.
+The trace endpoint hydrates that effect evidence while retaining the run's
+aborted/failed status. Credential-key redaction also covers stored requests
+and receipts. Downstream action bindings receive that same privacy-safe receipt
+on first execution and replay, including redacted card front matter. The
+created card itself retains its requested properties; receipt bindings do not
+expose credential properties from it.
+
+Bounded/nested iteration belongs to #159 and is not implemented by this action
+slice. Its per-occurrence identity and dry-run propagation must be added with
+that executor; do not reuse one operation identity for distinct iterations.
+
 
 ## Theming
 

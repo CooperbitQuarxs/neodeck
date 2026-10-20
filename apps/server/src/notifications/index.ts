@@ -9,10 +9,21 @@
  * `index.ts` registers default channels once.
  */
 
-export { notificationService, NotificationService } from "./service.ts";
+export {
+	notificationService,
+	NotificationService,
+	NotificationDeliveryError,
+	NotificationChannelRejectedError,
+	validateNotificationPayload,
+} from "./service.ts";
 export { BrowserNotificationChannel } from "./channels/browser.ts";
 export type {
 	NotificationChannel,
+	NotificationChannelPreflight,
+	NotificationChannelReceipt,
+	NotificationDeliveryCode,
+	NotificationDeliveryPreflight,
+	NotificationDeliveryReceipt,
 	NotificationEnvelope,
 	NotificationLevel,
 	NotificationPayload,

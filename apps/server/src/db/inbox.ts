@@ -1,6 +1,7 @@
 import type { InboxItem, InboxKind } from "@npi-deck/protocol";
 
 import { getDb, id, nowIso } from "./index.ts";
+import { enqueueInboxGraphEvents } from "./inbox-graph-events.ts";
 
 interface Row {
 	id: string;
@@ -70,16 +71,19 @@ export function createInbox(input: {
 	source?: string;
 }): InboxItem {
 	if (!VALID_KINDS.has(input.kind)) throw new Error(`invalid kind: ${input.kind}`);
-	const itemId = `i_${id().toLowerCase().slice(0, 18)}`;
-	const now = nowIso();
-	getDb()
-		.query<unknown, [string, string, string, string, string | null, string]>(
-			`INSERT INTO inbox_items (id, kind, title, body, source, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
-		)
-		.run(itemId, input.kind, input.title, input.body ?? "", input.source ?? null, now);
-	const out = getInbox(itemId);
-	if (!out) throw new Error("createInbox failed");
-	return out;
+	return getDb().transaction(() => {
+		const itemId = `i_${id().toLowerCase().slice(0, 18)}`;
+		const now = nowIso();
+		getDb()
+			.query<unknown, [string, string, string, string, string | null, string]>(
+				`INSERT INTO inbox_items (id, kind, title, body, source, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
+			)
+			.run(itemId, input.kind, input.title, input.body ?? "", input.source ?? null, now);
+		const out = getInbox(itemId);
+		if (!out) throw new Error("createInbox failed");
+		enqueueInboxGraphEvents(out);
+		return out;
+	})();
 }
 
 /** Commit a delivery receipt atomically with the synchronous inbox mutation. */

@@ -7,6 +7,9 @@ All notable changes to NPI deck (a fork of bjb2/omp-deck; entries before the for
 
 ### Added
 
+- **Inbox-first graph intake** ([#160](https://github.com/PsychedelicShayna/neodeck/issues/160)). Fresh navigation opens Inbox; Chat and Kanban remain one click away. The `inbox: card added` source delivers each committed card once per configured flow/source, keeps the original card in run provenance, and prevents duplicate intake across notifications and restarts.
+- **Reusable native graph actions:** create cards with their stored properties, send to explicit notification channels and file GitHub issues while retaining upstream provenance, durable replay receipts and write-free dry-runs ([#161](https://github.com/PsychedelicShayna/neodeck/issues/161)).
+
 - **Automatic GitHub releases:** main pushes publish stable source-plus-web archives, nightly pushes publish distinct prereleases, and manual CI dispatch can publish any selected ref as stable. Existing releases and tags are never replaced or pruned.
 - **Agents execute assigned cards** (#101). Assignment starts an isolated NeoPi worker immediately, queues behind a configurable global limit of 12, and records the result on the card. Leading YAML preserves arbitrary properties and can select an existing linked worktree, model, role or mechanically read-only research. Owned temporary worktrees are removed after completion or cancellation; linked worktrees survive. Read-only workers restrict native SDK tools and use a Linux filesystem sandbox that fails closed when unavailable. Interrupted runs recover their owned artifacts without replaying possible side effects. UI, chat, inbox promotion, API and routine filing keep card properties without inferring project routing.
 - **Native provenance-carrying routine graphs** (#158). V2 graphs persist and run through the routine API independently of YAML or a canvas. One extensible registry supplies typed ports, configuration validation and node execution. Every output preserves its result and ordered recursive inputs; truthy strings and numbers are never coerced into literal `true`. Generic event sources carry the original event object, invalid connections fail before save or dispatch, and immutable run traces survive definition edits and database reopen. The legacy editors recognize graph routines without rewriting them as single actions or pipelines.
@@ -52,6 +55,9 @@ All notable changes to NPI deck (a fork of bjb2/omp-deck; entries before the for
 
 ### Fixed
 
+- Confirmed graph messages replay and resume downstream work even when their notification channel is no longer available (#161).
+- Graph action receipt bindings retain the same credential-safe values on first execution and replay, preventing changed-request failures in downstream actions (#161).
+- Inbox graph simulations use separate run admission so integration with durable inbox intake cannot consume a pending live delivery (#161).
 - Restored typechecking and release publication by removing a duplicate inbox-promotion project field from the protocol.
 - Queued card assignments resume after a server restart; cancellations use the failure column, and deleted outcome columns no longer discard completed runs.
 - Card workers reach protected KB routes on IPv6 listeners, and assignments reject an active column that is also the completion column (#101).

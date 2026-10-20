@@ -1,6 +1,7 @@
 import {
+	INBOX_CARD_ADDED_EVENT, inboxCardAddedNodeType,
 	compileStructuredOutputSchema, isGraphValue, validateRoutineGraph,
-	type GraphActivation, type GraphEmission, type GraphExecutionResult, type GraphNode,
+	type GraphActivation, type GraphEffect, type GraphEmission, type GraphExecutionResult, type GraphNode,
 	type GraphNodeInput, type GraphNodeRun, type GraphNodeType, type GraphOutput,
 	type GraphValue, type GraphValueType, type RoutineGraph, type ValidationError, type ValidationResult,
 } from "@npi-deck/protocol";
@@ -17,6 +18,10 @@ export interface GraphNodeContext {
 	activation: GraphActivation;
 	signal: AbortSignal;
 	runId: string;
+	routineId?: string;
+	dryRun: boolean;
+	/** Effects are journaled by actions before writes; retained even on failure/abort. */
+	recordEffect(effect: GraphEffect): void;
 	/** Report each increment once. Caps are checked immediately; never estimate silently. */
 	recordUsage(usage: GraphUsage): void;
 }
@@ -27,6 +32,8 @@ export interface GraphNodeImplementation {
 export interface GraphExecutionOptions {
 	runId?: string;
 	signal?: AbortSignal;
+	routineId?: string;
+	dryRun?: boolean;
 	onNodeRun?: (record: GraphNodeRun) => void | Promise<void>;
 }
 export class GraphValidationError extends Error {
@@ -42,6 +49,11 @@ export class GraphNodeRegistry {
 	private readonly validators = new Map<string, (config: unknown) => ValidationResult>();
 
 	constructor() {
+		this.register({
+			definition: inboxCardAddedNodeType,
+			execute: ({ activation }) => activation.eventType === INBOX_CARD_ADDED_EVENT
+				? [{ port: "event", value: activation.event }] : [],
+		});
 		this.register({
 			definition: {
 				type: "event.source", label: "Event source", kind: "event", inputs: [],
@@ -175,6 +187,12 @@ export async function executeGraph(graph: RoutineGraph, activation: GraphActivat
 						}
 						const context: GraphNodeContext = {
 							node, inputs, activation, signal: controller.signal, runId,
+							routineId: options.routineId, dryRun: options.dryRun === true,
+							recordEffect: (effect) => {
+								record.effects ??= [];
+								const index = record.effects.findIndex((item) => item.logicalKey === effect.logicalKey);
+								if (index < 0) record.effects.push(effect); else record.effects[index] = effect;
+							},
 							recordUsage: (usage) => {
 								if (!active) throw new Error("Cannot report usage after graph node settled");
 								if (!usage || typeof usage !== "object" || Array.isArray(usage)) throw new Error("Invalid graph usage");
@@ -224,7 +242,7 @@ export async function executeGraph(graph: RoutineGraph, activation: GraphActivat
 			for (const target of outgoing.get(node.id) ?? []) indegree.set(target, indegree.get(target)! - 1);
 		}
 		if (controller.signal.aborted && status === "success") status = "aborted";
-		return { status, nodeRuns, outputs, ...(runError !== undefined ? { error: runError } : {}), ...(status === "aborted" && abortReason ? { abortReason } : {}), usage: { llmTokensIn: state.totalTokensIn, llmTokensOut: state.totalTokensOut, llmCostMicros: state.totalCostMicros, stepsExecuted: state.stepsExecuted } };
+		return { status, nodeRuns, outputs, dryRun: options.dryRun === true, ...(runError !== undefined ? { error: runError } : {}), ...(status === "aborted" && abortReason ? { abortReason } : {}), usage: { llmTokensIn: state.totalTokensIn, llmTokensOut: state.totalTokensOut, llmCostMicros: state.totalCostMicros, stepsExecuted: state.stepsExecuted } };
 	} finally {
 		if (deadline !== undefined) clearTimeout(deadline);
 		options.signal?.removeEventListener("abort", cancel);

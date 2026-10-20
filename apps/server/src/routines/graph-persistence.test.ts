@@ -2,6 +2,14 @@ import { afterEach, expect, test } from "bun:test";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+import type { Server } from "bun";
+import { Hono } from "hono";
+import { INBOX_CARD_ADDED_EVENT, inboxCardAddedNodeType, type InboxItem } from "@npi-deck/protocol";
+import { createInbox, deleteInbox, getInbox, listInbox, updateInbox } from "../db/inbox.ts";
+import { admitInboxGraphEvent, pendingInboxGraphEvents } from "../db/inbox-graph-events.ts";
+import { startRun } from "../db/routines.ts";
+import { buildInboxRouter } from "../routes-inbox.ts";
+import { executeDeckStep } from "./steps/deck.ts";
 import type { GraphNodeType, GraphOutput, GraphRunRecord, GraphValue, Routine, RoutineGraph, RoutineRun, RoutineSpec } from "@npi-deck/protocol";
 import { closeDb, getDb, openDb } from "../db/index.ts";
 import { createGraphRoutine, createRoutine, createV1Routine, getGraphRun, getRoutine, listRuns, updateGraphRoutine } from "../db/routines.ts";
@@ -15,6 +23,7 @@ let home = "";
 let runner: RoutinesRunner | undefined;
 let oldHome: string | undefined;
 let oldDb: string | undefined;
+let inboxServer: Server<undefined> | undefined;
 function setup(): RoutinesRunner {
 	home = fs.mkdtempSync(path.join(os.tmpdir(), "neodeck-graph-persistence-"));
 	oldHome = process.env.NPI_DECK_HOME;
@@ -27,6 +36,8 @@ function setup(): RoutinesRunner {
 	return runner;
 }
 afterEach(async () => {
+	inboxServer?.stop(true);
+	inboxServer = undefined;
 	await runner?.dispose();
 	await stopOwnedProcesses();
 	closeDb();
@@ -474,4 +485,220 @@ test("legacy V0 and V1 still execute their own stored source without graph trace
 	expect(getRoutine(pipeline.id)?.specYaml).toBe(yaml);
 	expect(getGraphRun(legacyRun.id)).toBeUndefined();
 	expect(getGraphRun(pipelineRun.id)).toBeUndefined();
+});
+
+function inboxGraph(): RoutineGraph {
+	const native = graph(INBOX_CARD_ADDED_EVENT);
+	native.nodes[0]!.type = INBOX_CARD_ADDED_EVENT;
+	native.concurrency = "queue";
+	return native;
+}
+
+async function settleInbox(run: RoutinesRunner): Promise<void> {
+	const deadline = Date.now() + 3000;
+	while (run.busy && Date.now() < deadline) await Bun.sleep(10);
+	expect(run.busy).toBe(false);
+}
+
+test("production inbox source catalogue and config validation expose one native contract", async () => {
+	const run = setup();
+	const api = buildRoutinesRouter(run);
+	const catalogue = await (await api.request("/routine-node-types")).json() as { nodeTypes: GraphNodeType[] };
+	expect(catalogue.nodeTypes.find((node) => node.type === INBOX_CARD_ADDED_EVENT)).toEqual(inboxCardAddedNodeType);
+	expect((await api.request("/routine-graphs/validate", request(inboxGraph()))).status).toBe(200);
+	for (const config of [{}, { eventType: "other" }, { eventType: INBOX_CARD_ADDED_EVENT, cron: "* * * * *" }]) {
+		const native = inboxGraph();
+		native.nodes[0]!.config = config;
+		expect((await api.request("/routine-graphs/validate", request(native))).status).toBe(400);
+	}
+});
+
+test("HTTP and internal card creation fan out once per source with committed original provenance", async () => {
+	const run = setup();
+	run.graphRegistry.register({ definition: definition("intake"), execute: ({ activation, inputs, recordUsage }) => {
+		expect(inputs[0]!.output.result).toBe(activation.event);
+		recordUsage({ llmTokensIn: 2, llmTokensOut: 3 });
+		return [{ port: "out", value: "truthy-not-true" }];
+	} });
+	run.graphRegistry.register({ definition: definition("inspect"), execute: ({ inputs }) => {
+		const source = findGraphOutput(inputs[0]!.output, "source")!;
+		expect(source.result.body).toBe("");
+		return [{ port: "out", value: { empty: [], no: false, zero: 0, nil: null } }];
+	} });
+	const native = inboxGraph();
+	native.nodes.push({ id: "intake", type: "intake", config: {} }, { id: "inspect", type: "inspect", config: {} },
+		{ id: "second", type: INBOX_CARD_ADDED_EVENT, config: { eventType: INBOX_CARD_ADDED_EVENT } },
+		{ id: "other", type: "event.source", config: { eventType: "unmatched" } });
+	connect(native, "intake", "source", "intake", "event");
+	connect(native, "inspect", "intake", "inspect");
+	const saved = createGraphRoutine({ name: "configured intake", graph: native }, run.graphRegistry);
+	const subscriber = createGraphRoutine({ name: "second subscriber", graph: inboxGraph() }, run.graphRegistry);
+	run.start();
+	const app = new Hono().route("/api", buildInboxRouter()).route("/api", buildRoutinesRouter(run));
+	inboxServer = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: app.fetch });
+	const url = `http://127.0.0.1:${inboxServer.port}/api`;
+	const input = { kind: "capture", title: "same text", body: "", source: "" };
+	const created = await fetch(`${url}/inbox`, { ...request(input), headers: { "content-type": "application/json", "Idempotency-Key": "one-delivery" } });
+	expect(created.status).toBe(201);
+	const first = await created.json() as InboxItem;
+	const repeated = await fetch(`${url}/inbox`, { ...request(input), headers: { "content-type": "application/json", "Idempotency-Key": "one-delivery" } });
+	expect((await repeated.json() as InboxItem).id).toBe(first.id);
+	const result = await executeDeckStep({ id: "create", type: "deck", action: "create_inbox_item", kind: "capture", title: input.title, body: "", source: "" },
+		{ run: { id: "test", started: "", iso_started: "", date: "", trigger_kind: "manual" }, trigger: {}, steps: {}, env: {}, secrets: {}, state: {} }, AbortSignal.timeout(3000));
+	expect(result.status).toBe("success");
+	const second = listInbox({}).find((card) => card.id !== first.id)!;
+	expect(second.title).toBe(first.title);
+	expect(second.id).not.toBe(first.id);
+	await Promise.all(Array.from({ length: 8 }, () => run.fireGraphEvent(saved.id, { eventType: INBOX_CARD_ADDED_EVENT, event: { ...first } })));
+	await settleInbox(run);
+	expect(listRuns(saved.id)).toHaveLength(4);
+	expect(listRuns(subscriber.id)).toHaveLength(2);
+	for (const record of listRuns(saved.id)) {
+		const response = await fetch(`${url}/routines/${saved.id}/runs/${record.id}/graph`);
+		expect(response.status).toBe(200);
+		const trace = await response.json() as GraphRunRecord;
+		const card = trace.activation.event.id === first.id ? first : second;
+		expect(trace.activation.event).toEqual(card);
+		expect(trace.graph).toEqual(native);
+		expect(trace.status).toBe("success");
+		const selected = trace.activation.sourceNodeId!;
+		const source = trace.nodeRuns.find((node) => node.nodeId === selected)!;
+		expect(source).toMatchObject({ status: "success", inputs: [], inputPorts: [], outputs: [{ nodeId: selected, port: "event", result: card, inputs: [] }] });
+		expect(trace.nodeRuns.find((node) => node.nodeId === "other")?.status).toBe("skipped");
+		if (selected === "source") {
+			const output = trace.nodeRuns.find((node) => node.nodeId === "inspect")!.outputs[0]!;
+			expect(findGraphOutput(output, "source")?.result).toEqual(card);
+			expect(readGraphPath(output, ["inputs", "0", "result", "value"])).toBe("truthy-not-true");
+			expect(output.result).toEqual({ empty: [], no: false, zero: 0, nil: null });
+			expect(record.totalLlmTokens).toBe(5);
+		} else expect(trace.nodeRuns.find((node) => node.nodeId === "source")?.status).toBe("skipped");
+	}
+	const before = listRuns(saved.id).length;
+	await fetch(`${url}/inbox/${first.id}`);
+	await fetch(`${url}/inbox/${first.id}`, request({ body: "edited", processed: true }, "PATCH"));
+	await fetch(`${url}/inbox/${second.id}/promote`, request({}));
+	await fetch(`${url}/inbox/${second.id}`, { method: "DELETE" });
+	await settleInbox(run);
+	expect(listRuns(saved.id)).toHaveLength(before);
+});
+
+test("old cards, failed transactions, disabled flows and unmatched notifications never become new intake", async () => {
+	const run = setup();
+	const old = createInbox({ kind: "idea", title: "before configuration" });
+	const saved = createGraphRoutine({ name: "disabled", graph: inboxGraph(), enabled: false }, run.graphRegistry);
+	createInbox({ kind: "idea", title: "while disabled" });
+	updateGraphRoutine(saved.id, { enabled: true }, run.graphRegistry);
+	run.start();
+	expect(listRuns(saved.id)).toEqual([]);
+	expect(() => getDb().transaction(() => {
+		createInbox({ kind: "capture", title: "rolled back" });
+		throw new Error("rollback");
+	})()).toThrow("rollback");
+	expect(() => createInbox({ kind: "idea", title: null as unknown as string })).toThrow();
+	expect(listInbox({})).toHaveLength(2);
+	await run.fireGraphEvent(saved.id, { eventType: INBOX_CARD_ADDED_EVENT, event: { ...old } });
+	expect(pendingInboxGraphEvents()).toEqual([]);
+	expect(listRuns(saved.id)).toEqual([]);
+	const card = createInbox({ kind: "ticket", title: "new" });
+	await settleInbox(run);
+	expect(listRuns(saved.id)).toHaveLength(1);
+	await run.fireGraphEvent(saved.id, { eventType: INBOX_CARD_ADDED_EVENT, sourceNodeId: "wrong", event: { ...card } });
+	await settleInbox(run);
+	expect(listRuns(saved.id)).toHaveLength(1);
+	updateInbox(card.id, { processed: true });
+	getInbox(card.id);
+	deleteInbox(card.id);
+	expect(listRuns(saved.id)).toHaveLength(1);
+});
+
+test("restart resumes only committed pending deliveries and never repeats admitted cards", async () => {
+	const run = setup();
+	const saved = createGraphRoutine({ name: "pending across restart", graph: inboxGraph() }, run.graphRegistry);
+	const card = createInbox({ kind: "capture", title: "committed while runner offline", body: "" });
+	await run.fireGraphEvent(saved.id, { eventType: INBOX_CARD_ADDED_EVENT, sourceNodeId: "wrong", event: { ...card } });
+	expect(listRuns(saved.id)).toEqual([]);
+	updateInbox(card.id, { body: "edited before dispatch" });
+	closeDb();
+	openDb({ path: path.join(home, "deck.db") });
+	run.start();
+	await settleInbox(run);
+	expect(listRuns(saved.id)).toHaveLength(1);
+	await run.dispose();
+	closeDb();
+	openDb({ path: path.join(home, "deck.db") });
+	runner = new RoutinesRunner();
+	runner.start();
+	await Promise.all(Array.from({ length: 4 }, () => runner!.fireGraphEvent(saved.id, { eventType: INBOX_CARD_ADDED_EVENT, event: { ...card } })));
+	expect(listRuns(saved.id)).toHaveLength(1);
+	const trace = getGraphRun(listRuns(saved.id)[0]!.id)!;
+	expect(trace.activation.event).toEqual(card);
+	expect(trace.nodeRuns[0]!.outputs[0]!.result).toEqual(card);
+});
+
+test("interrupted admitted intake is visibly aborted at restart rather than replayed", async () => {
+	const run = setup();
+	const saved = createGraphRoutine({ name: "interrupted", graph: inboxGraph() }, run.graphRegistry);
+	const card = createInbox({ kind: "capture", title: "admitted before crash" });
+	const delivery = pendingInboxGraphEvents()[0]!;
+	const admitted = admitInboxGraphEvent(saved.id, delivery.activation, saved.graph!, () => startRun(saved.id, "event", delivery.activation.event))!;
+	updateGraphRoutine(saved.id, { graph: graph("different") }, run.graphRegistry);
+	closeDb();
+	openDb({ path: path.join(home, "deck.db") });
+	run.start();
+	await run.fireGraphEvent(saved.id, { eventType: INBOX_CARD_ADDED_EVENT, event: { ...card } });
+	expect(listRuns(saved.id)).toHaveLength(1);
+	expect(getGraphRun(admitted.id)).toMatchObject({ status: "aborted", graph: saved.graph, activation: delivery.activation, error: "server_restarted: intake may have run; not replayed" });
+	expect(listRuns(saved.id)[0]?.abortReason).toBe("server_restarted");
+});
+
+test("pending work disabled before dispatch is discarded and admission rollback does not consume delivery", async () => {
+	const run = setup();
+	const saved = createGraphRoutine({ name: "pending disabled", graph: inboxGraph() }, run.graphRegistry);
+	const first = createInbox({ kind: "capture", title: "disabled before dispatch" });
+	updateGraphRoutine(saved.id, { enabled: false }, run.graphRegistry);
+	run.start();
+	updateGraphRoutine(saved.id, { enabled: true }, run.graphRegistry);
+	await run.fireGraphEvent(saved.id, { eventType: INBOX_CARD_ADDED_EVENT, event: { ...first } });
+	expect(listRuns(saved.id)).toEqual([]);
+	expect(pendingInboxGraphEvents()).toEqual([]);
+	await run.dispose();
+	const second = createInbox({ kind: "capture", title: "admission rollback" });
+	const delivery = pendingInboxGraphEvents()[0]!;
+	expect(() => admitInboxGraphEvent(saved.id, delivery.activation, saved.graph!, () => {
+		startRun(saved.id, "event", delivery.activation.event);
+		throw new Error("admission failed");
+	})).toThrow("admission failed");
+	expect(listRuns(saved.id)).toEqual([]);
+	expect(pendingInboxGraphEvents()).toHaveLength(1);
+	runner = new RoutinesRunner();
+	runner.start();
+	await settleInbox(runner);
+	expect(listRuns(saved.id)).toHaveLength(1);
+	expect(getGraphRun(listRuns(saved.id)[0]!.id)?.activation.event).toEqual(second);
+});
+
+test("a graph-created card gets its own new event, and failing intake is not successful filing", async () => {
+	const run = setup();
+	run.graphRegistry.register({ definition: definition("create-child"), execute: ({ activation }) => {
+		if (activation.event.source !== "child") createInbox({ kind: "capture", title: "child", source: "child" });
+		return [{ port: "out", value: activation.event.id }];
+	} });
+	const native = inboxGraph();
+	native.nodes.push({ id: "child", type: "create-child", config: {} });
+	connect(native, "child", "source", "child", "event");
+	const saved = createGraphRoutine({ name: "configured create-card consumer", graph: native }, run.graphRegistry);
+	run.start();
+	const parent = createInbox({ kind: "capture", title: "parent" });
+	await settleInbox(run);
+	expect(listRuns(saved.id)).toHaveLength(2);
+	expect(new Set(listRuns(saved.id).map((record) => getGraphRun(record.id)!.activation.event.id)).size).toBe(2);
+	expect(getInbox(parent.id)?.processedAt).toBeUndefined();
+	run.graphRegistry.register({ definition: definition("fail-intake"), execute: () => { throw new Error("intake failed"); } });
+	native.nodes[1]!.type = "fail-intake";
+	updateGraphRoutine(saved.id, { graph: native }, run.graphRegistry);
+	const failed = createInbox({ kind: "ticket", title: "do not infer filed" });
+	await settleInbox(run);
+	const record = listRuns(saved.id).find((record) => getGraphRun(record.id)!.activation.event.id === failed.id)!;
+	expect(getGraphRun(record.id)).toMatchObject({ status: "failed", nodeRuns: [{ status: "success" }, { status: "failed", inputs: [{ result: failed }], inputPorts: ["in"] }] });
+	expect(getInbox(failed.id)?.processedAt).toBeUndefined();
 });
