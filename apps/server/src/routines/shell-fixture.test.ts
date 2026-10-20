@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { expect } from "bun:test";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import type { RoutineSpec } from "@npi-deck/protocol";
@@ -9,8 +9,10 @@ import { RoutineTestFixtures } from "./test-fixture.ts";
 import { createShellFixture, shellFixtureCommand } from "./shell-fixture.ts";
 import type { ShellFixtureConfig } from "./shell-fixture.ts";
 
+const isolatedTest = createIsolatedTest(import.meta.path);
+
 // This assertion runs on Linux too. Actual cmd execution is the Windows CI test below.
-test("Windows fixture command preserves the cmd outer quote pair and Windows path separators", () => {
+isolatedTest("Windows fixture command preserves the cmd outer quote pair and Windows path separators", () => {
 	const runtime = "C:\\Program Files\\runtime's folder\\bun.exe";
 	const script = "C:\\private fixtures\\fixture's runtime.cjs";
 	const config = { marker: "C:\\private fixtures\\marker's file", bytes: "yes", newline: true };
@@ -20,7 +22,6 @@ test("Windows fixture command preserves the cmd outer quote pair and Windows pat
 	expect(encoded).toMatch(/^[A-Za-z0-9_-]+$/);
 });
 
-const isolatedTest = createIsolatedTest(import.meta.path);
 isolatedTest("fixture bytes, rendered values, cwd and exit 7 round-trip through the production shell", async () => {
 	const fixtures = new RoutineTestFixtures();
 	await fixtures.run(async ({ home, runner }) => {
