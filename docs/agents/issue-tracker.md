@@ -19,6 +19,23 @@ and closure, and [triage-labels.md](triage-labels.md) for vocabulary.
 - Every GitHub comment and PR body, including review triggers, opens with `> [!NOTE]` and `> <actual Model Name> on behalf of PsychedelicShayna`. Follow [review mechanics](pr-review-bots.md) for scoped requests.
 - Use existing labels only; creating or changing label definitions requires a Captain decision.
 
+## Provenance
+
+When an issue or idea originates in the owner's spoken or written explanation,
+put a structured summary first, then preserve each message verbatim under
+`## Owner's words (verbatim)`, with each message in its own `<details>` block.
+For speech, transcribe it as dictated: do not clean it up. The verbatim words
+take precedence wherever they differ from the summary. Do not make a local file
+path the only source; readers outside the owner's machine must be able to read
+the words in the issue itself.
+
+This keeps the reasoning that produced the issue available to implementers and
+to anyone upstream who follows a link downstream. Trackers often preserve the
+decision while losing the thought process behind it.
+
+Examples: [NeoPi #443](https://github.com/PsychedelicShayna/neopi/issues/443)
+and [NeoPi #444](https://github.com/PsychedelicShayna/neopi/issues/444).
+
 ## Pull requests as a triage surface
 
 **PRs as a request surface: no.** GitHub shares one number space across issues
@@ -74,7 +91,6 @@ Record the estimator, original unit, and normalization in the issue body or an
 attributed comment. Later triage reuses that provenance rather than shrinking
 the same estimate again. Keep existing estimates unless evidence supports a
 change. Larger frames may warrant splitting into independently deliverable work.
-
 
 ## Upstream requests (NeoPi)
 
