@@ -12,8 +12,7 @@ import { privateBackendTest } from "./backend/private-test.ts";
 if (privateBackendTest(import.meta.path)) {
 const root = await mkdtemp(path.join(tmpdir(), "deck-advisor-test-"));
 const project = path.join(root, "project");
-await mkdir(path.join(root, "agent")); await mkdir(project);
-process.env.PI_CODING_AGENT_DIR = path.join(root, "agent");
+await mkdir(project);
 const backend = resolveBackendSelection();
 if (!backend) throw new Error("advisor tests require a configured NeoPi backend");
 await loadBackend(backend);

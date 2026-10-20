@@ -18,8 +18,6 @@ import { privateBackendTest } from "../../backend/private-test.ts";
 
 if (privateBackendTest(import.meta.path)) {
 const root = mkdtempSync(path.join(tmpdir(), "deck-mcp-step-test-"));
-if (!process.env.PI_CODING_AGENT_DIR) process.env.PI_CODING_AGENT_DIR = path.join(root, "agent");
-mkdirSync(process.env.PI_CODING_AGENT_DIR, { recursive: true });
 const selection = resolveBackendSelection();
 if (!selection) throw new Error("mcp step tests require a configured NeoPi backend");
 await loadBackend(selection);

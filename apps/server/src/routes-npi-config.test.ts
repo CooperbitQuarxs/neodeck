@@ -13,8 +13,6 @@ import { privateBackendTest } from "./backend/private-test.ts";
 if (privateBackendTest(import.meta.path)) {
 const root = await mkdtemp(path.join(tmpdir(), "deck-npi-config-test-"));
 const project = path.join(root, "project");
-await mkdir(path.join(root, "agent"), { recursive: true });
-process.env.PI_CODING_AGENT_DIR = path.join(root, "agent");
 await mkdir(project);
 const backend = resolveBackendSelection();
 if (!backend) throw new Error("NeoPi config tests require a configured NeoPi backend");
