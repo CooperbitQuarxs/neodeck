@@ -21,13 +21,19 @@ export function shellFixtureCommand(
 	platform: NodeJS.Platform = process.platform,
 ): string {
 	const encoded = Buffer.from(JSON.stringify(config), "utf8").toString("base64url");
+	if (platform === "win32") {
+		// Bun's default Windows argv quoting escapes embedded quotes for the CRT,
+		// but cmd /c does not decode those escapes. Keep quoted paths in a batch
+		// file instead; only its space-free basename crosses the spawn boundary.
+		const launcher = `routine-fixture-${crypto.randomUUID()}.cmd`;
+		const command = [runtime, script, mode, encoded].map(arg => `"${arg}"`).join(" ");
+		fs.writeFileSync(path.join(path.dirname(script), launcher),
+			`@echo off\r\n${command}${renderedValue === undefined ? "" : ' "%*"'}\r\n`);
+		// Rendered fixture values are controlled literals/templates, not shell input.
+		return launcher + (renderedValue === undefined ? "" : ` ${renderedValue}`);
+	}
 	const args = [runtime, script, mode, encoded];
 	if (renderedValue !== undefined) args.push(renderedValue);
-	if (platform === "win32") {
-		// cmd /c strips the first and last quote around a quoted executable.
-		// These fixtures accept only controlled literal/template values, not arbitrary shell input.
-		return `"${args.map(arg => `"${arg}"`).join(" ")}"`;
-	}
 	return args.map(arg => `'${arg.replaceAll("'", "'\"'\"'")}'`).join(" ");
 }
 
