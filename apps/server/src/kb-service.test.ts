@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, watch, writeFileSync } from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 
@@ -92,6 +92,29 @@ describe("KbService with .kbignore", () => {
 		expect((await kb.search("needle", 50)).results.map((r) => r.path)).toContain("drafts/idea.md");
 	});
 
+	test("parent directory notifications respect directory-only exclusions without hiding replacement files", () => {
+		const kb = new KbService({ root });
+		// Windows reports `change: drafts` as well as the new child's event.
+		expect(kb.isWatchEventIgnored("drafts")).toBe(true);
+		expect(kb.isWatchEventIgnored("drafts\\another.md")).toBe(true);
+		expect(kb.isWatchEventIgnored(".kbignore")).toBe(false);
+		expect(kb.isWatchEventIgnored("")).toBe(false);
+
+		rmSync(path.join(root, "drafts"), { recursive: true });
+		// A deleted entry has unknown type, so its notification still refreshes.
+		expect(kb.isWatchEventIgnored("drafts")).toBe(false);
+		put("drafts", "a visible file, not an excluded directory");
+		expect(kb.isWatchEventIgnored("drafts")).toBe(false);
+	});
+
+	test("directory notifications follow edited ignore rules after invalidation", () => {
+		const kb = new KbService({ root });
+		expect(kb.isWatchEventIgnored("drafts")).toBe(true);
+		writeFileSync(path.join(root, ".kbignore"), "", "utf8");
+		kb.invalidate();
+		expect(kb.isWatchEventIgnored("drafts")).toBe(false);
+	});
+
 	test("the watcher ignores excluded paths and reloads on .kbignore edits", async () => {
 		const prev = process.env.NPI_DECK_WATCH_KB;
 		delete process.env.NPI_DECK_WATCH_KB;
@@ -102,14 +125,33 @@ describe("KbService with .kbignore", () => {
 			if (f.type === "kb_changed") frames.push(f);
 		});
 		const dispose = startKbWatcher(kb);
+		// A separate, read-only observer records native events without changing
+		// the production watcher's callback or exclusion decisions.
+		const started = Date.now();
+		let phase = "settling";
+		const events: { ms: number; phase: string; event: string; filename: string | null; ignored: boolean }[] = [];
+		const diagnostic = watch(root, { recursive: true, persistent: false }, (event, filename) => {
+			const rel = filename?.toString() ?? null;
+			events.push({
+				ms: Date.now() - started,
+				phase,
+				event,
+				filename: rel,
+				ignored: rel !== null && kb.isWatchEventIgnored(rel),
+			});
+		});
 		const settle = (): Promise<void> => new Promise((r) => setTimeout(r, 700));
 		try {
 			await settle();
 			frames.length = 0;
+			phase = "excluded-writes";
 			put("drafts/another.md");
 			put("private/more.md");
 			put("node_modules/pkg/other.md");
 			await settle();
+			if (frames.length !== 0) {
+				console.error("KB_WATCHER_DIAGNOSTIC", JSON.stringify({ platform: process.platform, events, frames }));
+			}
 			expect(frames).toHaveLength(0);
 
 			writeFileSync(path.join(root, ".kbignore"), "", "utf8");
@@ -122,6 +164,7 @@ describe("KbService with .kbignore", () => {
 			await settle();
 			expect(frames.length).toBeGreaterThan(0);
 		} finally {
+			diagnostic.close();
 			dispose();
 			unsubscribe();
 			if (prev === undefined) delete process.env.NPI_DECK_WATCH_KB;

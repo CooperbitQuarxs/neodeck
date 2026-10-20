@@ -23,7 +23,7 @@
  * fresh data after `rebuildIndex()` is called by the watcher.
  */
 
-import { createReadStream, existsSync, readFileSync } from "node:fs";
+import { createReadStream, existsSync, readFileSync, statSync } from "node:fs";
 import { link, mkdir, readdir, readFile, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
@@ -235,14 +235,27 @@ export class KbService {
 	}
 
 	/**
-	 * Should a watcher event at `rel` (kb-relative) be dropped? True only
-	 * when the path is excluded whether it names a file or a directory, so
-	 * an ambiguous event still refreshes. `.kbignore` itself always counts.
+	 * Should a watcher event at `rel` (kb-relative) be dropped? Directory-only
+	 * rules need the current entry type because Windows also reports parent
+	 * directory changes. Missing or unreadable ambiguous entries refresh.
+	 * `.kbignore` itself always counts.
 	 */
 	isWatchEventIgnored(rel: string): boolean {
 		const clean = normalizeRel(rel);
 		if (!clean || clean === KB_IGNORE_FILE) return false;
-		return this.pathIsExcluded(clean, false) && this.pathIsExcluded(clean, true);
+		const fileIgnored = this.pathIsExcluded(clean, false);
+		const dirIgnored = this.pathIsExcluded(clean, true);
+		if (fileIgnored === dirIgnored) return fileIgnored;
+		const abs = this.resolveAbs(clean);
+		if (!abs) return false;
+		try {
+			const entry = statSync(abs, { throwIfNoEntry: false });
+			if (!entry) return false;
+			return entry.isDirectory() ? dirIgnored : fileIgnored;
+		} catch {
+			// An unknown entry type must not hide a potentially visible change.
+			return false;
+		}
 	}
 
 	/**
