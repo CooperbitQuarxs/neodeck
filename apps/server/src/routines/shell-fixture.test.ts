@@ -38,7 +38,7 @@ isolatedTest("fixture bytes, rendered values, cwd and exit 7 round-trip through 
 		const command = (config: ShellFixtureConfig, value?: string) =>
 			shellFixtureCommand(runtime, script, "write", { ...config, marker, expectedCwd: shell.cwd }, value);
 		const spec: RoutineSpec = {
-			version: 1, name: "shell round trip", trigger: [{ manual: {} }], concurrency: "skip",
+			name: "shell round trip", trigger: [{ manual: {} }], concurrency: "skip",
 			steps: [
 				{ id: "bytes", type: "run", cwd: shell.cwd, command: command({ bytes: "UTF-8 café ' \\ bytes", newline: false }) },
 				{ id: "rendered", type: "run", cwd: shell.cwd, command: command({ append: true, newline: true, exitCode: 7 }, "{{ trigger.tag }}") },

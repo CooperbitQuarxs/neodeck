@@ -10,7 +10,7 @@ import { admitInboxGraphEvent, pendingInboxGraphEvents } from "../db/inbox-graph
 import { startRun } from "../db/routines.ts";
 import { buildInboxRouter } from "../routes-inbox.ts";
 import { executeDeckStep } from "./steps/deck.ts";
-import type { GraphNodeType, GraphOutput, GraphRunRecord, GraphValue, Routine, RoutineGraph, RoutineRun, RoutineSpec } from "@npi-deck/protocol";
+import type { GraphNodeType, GraphObject, GraphOutput, GraphRunRecord, GraphValue, Routine, RoutineGraph, RoutineRun, RoutineSpec } from "@npi-deck/protocol";
 import { closeDb, getDb, openDb } from "../db/index.ts";
 import { createGraphRoutine, createRoutine, createV1Routine, getGraphRun, getRoutine, listRuns, updateGraphRoutine } from "../db/routines.ts";
 import { listStepRuns } from "../db/routine-step-runs.ts";
@@ -506,7 +506,8 @@ test("production inbox source catalogue and config validation expose one native 
 	const catalogue = await (await api.request("/routine-node-types")).json() as { nodeTypes: GraphNodeType[] };
 	expect(catalogue.nodeTypes.find((node) => node.type === INBOX_CARD_ADDED_EVENT)).toEqual(inboxCardAddedNodeType);
 	expect((await api.request("/routine-graphs/validate", request(inboxGraph()))).status).toBe(200);
-	for (const config of [{}, { eventType: "other" }, { eventType: INBOX_CARD_ADDED_EVENT, cron: "* * * * *" }]) {
+	const configs: GraphObject[] = [{}, { eventType: "other" }, { eventType: INBOX_CARD_ADDED_EVENT, cron: "* * * * *" }];
+	for (const config of configs) {
 		const native = inboxGraph();
 		native.nodes[0]!.config = config;
 		expect((await api.request("/routine-graphs/validate", request(native))).status).toBe(400);
@@ -540,13 +541,13 @@ test("HTTP and internal card creation fan out once per source with committed ori
 	const input = { kind: "capture", title: "same text", body: "", source: "" };
 	const created = await fetch(`${url}/inbox`, { ...request(input), headers: { "content-type": "application/json", "Idempotency-Key": "one-delivery" } });
 	expect(created.status).toBe(201);
-	const first = await created.json() as InboxItem;
+	const first = { ...await created.json() as InboxItem };
 	const repeated = await fetch(`${url}/inbox`, { ...request(input), headers: { "content-type": "application/json", "Idempotency-Key": "one-delivery" } });
 	expect((await repeated.json() as InboxItem).id).toBe(first.id);
 	const result = await executeDeckStep({ id: "create", type: "deck", action: "create_inbox_item", kind: "capture", title: input.title, body: "", source: "" },
 		{ run: { id: "test", started: "", iso_started: "", date: "", trigger_kind: "manual" }, trigger: {}, steps: {}, env: {}, secrets: {}, state: {} }, AbortSignal.timeout(3000));
 	expect(result.status).toBe("success");
-	const second = listInbox({}).find((card) => card.id !== first.id)!;
+	const second = { ...listInbox({}).find((card) => card.id !== first.id)! };
 	expect(second.title).toBe(first.title);
 	expect(second.id).not.toBe(first.id);
 	await Promise.all(Array.from({ length: 8 }, () => run.fireGraphEvent(saved.id, { eventType: INBOX_CARD_ADDED_EVENT, event: { ...first } })));
@@ -614,7 +615,7 @@ test("old cards, failed transactions, disabled flows and unmatched notifications
 test("restart resumes only committed pending deliveries and never repeats admitted cards", async () => {
 	const run = setup();
 	const saved = createGraphRoutine({ name: "pending across restart", graph: inboxGraph() }, run.graphRegistry);
-	const card = createInbox({ kind: "capture", title: "committed while runner offline", body: "" });
+	const card = { ...createInbox({ kind: "capture", title: "committed while runner offline", body: "" }) };
 	await run.fireGraphEvent(saved.id, { eventType: INBOX_CARD_ADDED_EVENT, sourceNodeId: "wrong", event: { ...card } });
 	expect(listRuns(saved.id)).toEqual([]);
 	updateInbox(card.id, { body: "edited before dispatch" });
@@ -662,7 +663,7 @@ test("pending work disabled before dispatch is discarded and admission rollback 
 	expect(listRuns(saved.id)).toEqual([]);
 	expect(pendingInboxGraphEvents()).toEqual([]);
 	await run.dispose();
-	const second = createInbox({ kind: "capture", title: "admission rollback" });
+	const second = { ...createInbox({ kind: "capture", title: "admission rollback" }) };
 	const delivery = pendingInboxGraphEvents()[0]!;
 	expect(() => admitInboxGraphEvent(saved.id, delivery.activation, saved.graph!, () => {
 		startRun(saved.id, "event", delivery.activation.event);

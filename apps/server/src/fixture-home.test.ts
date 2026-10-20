@@ -6,7 +6,7 @@ import { isolateFixtureHome } from "./fixture-home.ts";
 import { spawnOwnedSync } from "./owned-process.ts";
 
 test("Windows fixture homes replace inherited profile aliases and drive selectors", () => {
-	const env = {
+	const env: Record<string, string> = {
 		HOME: "/owner", Home: "/other-owner", UserProfile: "C:\\Users\\owner",
 		HOMEDRIVE: "C:", HomePath: "\\Users\\owner", PATH: "launch-path",
 	};
