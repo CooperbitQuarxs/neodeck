@@ -1,4 +1,4 @@
-import { Layout } from "@/components/Layout";
+import { Layout, ToolCallsHiddenToggle, ToolCardsToggle } from "@/components/Layout";
 import { Sidebar } from "@/components/Sidebar";
 import { Chat } from "@/components/Chat";
 import { Composer } from "@/components/Composer";
@@ -24,6 +24,7 @@ export function ChatView() {
 				}
 				inspector={<Inspector />}
 				topBar={<StatusBar />}
+				tools={<><ToolCardsToggle /><ToolCallsHiddenToggle /></>}
 			/>
 			<ExtUiDialog />
 		</>

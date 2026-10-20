@@ -147,7 +147,7 @@
 	scrollbar-width: none;
 	display: flex;
 	flex-direction: column;
-	gap: 10px;
+	gap: 8px;
 	z-index: 30;
 }
 
