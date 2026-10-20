@@ -58,7 +58,7 @@ states defined in `triage-labels.md`.
 ## Publish
 
 1. Confirm no open issue owns the subject.
-2. Publish with `gh issue create --repo PsychedelicShayna/neodeck --title "..." --body-file <path>` and existing house labels.
+2. Publish with `gh issue create -R PsychedelicShayna/neodeck --title "..." --body-file <path>` and existing house labels.
 3. Update the assigned ledger after each publication, if supplied.
 4. Report the issue number and title to the coordinator through the assigned channel.
 5. Continue sequentially through assigned items, leaving the ledger current.

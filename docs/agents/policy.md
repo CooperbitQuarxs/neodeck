@@ -29,10 +29,10 @@ Agents leave default/integration branch history to merged PRs; no direct
 commits, pushes, resets, rebases, or force-pushes there. Preserve local drift
 and unrelated work rather than committing it as part of a topic.
 
-Upstream is `Shreyans13/omp-deck`, GitHub's fork parent. The old `bjb2/omp-deck`
-no longer exists; changing the local `upstream` remote awaits the Captain's
-answer. Follow [upstream-sync.md](upstream-sync.md) for releases on `sync/<date>`
-into `nightly` and [fork-maintenance.md](fork-maintenance.md) for compatibility.
+Active upstream is `Shreyans13/omp-deck` (`upstream` remote). Original
+`bjb2/omp-deck` credits are historical provenance. Follow
+[upstream-sync.md](upstream-sync.md) for releases on `sync/<date>` into
+`nightly` and [fork-maintenance.md](fork-maintenance.md) for compatibility.
 Keep fork contracts when integrating upstream. Repository slug changes do not
 rename `@npi-deck/*`, `NPI_DECK_*`, state/install paths, launchers, or services.
 
@@ -99,7 +99,7 @@ lower is acceptable. Record confidence and suspected PR-caused check failures
 in the merge note. Fix failures in a follow-up if they matter.
 
 The authoring agent merges into `nightly` unless the assignment names another
-integrator. Merge commits only: `gh pr merge --merge`, with subject
+integrator. Merge commits only: `gh pr merge -R PsychedelicShayna/neodeck --merge`, with subject
 `Merge PR #<number>: <conventional PR subject> (@<author>)`. Resolve actual
 conflicts by merging the base into the topic, never rebasing or refreshing.
 A changed base never invalidates review, confidence, or other evidence.

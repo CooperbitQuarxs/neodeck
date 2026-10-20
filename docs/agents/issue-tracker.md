@@ -1,18 +1,20 @@
 # Issue tracker: GitHub
 
 Issues and specs live in `PsychedelicShayna/neodeck`. Use `gh` and pass
-`--repo PsychedelicShayna/neodeck` on every issue, PR, and label operation:
-fork discovery may otherwise resolve to `Shreyans13/omp-deck`.
+`-R PsychedelicShayna/neodeck` on every issue, PR, and label operation:
+fork discovery may otherwise resolve to the active upstream, `Shreyans13/omp-deck`.
 
 Follow [triage.md](triage.md) for classification, actor states, reconciliation,
 and closure, and [triage-labels.md](triage-labels.md) for vocabulary.
 
 ## Conventions
 
-- Create: `gh issue create --repo PsychedelicShayna/neodeck --title "..." --body-file <path>`.
-- Read: `gh issue view <number> --repo PsychedelicShayna/neodeck --comments`, including labels.
-- Complete open-issue inventory: `gh api --paginate --slurp 'repos/PsychedelicShayna/neodeck/issues?state=open&per_page=100' | jq '[.[][] | select(has("pull_request") | not)]'`. The REST issues endpoint includes PRs, hence the filter. Read issue comments separately. For a narrowed task query, `gh issue list` is useful, but its default limit of 30 is not an exhaustive inventory.
-- Apply or remove existing labels: `gh issue edit <number> --repo PsychedelicShayna/neodeck --add-label "..."` or `--remove-label "..."`.
+- Create: `gh issue create -R PsychedelicShayna/neodeck --title "..." --body-file <path>`.
+- Read: `gh issue view <number> -R PsychedelicShayna/neodeck --comments`, including labels.
+- Complete open-issue inventory: `gh api --paginate --slurp 'repos/PsychedelicShayna/neodeck/issues?state=open&per_page=100' | jq '[.[][] | select(has("pull_request") | not)]'`. The REST issues endpoint includes PRs, hence the filter. Read issue comments separately. For a narrowed task query, `gh issue list -R PsychedelicShayna/neodeck` is useful, but its default limit of 30 is not an exhaustive inventory.
+- Apply or remove existing labels: `gh issue edit <number> -R PsychedelicShayna/neodeck --add-label "..."` or `--remove-label "..."`.
+- Inspect PRs: `gh pr view <number> -R PsychedelicShayna/neodeck`.
+- Inspect label definitions: `gh label list -R PsychedelicShayna/neodeck`.
 - Closure follows [triage](triage.md#closure): verify full acceptance and promotion to `main`; a nightly merge alone does not satisfy it. The Issue Funnel's publication authority is defined in `docs/agents/issue-funnel.md`.
 - Every GitHub comment and PR body, including review triggers, opens with `> [!NOTE]` and `> <actual Model Name> on behalf of PsychedelicShayna`. Follow [review mechanics](pr-review-bots.md) for scoped requests.
 - Use existing labels only; creating or changing label definitions requires a Captain decision.
@@ -24,8 +26,8 @@ and PRs; resolve an ambiguous number before acting.
 
 ## Skill meanings
 
-- "Publish to the issue tracker" means create a GitHub issue.
-- "Fetch the relevant ticket" means read the issue, comments, and labels.
+- "Publish to the issue tracker" means create a GitHub issue with `gh issue create -R PsychedelicShayna/neodeck --title "..." --body-file <path>`.
+- "Fetch the relevant ticket" means read the issue, comments, and labels with `gh issue view <number> -R PsychedelicShayna/neodeck --comments`.
 
 ## Labels and participation
 

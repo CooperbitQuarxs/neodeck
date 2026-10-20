@@ -2,9 +2,9 @@
 
 NeoDeck is [NeoPi](https://github.com/PsychedelicShayna/neopi)'s orchestration and integration frontend; [NeoCode](https://github.com/PsychedelicShayna/neocode) is its graphical frontend.
 
-Repository: `PsychedelicShayna/neodeck`, fork of `Shreyans13/omp-deck`. The old
-`bjb2/omp-deck` no longer exists; changing the local upstream remote awaits
-the Captain's answer.
+Repository and issue tracker: `PsychedelicShayna/neodeck`. Active upstream:
+`Shreyans13/omp-deck` (`upstream` remote). Original `bjb2/omp-deck` credits
+in README/CHANGELOG record historical provenance, not the active upstream.
 
 ## Read before acting
 
