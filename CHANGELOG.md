@@ -56,6 +56,7 @@ All notable changes to NPI deck (a fork of bjb2/omp-deck; entries before the for
 ### Fixed
 
 - Legacy-state migration accepts Windows fixture descendants while retaining outside-path and symlink protections ([#167](https://github.com/PsychedelicShayna/neodeck/issues/167)).
+- Mixture saves and removals no longer fail on Windows when directory fsync is unsupported; file contents still sync before replacement ([#170](https://github.com/PsychedelicShayna/neodeck/issues/170)).
 - Real-backend tests establish private home, agent and storage directories before the first SDK import, including on Windows ([#176](https://github.com/PsychedelicShayna/npi-deck/issues/176)).
 - Routine foundation tests retain their runner, database, home and process-generation lease until the body and cleanup finish, even after a test or hook timeout ([#178](https://github.com/PsychedelicShayna/neodeck/issues/178)).
 - Confirmed graph messages replay and resume downstream work even when their notification channel is no longer available (#161).

@@ -160,6 +160,9 @@ async function assertDirectory(source: MixtureSource): Promise<string> {
 }
 
 async function fsyncDir(dir: string): Promise<void> {
+	// Windows cannot fsync directories. The temp file is still synced before rename,
+	// but rename/unlink durability across power loss is only guaranteed on POSIX.
+	if (process.platform === "win32") return;
 	const handle = await fs.open(dir, constants.O_RDONLY | constants.O_DIRECTORY);
 	try {
 		await handle.sync();
