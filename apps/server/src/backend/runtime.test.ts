@@ -18,9 +18,9 @@ describe("backend selection", () => {
 		const env = { NPI_DECK_HOME: dir };
 		expect(resolveBackendSelection(env)).toBeUndefined();
 		writeFileSync(path.join(dir, "config.yml"), "backends:\n  - id: first\n    kind: source\n    path: /tmp/tree-a\n  - id: second\n    kind: source\n    path: /tmp/tree-b\nactiveBackend: first\n");
-		expect(resolveBackendSelection(env)?.path).toBe("/tmp/tree-a");
+		expect(resolveBackendSelection(env)?.path).toBe(path.resolve("/tmp/tree-a"));
 		writeActiveBackend("second", dir);
-		expect(resolveBackendSelection(env)?.path).toBe("/tmp/tree-b");
+		expect(resolveBackendSelection(env)?.path).toBe(path.resolve("/tmp/tree-b"));
 		writeActiveBackend(null, dir);
 		expect(resolveBackendSelection(env)).toBeUndefined();
 		expect(listBackends(dir)).toHaveLength(2);
