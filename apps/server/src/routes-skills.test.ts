@@ -19,11 +19,14 @@ const selection = resolveBackendSelection();
 if (!selection) throw new Error("skill authoring tests require a configured NeoPi backend");
 await loadBackend(selection);
 // NeoPi fixes its agent dir when first loaded; another test file may have loaded it first.
-// These tests write skills, so they must never reach the user's real agent dir. Bun's
-// userInfo() reads $HOME, which a test run may override, so the real home comes from passwd.
+// These tests write skills, so they must never reach the user's real agent dir.
+// Bun's userInfo() reads $HOME on Unix, which a test run may override, so use passwd there.
+// Windows has no passwd file; userInfo() supplies the account's home instead.
 const agentDir = sdk().getAgentDir();
-const realHome = readFileSync("/etc/passwd", "utf8").split("\n").map((line) => line.split(":"))
-	.find((fields) => Number(fields[2]) === process.getuid?.())?.[5] ?? userInfo().homedir;
+const realHome = process.platform === "win32"
+	? userInfo().homedir
+	: readFileSync("/etc/passwd", "utf8").split("\n").map((line) => line.split(":"))
+		.find((fields) => Number(fields[2]) === process.getuid?.())?.[5] ?? userInfo().homedir;
 if (!agentDir.startsWith(tmpdir()) || agentDir === realHome || agentDir.startsWith(`${realHome}${path.sep}`)) {
 	throw new Error(`refusing to write skills into an agent dir that is not temporary or sits under ${realHome}: ${agentDir}`);
 }
