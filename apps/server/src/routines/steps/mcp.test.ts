@@ -14,13 +14,14 @@ import { RoutinesRunner } from "../../routines-runner.ts";
 import type { RunContext } from "../types.ts";
 import { executeMcpStep } from "./mcp.ts";
 
+import { privateBackendTest } from "../../backend/private-test.ts";
+
+if (privateBackendTest(import.meta.path)) {
 const root = mkdtempSync(path.join(tmpdir(), "deck-mcp-step-test-"));
-if (!process.env.PI_CODING_AGENT_DIR) process.env.PI_CODING_AGENT_DIR = path.join(root, "agent");
-mkdirSync(process.env.PI_CODING_AGENT_DIR, { recursive: true });
 const selection = resolveBackendSelection();
 if (!selection) throw new Error("mcp step tests require a configured NeoPi backend");
 await loadBackend(selection);
-// NeoPi fixes its agent dir at first load; whichever test file got there first, it must be temporary.
+// Refuse an SDK path outside this child's temporary storage.
 if (!sdk().getAgentDir().startsWith(tmpdir())) throw new Error(`refusing to run against a non-temporary agent dir: ${sdk().getAgentDir()}`);
 
 const fixture = path.join(import.meta.dir, "mcp-test-server.ts");
@@ -238,3 +239,4 @@ test("the step timeout ends a stuck call, records a timeout and leaves no server
 	expect(listStepRuns(latest!.id)[0]?.status).toBe("aborted");
 	expect(await waitFor(serversGone)).toBe(true);
 });
+}

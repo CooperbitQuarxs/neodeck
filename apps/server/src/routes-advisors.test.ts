@@ -7,14 +7,15 @@ import { buildAdvisorsRouter } from "./routes-advisors.ts";
 import type { AgentBridge } from "./bridge/types.ts";
 import type { Config } from "./config.ts";
 
+import { privateBackendTest } from "./backend/private-test.ts";
+
+if (privateBackendTest(import.meta.path)) {
 const root = await mkdtemp(path.join(tmpdir(), "deck-advisor-test-"));
 const project = path.join(root, "project");
-await mkdir(path.join(root, "agent")); await mkdir(project);
-process.env.PI_CODING_AGENT_DIR = path.join(root, "agent");
+await mkdir(project);
 const backend = resolveBackendSelection();
 if (!backend) throw new Error("advisor tests require a configured NeoPi backend");
 await loadBackend(backend);
-// NeoPi fixes its agent dir when first loaded; another test file may have loaded it first.
 const agentDir = sdk().getAgentDir();
 if (!agentDir.startsWith(tmpdir())) throw new Error(`refusing to edit a non-temporary agent dir: ${agentDir}`);
 const config: Config = { defaultCwd: project, extraWorkspaces: [], host: "127.0.0.1", port: 0, devMode: true, idleTimeoutMs: 0, dbPath: path.join(root, "db"), uploadsRoot: path.join(root, "uploads") };
@@ -133,3 +134,4 @@ test("model role saves via locked settings without dropping unrelated keys", asy
 	expect(text).toContain("advisor: openrouter/openai/gpt-4o-mini");
 	expect(model).toBe("openrouter/openai/gpt-4o-mini");
 });
+}

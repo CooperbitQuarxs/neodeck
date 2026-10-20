@@ -9,14 +9,15 @@ import { InProcessAgentBridge } from "./bridge/in-process.ts";
 import type { Config } from "./config.ts";
 import { buildMixturesRouter } from "./routes-mixtures.ts";
 
+import { privateBackendTest } from "./backend/private-test.ts";
+
+if (privateBackendTest(import.meta.path)) {
 const root = await mkdtemp(path.join(tmpdir(), "deck-mixtures-test-"));
 const project = path.join(root, "project");
 const nested = path.join(project, "nested");
 const outside = path.join(root, "outside");
-await mkdir(path.join(root, "agent"), { recursive: true });
 await mkdir(nested, { recursive: true });
 await mkdir(outside);
-process.env.PI_CODING_AGENT_DIR = path.join(root, "agent");
 const backend = resolveBackendSelection();
 if (!backend) throw new Error("mixture route tests require a configured NeoPi backend");
 await loadBackend(backend);
@@ -59,7 +60,7 @@ beforeEach(async () => {
 afterAll(async () => {
 	await bridge.dispose();
 	registry.unregisterProvider("deck-test");
-	// NeoPi fixes its agent dir at first load and other test files share it; remove only this file's workspace.
+	// The parent keeps this child's agent storage alive until process exit.
 	await rm(project, { recursive: true, force: true });
 	await rm(outside, { recursive: true, force: true });
 });
@@ -219,3 +220,4 @@ test("nested .omp and ancestor MIXTURES.toml files are listed in NeoPi's order a
 	expect(discovered.mixtures.find(item => item.name === "shared")?.definition.description).toBe("leaf edited");
 	expect(await readFile(file, "utf8")).toContain('description = "ancestor"');
 });
+}

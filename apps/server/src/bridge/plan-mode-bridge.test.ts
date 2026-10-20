@@ -6,18 +6,13 @@ import { feature, loadBackend, resolveBackendSelection } from "../backend/runtim
 import { InProcessSessionHandle } from "./in-process.ts";
 import { PlanModeBridge, type PlanModeSession } from "./plan-mode-bridge.ts";
 
+import { privateBackendTest } from "../backend/private-test.ts";
+
+if (privateBackendTest(import.meta.path)) {
 const backend = resolveBackendSelection();
 const root = await mkdtemp(path.join(os.tmpdir(), "deck-plan-test-"));
-const priorHome = process.env.HOME;
-const priorAgentDir = process.env.PI_CODING_AGENT_DIR;
-process.env.HOME = root;
-process.env.PI_CODING_AGENT_DIR = path.join(root, "agent");
 await loadBackend(backend);
 afterAll(async () => {
-	if (priorHome === undefined) delete process.env.HOME;
-	else process.env.HOME = priorHome;
-	if (priorAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
-	else process.env.PI_CODING_AGENT_DIR = priorAgentDir;
 	await rm(root, { recursive: true, force: true });
 });
 
@@ -267,3 +262,4 @@ test("disposing during proposal preparation cannot install a late pending decisi
 	await expect(proposal).rejects.toThrow("no longer ready for this proposal");
 	expect(f.bridge.hasPendingApproval()).toBe(false);
 });
+}

@@ -9,13 +9,13 @@ import { loadBackend, resolveBackendSelection, sdk } from "./backend/runtime.ts"
 import { getDeckModelRegistry } from "./auth-singleton.ts";
 import { buildModelsConfigRouter, replaceModelsFile } from "./routes-models-config.ts";
 
+import { privateBackendTest } from "./backend/private-test.ts";
+
+if (privateBackendTest(import.meta.path)) {
 const root = await mkdtemp(path.join(tmpdir(), "deck-models-config-test-"));
-await mkdir(path.join(root, "agent"), { recursive: true });
-process.env.PI_CODING_AGENT_DIR = path.join(root, "agent");
 const backend = resolveBackendSelection();
 if (!backend) throw new Error("models.yml tests require a configured NeoPi backend");
 await loadBackend(backend);
-// NeoPi fixes its agent dir when first loaded; another test file may have loaded it first.
 const agentDir = sdk().getAgentDir();
 if (!agentDir.startsWith(tmpdir())) throw new Error(`refusing to edit a non-temporary agent dir: ${agentDir}`);
 await mkdir(agentDir, { recursive: true });
@@ -421,3 +421,4 @@ test("a file NeoPi rejects is still shown masked with its error; an unparseable 
 	expect(broken.rawUnavailable).toBeDefined();
 	expect(broken.error).toContain("YAML Parse error");
 });
+}

@@ -20,6 +20,10 @@ import { MarketplaceService } from "./marketplace-service.ts";
 import { spawnOwnedSync } from "./owned-process.ts";
 import { buildMarketplaceRouter } from "./routes-marketplace.ts";
 
+import { privateBackendTest } from "./backend/private-test.ts";
+
+// The existing marketplace subprocess already owns its separate fixture lifecycle.
+if (process.env.NPI_DECK_MARKETPLACE_TEST_ROOT || privateBackendTest(import.meta.path)) {
 const backend = resolveBackendSelection();
 if (!backend) throw new Error("marketplace route tests require a configured NeoPi backend");
 await loadBackend(backend);
@@ -243,4 +247,5 @@ if (!fixtureRoot) {
 		expect(missing.status).toBe(500);
 		expect(((await missing.json()) as { error: string }).error).toContain("not installed");
 	});
+}
 }
