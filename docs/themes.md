@@ -1,7 +1,13 @@
 # Themes
 
-npi-deck ships with three themes:
+NeoDeck ships with five themes. **Neo** is the default and is the design
+language shared with NeoPi's web surfaces; the full reference is
+[docs/design/neo-design-language.md](./design/neo-design-language.md).
 
+- **Neo** — pure-black chassis, one inset panel, alpha hairlines, cyan → pink
+  accent, Inter. Dark mode, default.
+- **Neo light** — the same language on white paper. Light mode, chosen when
+  the OS prefers light.
 - **Paper** — warm cream surfaces, rust accent, near-black ink. Engineer's
   notebook aesthetic. Light mode.
 - **Slate** — deep slate surfaces, brighter rust accent, calm syntax colors.
@@ -53,8 +59,8 @@ is no flash-of-default. Reload preserves the choice.
 On first visit (no value in `localStorage`), the pre-paint script reads
 `prefers-color-scheme`:
 
-- `dark` → slate.
-- otherwise → paper.
+- `light` → neo-light.
+- otherwise → neo.
 
 Pin a choice by picking a card in Settings. Revert to system preference
 with **Match system** (clears the `localStorage` value).
@@ -74,9 +80,9 @@ stylesheet. Slate theme overrides the syntax-token colors via
 `[data-theme="slate"] .hljs-keyword { ... }` selectors so code remains
 readable on dark.
 
-## Adding a third theme
+## Adding a theme
 
-The architecture supports N themes — v1 ships three.
+The architecture supports N themes — five ship today.
 
 1. Append a `ThemeDefinition` entry to `THEMES` in
    `apps/web/src/lib/theme.ts`.
