@@ -79,7 +79,7 @@ export function HomeView() {
 							<Stat label="Engine" value={backend ? "NeoPi" : "none"} foot={backend ? (backend.version ?? backend.commit?.slice(0, 7) ?? backend.path) : "attach one on the NeoPi page"} to="/neopi" icon={Zap} />
 						</StatGrid>
 
-						<div className="neo-grid neo-grid-main-side">
+						<div className="neo-grid neo-grid-main-side items-start">
 							<Card
 								title="Inbox"
 								description={unread.length ? "Newest first. Open one to read, label, or promote it." : "Nothing waiting. Capture a thought and it lands here."}

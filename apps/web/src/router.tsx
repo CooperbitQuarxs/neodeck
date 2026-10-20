@@ -13,6 +13,8 @@ import { IntegrationsView } from "./views/IntegrationsView";
 import { OnboardingView } from "./views/OnboardingView";
 import { AdvisorsView } from "./views/AdvisorsView";
 import { MixturesView } from "./views/MixturesView";
+import { HomeView } from "./views/HomeView";
+import { FlowsView, GitHubView, NeoPiView, PeopleView, TelegramView } from "./views/PlannedViews";
 import { onboardingApi } from "./lib/onboarding-api";
 
 /**
@@ -36,12 +38,11 @@ function OnboardingGate() {
 			.state()
 			.then((state) => {
 				if (currentPath.current !== "/") return;
-				navigate(state.needsOnboarding ? "/onboarding" : "/inbox", { replace: true });
+				if (state.needsOnboarding) navigate("/onboarding", { replace: true });
 			})
 			.catch(() => {
 				// State endpoint failed — don't block the app. Onboarding can be
-				// re-run from Settings if the gate misfires.
-				if (currentPath.current === "/") navigate("/inbox", { replace: true });
+				// re-run from Settings if the gate misfires; `/` is Home either way.
 			});
 	}, [location.pathname, navigate]);
 	return <Outlet />;
@@ -51,8 +52,14 @@ const router = createBrowserRouter([
 	{
 		element: <OnboardingGate />,
 		children: [
-			{ path: "/", element: <InboxView /> },
+			{ path: "/", element: <HomeView /> },
+			{ path: "/threads", element: <ChatView /> },
 			{ path: "/chat", element: <ChatView /> },
+			{ path: "/flows", element: <FlowsView /> },
+			{ path: "/github", element: <GitHubView /> },
+			{ path: "/telegram", element: <TelegramView /> },
+			{ path: "/neopi", element: <NeoPiView /> },
+			{ path: "/people", element: <PeopleView /> },
 			{ path: "/tasks", element: <TasksView /> },
 			{ path: "/routines", element: <RoutinesView /> },
 			{ path: "/routines/:id/runs/:runId", element: <RunDetailView /> },

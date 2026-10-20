@@ -362,8 +362,8 @@ export function RoutineBuilder({ routine, onSaved, onError }: Props) {
 				// T-77: canvas tab claims the full viewport so the graph + inspector
 				// can spread out; form tabs stay capped at 5xl for readability.
 				tab === "canvas"
-					? "flex h-full flex-col overflow-hidden rounded-lg border border-line bg-paper shadow-[0_1px_0_0_rgb(var(--ink)/0.03)]"
-					: "mx-auto flex h-full max-w-5xl flex-col overflow-hidden rounded-lg border border-line bg-paper shadow-[0_1px_0_0_rgb(var(--ink)/0.03)]"
+					? "flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-line bg-paper shadow-[0_1px_0_0_rgb(var(--ink)/0.03)]"
+					: "mx-auto flex min-h-0 w-full flex-1 max-w-5xl flex-col overflow-hidden rounded-lg border border-line bg-paper shadow-[0_1px_0_0_rgb(var(--ink)/0.03)]"
 			}
 		>
 			<div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-line px-3 py-2">
@@ -634,13 +634,13 @@ function Footer({
 }) {
 	return (
 		<div className="flex shrink-0 items-center gap-2 border-t border-line bg-paper px-3 py-2">
-			<label className="flex items-center gap-2 text-2xs">
+			<label className="flex items-center gap-2 text-xs text-ink-2">
 				<input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
 				<span>Enabled</span>
 			</label>
 			<div className="ml-auto flex items-center gap-1.5">
 				{routine ? (
-					<button type="button" onClick={onRunNow} className="btn-ghost h-7 px-2 text-2xs">
+					<button type="button" onClick={onRunNow} className="neo-btn" data-size="sm">
 						Run now
 					</button>
 				) : null}
@@ -648,9 +648,11 @@ function Footer({
 					type="button"
 					onClick={onSave}
 					disabled={!canSave}
-					className="btn-primary h-7 px-2 text-2xs disabled:opacity-50"
+					className="neo-btn"
+					data-variant="primary"
+					data-size="sm"
 				>
-					{busy ? "Saving..." : routine ? "Save" : "Create"}
+					{busy ? "Saving..." : routine ? "Save routine" : "Create routine"}
 				</button>
 			</div>
 		</div>

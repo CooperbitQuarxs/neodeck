@@ -31,7 +31,7 @@ export function GraphCanvasSurface<N extends Node = Node, E extends Edge = Edge>
 				position="bottom-left"
 				nodeStrokeWidth={2}
 				maskColor="rgb(var(--paper) / 0.7)"
-				className="!border !border-line !bg-paper-2"
+				className="!h-20 !w-32 !border !border-line !bg-paper-2"
 				pannable
 				zoomable
 			/>

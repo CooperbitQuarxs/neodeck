@@ -34,7 +34,7 @@ export function RoutineEditorPage({ routine, onSaved, onDeleted }: Props) {
 				{!isNew ? <button type="button" onClick={() => void remove()} className="btn-ghost h-8 px-2 text-xs text-danger"><Trash2 className="h-3.5 w-3.5" />Delete</button> : null}
 			</header>
 			{error ? <div role="alert" className="border-b border-line bg-danger/10 px-3 py-2 text-xs text-danger">{error}</div> : null}
-			<div className="min-h-0 flex-1 p-3">
+			<div className="flex min-h-0 flex-1 flex-col p-3">
 				{!isNew && routine.specVersion === 2 ? (
 					<p className="px-3 py-3 text-sm text-ink-2">This routine executes a native graph. Its definition is managed through the routine API, not the single-action or pipeline editor.</p>
 				) : <RoutineBuilder routine={isNew ? undefined : routine} onSaved={(saved) => { setError(undefined); onSaved(saved); }} onError={setError} />}
