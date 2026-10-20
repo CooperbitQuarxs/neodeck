@@ -2,6 +2,11 @@ name: macOS routine hook probe
 
 on:
   workflow_dispatch:
+  # Dispatch registration requires a default-branch copy. This narrow trigger
+  # lets nightly diagnostics run without promoting application code to main.
+  push:
+    branches:
+      - "ci/mac-hook-probe-run/**"
 
 permissions:
   contents: read
