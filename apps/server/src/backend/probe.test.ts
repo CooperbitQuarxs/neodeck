@@ -47,6 +47,7 @@ function recordedTree(options?: FakeTreeOptions): string {
 			git,
 		}));
 	}
+	expect(readNativeRecord(tree)?.inputs).toBeString();
 	return tree;
 }
 
@@ -66,6 +67,10 @@ test("refuses unprepared candidate before importing SDK modules", async () => {
 		if (result.ok) throw new Error("unprepared backend unexpectedly passed preflight");
 		expect(result.reason).toContain("tree not prepared: node_modules missing");
 	} finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("accepts the initial native record before checking the fake tree's missing SDK exports", async () => {
+	expect(await refusal(recordedTree())).toContain("missing required SDK surface");
 });
 
 // quarantined: flaky on Windows, tracked by #198
