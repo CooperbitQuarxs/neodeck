@@ -8,6 +8,9 @@ import { loadBackend, resolveBackendSelection, sdk } from "./backend/runtime.ts"
 import type { Config } from "./config.ts";
 import { buildIntegrationsRouter } from "./routes-integrations.ts";
 
+import { privateBackendTest } from "./backend/private-test.ts";
+
+if (privateBackendTest(import.meta.path)) {
 const root = mkdtempSync(path.join(tmpdir(), "deck-integrations-test-"));
 if (!process.env.PI_CODING_AGENT_DIR) process.env.PI_CODING_AGENT_DIR = path.join(root, "agent");
 mkdirSync(process.env.PI_CODING_AGENT_DIR, { recursive: true });
@@ -75,3 +78,4 @@ test("lists each enabled server with its tools or its scrubbed failure, then clo
 	while (alive() && Date.now() < deadline) await Bun.sleep(25);
 	expect(alive()).toBe(false);
 });
+}

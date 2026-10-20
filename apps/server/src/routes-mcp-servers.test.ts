@@ -8,6 +8,9 @@ import { buildMcpServersRouter } from "./routes-mcp-servers.ts";
 import type { AgentBridge, LiveMcpSession } from "./bridge/types.ts";
 import type { Config } from "./config.ts";
 
+import { privateBackendTest } from "./backend/private-test.ts";
+
+if (privateBackendTest(import.meta.path)) {
 const root = await mkdtemp(path.join(tmpdir(), "deck-mcp-servers-test-"));
 const project = path.join(root, "project");
 await mkdir(path.join(root, "agent"), { recursive: true });
@@ -16,8 +19,7 @@ await mkdir(path.join(project, ".omp"), { recursive: true });
 const backend = resolveBackendSelection();
 if (!backend) throw new Error("MCP server tests require a configured NeoPi backend");
 await loadBackend(backend);
-// NeoPi fixes its agent dir when first loaded; another test file may have loaded it first.
-// Either way it must be a temp dir: these tests rewrite the user mcp.json.
+// Retain the actual SDK-path refusal before rewriting the user mcp.json.
 const agentDir = sdk().getAgentDir();
 if (!agentDir.startsWith(tmpdir())) throw new Error(`refusing to edit a non-temporary agent dir: ${agentDir}`);
 await mkdir(agentDir, { recursive: true });
@@ -526,3 +528,4 @@ test("a malformed mcp.json fails with a generic error that never quotes it, and 
 	expect(JSON.parse(text).error).toContain("server log");
 	expect(await readFile(projectFile, "utf8")).toBe(broken);
 });
+}

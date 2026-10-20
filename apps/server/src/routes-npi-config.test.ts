@@ -8,6 +8,9 @@ import { buildNpiConfigRouter } from "./routes-npi-config.ts";
 import type { AgentBridge } from "./bridge/types.ts";
 import type { Config } from "./config.ts";
 
+import { privateBackendTest } from "./backend/private-test.ts";
+
+if (privateBackendTest(import.meta.path)) {
 const root = await mkdtemp(path.join(tmpdir(), "deck-npi-config-test-"));
 const project = path.join(root, "project");
 await mkdir(path.join(root, "agent"), { recursive: true });
@@ -16,8 +19,7 @@ await mkdir(project);
 const backend = resolveBackendSelection();
 if (!backend) throw new Error("NeoPi config tests require a configured NeoPi backend");
 await loadBackend(backend);
-// NeoPi fixes its agent dir when first loaded; another test file may have loaded it first.
-// Either way it must be a temp dir: these tests rewrite config.yml.
+// Retain the actual SDK-path refusal before rewriting config.yml.
 const agentDir = sdk().getAgentDir();
 if (!agentDir.startsWith(tmpdir())) throw new Error(`refusing to edit a non-temporary agent dir: ${agentDir}`);
 await mkdir(agentDir, { recursive: true });
@@ -248,3 +250,4 @@ test("model roles: assigning or unsetting one role keeps every other role, inclu
 	const saved2 = Bun.YAML.parse(await readFile(configFile, "utf8")) as { modelRoles: Record<string, string> };
 	expect(saved2.modelRoles).toEqual({ review: "anthropic/claude-opus-5-5:high", slow: "anthropic/claude-opus-5-5:high" });
 });
+}

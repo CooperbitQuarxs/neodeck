@@ -12,13 +12,15 @@ import { buildSkillsRouter } from "./routes-skills.ts";
 import { SkillsService } from "./skills-service.ts";
 import { watchSkillRoots } from "./skills-watcher.ts";
 
+import { privateBackendTest } from "./backend/private-test.ts";
+
+if (privateBackendTest(import.meta.path)) {
 const root = mkdtempSync(path.join(tmpdir(), "deck-skills-test-"));
 if (!process.env.PI_CODING_AGENT_DIR) process.env.PI_CODING_AGENT_DIR = path.join(root, "agent");
 mkdirSync(process.env.PI_CODING_AGENT_DIR, { recursive: true });
 const selection = resolveBackendSelection();
 if (!selection) throw new Error("skill authoring tests require a configured NeoPi backend");
 await loadBackend(selection);
-// NeoPi fixes its agent dir when first loaded; another test file may have loaded it first.
 // These tests write skills, so they must never reach the user's real agent dir.
 // Bun's userInfo() reads $HOME on Unix, which a test run may override, so use passwd there.
 // Windows has no passwd file; userInfo() supplies the account's home instead.
@@ -258,4 +260,5 @@ test("the watcher arms a skills root created after it started and reports what l
 async function waitFor(ready: () => boolean): Promise<void> {
 	for (let i = 0; i < 100 && !ready(); i++) await Bun.sleep(20);
 	expect(ready()).toBe(true);
+}
 }

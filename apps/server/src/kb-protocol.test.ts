@@ -8,6 +8,9 @@ import type { InternalUrlRouter } from "@oh-my-pi/pi-coding-agent/internal-urls"
 import { loadBackend, sdk } from "./backend/runtime.ts";
 import { KbProtocolHandler } from "./kb-protocol.ts";
 
+import { privateBackendTest } from "./backend/private-test.ts";
+
+if (privateBackendTest(import.meta.path)) {
 const ENV_KEYS = ["NPI_DECK_KB_ROOT", "HOME", "USERPROFILE"];
 
 let saved: Record<string, string | undefined>;
@@ -15,9 +18,8 @@ let kbRoot: string;
 let router: InternalUrlRouter;
 
 // Provision the native SDK before admitting cases; cold backend loading is not a case hook.
-if (process.platform !== "win32") await loadBackend();
-// quarantined: flaky on Windows, tracked by #192
-describe.skipIf(process.platform === "win32")("kb:// resolution", () => {
+await loadBackend();
+describe("kb:// resolution", () => {
 
 	beforeEach(() => {
 		saved = Object.fromEntries(ENV_KEYS.map((k) => [k, process.env[k]]));
@@ -116,3 +118,4 @@ describe.skipIf(process.platform === "win32")("kb:// resolution", () => {
 		await expect(router.resolve("kb://anything")).rejects.toThrow(/NPI_DECK_KB_ROOT/);
 	});
 });
+}
