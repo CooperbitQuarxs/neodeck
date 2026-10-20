@@ -139,8 +139,10 @@ function physical(file: string): string {
 	}
 }
 
-function within(inner: string, outer: string): boolean {
-	return inner === outer || inner.startsWith(outer.endsWith("/") ? outer : `${outer}/`);
+/** Lexical containment only; callers resolve symlinks with `physical` where required. */
+export function within(inner: string, outer: string, paths: path.PlatformPath = path): boolean {
+	const relative = paths.relative(outer, inner);
+	return relative === "" || (!paths.isAbsolute(relative) && relative !== ".." && !relative.startsWith(`..${paths.sep}`));
 }
 
 /** Creates `relative` under `root` one component at a time. Any existing component that is not a real directory (a symlink included) is refused. */
@@ -187,7 +189,7 @@ export async function migrate(args: string[], env: NodeJS.ProcessEnv = process.e
 	if (from) {
 		const fixtureBoundary = path.dirname(source.home);
 		for (const configured of [source.data, configuredDb, configuredUploads, configuredBridgeDb]) {
-			if (configured && configured !== fixtureBoundary && !configured.startsWith(`${fixtureBoundary}/`)) {
+			if (configured && !within(configured, fixtureBoundary)) {
 				throw new Error(`--from fixture references a path outside its parent directory: ${configured}`);
 			}
 		}
@@ -199,7 +201,7 @@ export async function migrate(args: string[], env: NodeJS.ProcessEnv = process.e
 		extraDbs.push([origin, filename]);
 		source.extra.push([origin, path.join(target, filename)]);
 	}
-	const externalUploads = configuredUploads && !configuredUploads.startsWith(`${source.data}/`) && configuredUploads !== source.data ? configuredUploads : undefined;
+	const externalUploads = configuredUploads && !within(configuredUploads, source.data) ? configuredUploads : undefined;
 	if (externalUploads) source.extra.push([externalUploads, path.join(target, "uploads")]);
 	// Compare where the paths physically lead, so a symlinked deck home (or any
 	// symlinked ancestor) cannot reach into the legacy state, or the reverse.
