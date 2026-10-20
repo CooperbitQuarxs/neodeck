@@ -7,7 +7,7 @@ All notable changes to NPI deck (a fork of bjb2/omp-deck; entries before the for
 
 ### Added
 
-- A manual macOS routine-hook probe records native process ownership, output endpoints, signals and EOF for the deadline and duration-budget failures ([#166](https://github.com/PsychedelicShayna/neodeck/issues/166)).
+- A macOS routine-hook probe records native process ownership, output endpoints, signals and EOF for the deadline and duration-budget failures. Run it manually or by pushing a disposable `ci/mac-hook-probe-run/**` branch without promoting nightly to main ([#166](https://github.com/PsychedelicShayna/neodeck/issues/166)).
 - **Inbox-first graph intake** ([#160](https://github.com/PsychedelicShayna/neodeck/issues/160)). Fresh navigation opens Inbox; Chat and Kanban remain one click away. The `inbox: card added` source delivers each committed card once per configured flow/source, keeps the original card in run provenance, and prevents duplicate intake across notifications and restarts.
 - **Reusable native graph actions:** create cards with their stored properties, send to explicit notification channels and file GitHub issues while retaining upstream provenance, durable replay receipts and write-free dry-runs ([#161](https://github.com/PsychedelicShayna/neodeck/issues/161)).
 
