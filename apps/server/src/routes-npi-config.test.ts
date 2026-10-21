@@ -89,6 +89,20 @@ test("a saved record reaches config.yml and the live session; reset removes the 
 	expect(reset.live[0]).toMatchObject({ provenance: "default", effectiveValue: {} });
 });
 
+test.skipIf(!("setActiveRole" in live))("live settings report role provenance without replacing the saved global value", async () => {
+	const configured = await patch({ id: "roleSettings", value: { review: { "compaction.thresholdTokens": 64000 } } });
+	expect(configured.status).toBe(200);
+	if (!("setActiveRole" in live) || typeof live.setActiveRole !== "function") throw new Error("backend lacks active role settings");
+	live.setActiveRole("review");
+	const response = await patch({ id: "compaction.thresholdTokens", value: 32000 });
+	expect(response.status).toBe(200);
+	const body = await response.json() as NpiConfigPatchResponse;
+	expect(body.setting).toMatchObject({ provenance: "global", value: 32000, effectiveValue: 32000 });
+	expect(body.live).toEqual([{ sessionId: "live", cwd: project, provenance: "role", effectiveValue: 64000 }]);
+	expect((await list()).settings.find(setting => setting.id === "compaction.thresholdTokens"))
+		.toMatchObject({ provenance: "global", effectiveValue: 32000 });
+});
+
 test("invalid values fail with the setting's own message and leave config.yml untouched", async () => {
 	const before = await readFile(configFile, "utf8");
 	const cases: Array<[string, unknown, string]> = [
@@ -206,13 +220,18 @@ test("an environment override locks its key with the reason and refuses writes",
 });
 
 test("model roles: every built-in role in NeoPi's order, then custom roles, each with its own layer and model filter", async () => {
+	// Newer SDKs add built-in roles. Keep the shared core's order fixed while
+	// requiring configured roles to follow the backend's entire built-in list.
+	const builtins = (await roles()).roles;
+	expect(builtins.every(role => role.builtin)).toBe(true);
+	expect(builtins.map(role => role.id).filter(id => BUILTIN_ROLES.includes(id))).toEqual(BUILTIN_ROLES);
 	await writeFile(configFile, "modelRoles:\n  smol: openrouter/openai/gpt-4o-mini\n  review: anthropic/claude-opus-5-5:high\n  sweep:\n    - openai/gpt-5\n    - \"@smol\"\n");
 	const projectDir = path.join(project, ".omp");
 	await mkdir(projectDir, { recursive: true });
 	await writeFile(path.join(projectDir, "config.yml"), "modelRoles:\n  plan: openai/gpt-5:high\n");
 	try {
 		const body = await roles();
-		expect(body.roles.map(r => r.id)).toEqual([...BUILTIN_ROLES, "review", "sweep"]);
+		expect(body.roles.map(r => r.id)).toEqual([...builtins.map(role => role.id), "review", "sweep"]);
 		const role = (id: string) => body.roles.find(r => r.id === id)!;
 		expect(role("smol")).toMatchObject({ name: "Fast", tag: "SMOL", section: "chat", builtin: true, value: "openrouter/openai/gpt-4o-mini", effectiveValue: "openrouter/openai/gpt-4o-mini", provenance: "global" });
 		// Unset: no layer assigns it, so NeoPi's built-in chain is what applies.
