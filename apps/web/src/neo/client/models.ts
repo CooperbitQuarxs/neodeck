@@ -12,6 +12,7 @@ import { npiConfigApi } from "@/lib/npi-config-api";
 import { useAccount } from "./auth";
 import { PREVIEW_POOLS, PREVIEW_PROVIDERS } from "./preview-data";
 import { SOURCES } from "./source";
+import { useProviders } from "./providers";
 
 export interface PickRole {
 	/** `neoproxy/<name>`. */
@@ -92,15 +93,26 @@ export const models: ModelsClient = SOURCES.models === "live" ? liveModels : pre
 
 let cache: Promise<PickerCatalog> | null = null;
 
-/** The catalogue, fetched once per page load; `undefined` until it arrives. */
-export function useCatalog(): PickerCatalog | undefined {
+/** The catalogue and a surfaced load error, shared by the model selectors. */
+export function useCatalog(): { catalog: PickerCatalog | undefined; error: string | null } {
 	const [catalog, setCatalog] = useState<PickerCatalog>();
+	const [error, setError] = useState<string | null>(null);
 	const account = useAccount();
+	const exposure = useProviders();
 	useEffect(() => {
 		cache ??= models.catalog();
-		void cache.then((c) => setCatalog(filterForAccount(c, account?.roles)));
-	}, [account?.roles]);
-	return catalog;
+		let active = true;
+		void cache.then((c) => {
+			if (!active) return;
+			const filtered = filterForAccount(c, account?.roles);
+			setCatalog({ ...filtered, providers: filtered.providers.map(p => ({ ...p, hidden: exposure.find(e => e.id === p.id || e.id === (p.id === "openai-codex" ? "codex" : p.id))?.hidden ?? p.hidden })) });
+			setError(null);
+		}, (failure: unknown) => {
+			if (active) setError(failure instanceof Error ? failure.message : String(failure));
+		});
+		return () => { active = false; };
+	}, [account?.roles, exposure]);
+	return { catalog, error };
 }
 
 /** Members see only the roles the admin mapped for them; admins see everything, hidden providers included. */

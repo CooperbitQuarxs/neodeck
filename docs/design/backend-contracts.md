@@ -1,20 +1,30 @@
 # Backend contracts the new deck designs against
 
 Every domain in `apps/web/src/neo/client/` has a typed client with a `live`
-adapter (existing deck endpoints) and a `preview` adapter (fixtures in
-`preview-data.ts`). The registry in `client/source.ts` says which is in use.
-This file is the contract a backend implements to flip a domain to `live`;
-the TypeScript shapes in `preview-data.ts` are authoritative.
+adapter (existing deck endpoints) and a `preview` adapter (in-memory
+fixtures that mutate, so the page is fully interactive). The registry in
+`client/source.ts` says which is in use per domain, with the reason. This
+file is the contract a backend implements to flip a domain to `live`; the
+TypeScript shapes in the client files are authoritative, and the fixtures
+are the examples.
+
+Vocabulary shared with NeoProxy (`NeoProxy/docs/design/backend-contracts.md`):
+a **virtual model** is `neoproxy/<name>` (`default`, `small`, `heavy`, `live`
+are virtual models, not a separate "role" object); its **chain** is a list
+of **stages** `{ model, accounts, draw, perAccount, cap, window, per, effort }`
+joined by "demote", ending in a **terminal** `{ kind: limit | queue |
+passthrough, message }`; an account's grant carries an `allotment` (0..1)
+that scales every budget. NeoDeck's "hidden from pickers" is local to the
+deck (still served); NeoProxy's `exposed: false` removes a provider.
 
 ## 1. Auth and accounts (`auth`, `accounts`)
 
 - `POST /api/auth/login` `{ handle, password }` → `200 { account: Account, token }`, `401` on mismatch. Cookie or bearer; the client sends nothing extra.
-- `GET /api/auth/me` → `{ account }` or `401`.
-- `POST /api/auth/logout` → `204`.
-- `GET /api/accounts` (admin) → `{ accounts: Account[] }`; `PATCH /api/accounts/:id` `{ role?, roles? }`.
-- `Account { id, handle, name, role: "admin"|"member", hue, roles: string[] }`; `roles` are the `neoproxy/<name>` roles the admin mapped for the account.
+- `GET /api/auth/me` → `{ account }` or `401`. `POST /api/auth/logout` → `204`.
+- `GET /api/accounts` (admin) → `{ accounts: Account[] }`; `POST /api/accounts` `{ handle, name, password, role, models }`; `PATCH /api/accounts/:id` `{ name?, role?, models?, allotment?, password? }`.
+- `Account { id, handle, name, role: "admin"|"member", hue, roles: string[], allotment?: number }`; `roles` are the virtual models (`neoproxy/<name>`) the admin granted the account.
 
-## 2. Classifier (`classifier`)
+## 2. Classifier and inbox history (`classifier`)
 
 - `GET /api/inbox/:id/proposal` → `Proposal { itemId, kind, destination, confidence, reason }`.
 - `POST /api/inbox/:id/file` `{ destination }` → `{ receipt: { kind, ref, url } }`, and appends to the item's history. `destination` is one of `card{project,column}`, `issue{repo}`, `thread{agent}`, `note{path}`.
@@ -24,30 +34,71 @@ the TypeScript shapes in `preview-data.ts` are authoritative.
 
 - `GET /api/presence` → `{ needsYou, working, inReview }`; also pushed on the websocket as `presence` frames.
 
-## 4. Agents and the judge (`agents`, `judge`)
+## 4. Threads with several agents (`threadAgents`)
 
-- `GET /api/agents` → `{ agents: LiveAgent[] }` across threads, cards and routines.
-- `GET /api/agents/templates` → `{ templates: AgentTemplate[] }`; `POST /api/agents` `{ template, where, model?, restrictions? }` spawns one; `POST /api/agents/:id/stop`.
-- `GET /api/judge/events?limit=` → `{ events: JudgeEvent[] }`; websocket frame `judge_event`.
+A thread is a session that hosts agents as equals. Today a session has exactly one (the deck's `Main`); the contract adds the rest.
 
-## 5. GitHub (`github`)
+- `GET /api/threads/:id/agents` → `{ agents: ThreadAgent[] }`; `ThreadAgent { id, name, hue, model, template, state: "needs-you"|"working"|"idle", restrictions: Restriction[], spawnedBy? }`.
+- `POST /api/threads/:id/agents` `{ name, hue, model, template, restrictions }` → `ThreadAgent`; `DELETE /api/threads/:id/agents/:agentId`.
+- `POST /api/threads/:id/send` `{ text, to: agentId | "all", images? }`: the composer's target. Assistant messages on the websocket carry `agentId` so the transcript can colour them.
+- `PATCH /api/threads/:id/agents/:agentId` `{ model?, restrictions? }`: loosening or tightening at runtime (the owner's model: hierarchy is a restriction, not a type).
 
-- `GET /api/github/repos` → `{ repos: Repo[] }`.
-- `GET /api/github/wheel?repo=` → `{ items: WheelItem[] }` (stages ready → implementing → pr → review → merged → nightly).
-- `POST /api/github/issues` `{ repo, title, body, cardId? }` → `{ number, url }`.
+## 5. Agents, templates and the judge (`agents`, `judge`)
 
-## 6. Usage and providers (`usage`, `providers`)
+- `GET /api/agents` → `{ agents: LiveAgent[] }` across threads, cards and routines. `LiveAgent { id, name, template, model, where: { kind: "thread"|"card"|"routine", id, label }, state, owner, tokens, costUsd, since, hue }`.
+- `GET /api/agents/templates` → `{ templates: AgentTemplate[] }`; `POST`/`PUT /api/agents/templates/:id`; `DELETE`. `AgentTemplate { id, name, blurb, model, restrictions: Restriction[] }`; `Restriction { key: "visibility"|"lifecycle"|"spawn"|"model"|"prompt"|"tools", label }`.
+- `POST /api/agents` `{ template, name, hue, model, restrictions, where }` spawns one; `POST /api/agents/:id/stop`; `PATCH /api/agents/:id` `{ model?, restrictions? }`.
+- `GET /api/judge/events?limit=` → `{ events: JudgeEvent[] }`; websocket frame `judge_event`. `POST /api/judge/events/:id/undo` re-spawns what a "stopped" event stopped. `GET/PUT /api/judge` `{ model, intervalSec, paused }`.
 
-- `GET /api/usage/me` → `{ pools: Pool[], spend: SpendPoint[] }`; `GET /api/usage/accounts/:id` (admin).
-- `GET /api/providers` → `{ providers: ProviderExposure[] }`; `PATCH /api/providers/:id` `{ hidden }` (admin).
+## 6. Board evidence (`boardEvidence`)
 
-## 7. Studio (`studio`)
+Cards and columns are live (`/api/tasks`, `/api/task-states`). The contract adds what a card knows about itself:
 
-- `GET /api/graphs` → `GraphSummary[]`; `POST /api/graphs` `{ kind, name }` → `StudioGraph`.
-- `GET /api/graphs/:id` → `StudioGraph`; `PUT /api/graphs/:id` accepts that document and returns the saved document; `DELETE /api/graphs/:id` removes it.
-- `POST /api/graphs/:id/run` → `StudioRun`; `GET /api/graphs/:id/runs` → `StudioRun[]`, with per-node timing and output notes.
-- `GET /api/graphs/node-types?kind=` → `NodeType[]`. The plain-data registry is `neo/pages/studio/vocab.ts`; the graph and run interfaces are exported by `neo/client/studio.ts`.
-- Graph documents contain `id`, `kind`, `name`, `description`, `enabled`, `nodes`, `edges`, `settings`, `updatedAt` and optional `lastRun`. Each node has an id, vocabulary type, configuration and x/y position. An edge names its source and target node and port. Ports must have matching types, unless either is `any`.
-- Flows stay on `/api/routines`; the existing routine builder owns their YAML source. The map stays on `/api/kb/graph` and is read-only in Studio. Neither is rewritten into a preview graph.
-- Routers edit virtual models such as `neoproxy/heavy`. An entry leads to model stages, and stage-to-stage edges mean demotion. A stage defines model, accounts, draw strategy, per-account pool percentage, cap, whether the cap applies per user or to all users, window and optional effort. A terminal limits, queues or passes through.
-- Pipeline, router, classifier and board-flow previews save documents in this browser's local storage. Their run records remain in memory and never send inference requests or output actions.
+- `GET /api/tasks/:id/events` → `{ events: BoardEvent[] }`; `BoardEvent { id, at, actor, text, tone? }` (captured, assigned, run started/finished, PR opened, review, merged).
+- `GET /api/tasks/:id/links` → `{ issue?: { repo, number, url }, pr?: { repo, number, url }, thread?: { id }, flow?: { id, name } }`.
+- Card properties the deck reads from the card's front matter: `origin: inbox|github|thread|routine|manual`, `origin_ref`, `holder: { kind: "person", handle } | { kind: "agent", id }`.
+- `POST /api/tasks/:id/assign` accepts `{ model? }` (today it takes no body).
+
+## 7. Studio graphs (`studioGraphs`)
+
+Flows are today's routines (`/api/routines`). The other kinds share one document:
+
+- `GET /api/graphs` → `{ graphs: GraphSummary[] }` for kinds `pipeline | router | classifier | boardflow` (+ `flow` mirrored from routines, `map` virtual).
+- `GET/PUT/DELETE /api/graphs/:id` → `StudioGraph { id, kind, name, description, enabled, nodes: { id, type, config, position }[], edges: { id, from: { node, port }, to: { node, port } }[], settings, lastRun?, updatedAt }`; `POST /api/graphs` `{ kind, name }`.
+- `GET /api/graphs/node-types?kind=` → the node vocabulary (`apps/web/src/neo/pages/studio/vocab.ts` is the reference data: types, ports with types, fields with controls).
+- `POST /api/graphs/:id/run` → `StudioRun`; `GET /api/graphs/:id/runs` → `{ runs: StudioRun[] }`; `StudioRun { id, graphId, startedAt, endedAt?, ok, trigger, costUsd?, nodes: { nodeId, startedAt, endedAt?, status, note? }[] }`.
+- A router graph is the visual form of a NeoProxy virtual model's chain; saving one writes the virtual model (`PUT /neoproxy/api/virtual-models/:name`).
+- Pipeline, router, classifier and board-flow previews save documents in the browser's local storage; preview runs stay in memory and never send inference requests or output actions.
+- Source is TOML (`text/toml`) on `GET /api/graphs/:id?format=toml` and `PUT` with the same type; flows stay YAML until routines migrate.
+
+## 8. Dictation (`dictation`)
+
+- `POST /api/dictation/transcribe` body `audio/webm` (or whatever MediaRecorder produced) → `{ text }`. Routed through xAI STT with a local parakeet fallback; `404` until wired, which the composer reports as "Dictation isn't wired on this deck yet."
+- `GET/PUT /api/settings/dictation` `{ engine: "xai"|"parakeet"|"off", language, holdKey }`.
+
+## 9. Knowledge history (`knowledgeHistory`)
+
+Notes are read live (`/api/kb/*`); humans do not write (the server refuses by design; agents write through `kb_write`). The page's verb is "Ask an agent", which opens a thread.
+
+- `GET /api/kb/history?path=` → `{ events: { id, at, actor, kind: "wrote"|"asked"|"linked", text, threadId? }[] }`.
+
+## 10. Skills usage
+
+- `GET /api/skills/usage` → `{ [skillId]: { lastUsedAt, uses7d } }`.
+
+## 11. GitHub (`github`)
+
+- `GET /api/github/repos` → `{ repos: Repo[] }`; `Repo { id, name, defaultBranch, integrationBranch, openIssues, openPrs, lastNightly }`.
+- `GET /api/github/wheel?repo=` → `{ items: WheelItem[] }` (stages `ready → implementing → pr → review → merged → nightly`); `POST /api/github/wheel/:id/advance` `{ to, model? }`.
+- `GET /api/github/issues?repo=&state=` → `{ issues }`; `GET /api/github/prs?repo=` → `{ prs }` with checks and review state; `GET /api/github/items/:id` → the item with its timeline and comments.
+- `POST /api/github/issues` `{ repo, title, body, labels, card?: boolean }` → `{ number, url, cardId? }`.
+- `POST /api/integrations/github` installs the app; `GET` reports the connection.
+
+## 12. Usage and providers (`usage`, `providers`)
+
+- `GET /api/usage/me?period=today|week|month` → `{ pools: Pool[], spend: SpendPoint[], requests: UsageRequest[], resetsAt }`; `GET /api/usage/accounts/:id?period=` (admin). `Pool { role /* virtual model name */, chain: Stage[], terminal, spentUsd, requests, resetsAt }`, `UsageRequest { at, model /* virtual */, resolved, where, tokens, costUsd }`.
+- `GET /api/providers` → `{ providers: ProviderExposure[] }`; `PATCH /api/providers/:id` `{ hidden }` (admin; hidden from pickers, still served).
+
+## 13. Settings
+
+Env (`/api/settings/env`), NeoPi config (`/api/npi-config`), models (`/api/models-config`), MCP (`/api/mcp-servers`), bridges (`/api/bridges`), workspaces and notifications are live. The contract adds accounts (§1), dictation (§8), the GitHub app (§11), and a deck-config read: `GET /api/state` already serves it.
