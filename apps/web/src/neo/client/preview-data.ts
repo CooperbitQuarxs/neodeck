@@ -15,6 +15,8 @@ export interface Account {
 	hue: number;
 	/** Roles the admin mapped for this account, as `neoproxy/<name>`. */
 	roles: readonly string[];
+	/** Fraction of every virtual-model budget granted to this account; omitted means 100%. */
+	allotment?: number;
 }
 
 export const PREVIEW_ACCOUNTS: readonly Account[] = [

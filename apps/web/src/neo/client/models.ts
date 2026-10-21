@@ -12,6 +12,7 @@ import { npiConfigApi } from "@/lib/npi-config-api";
 import { useAccount } from "./auth";
 import { PREVIEW_POOLS, PREVIEW_PROVIDERS } from "./preview-data";
 import { SOURCES } from "./source";
+import { useProviders } from "./providers";
 
 export interface PickRole {
 	/** `neoproxy/<name>`. */
@@ -96,10 +97,17 @@ let cache: Promise<PickerCatalog> | null = null;
 export function useCatalog(): PickerCatalog | undefined {
 	const [catalog, setCatalog] = useState<PickerCatalog>();
 	const account = useAccount();
+	const exposure = useProviders();
 	useEffect(() => {
 		cache ??= models.catalog();
-		void cache.then((c) => setCatalog(filterForAccount(c, account?.roles)));
-	}, [account?.roles]);
+		let active = true;
+		void cache.then((c) => {
+			if (!active) return;
+			const filtered = filterForAccount(c, account?.roles);
+			setCatalog({ ...filtered, providers: filtered.providers.map(p => ({ ...p, hidden: exposure.find(e => e.id === p.id || e.id === (p.id === "openai-codex" ? "codex" : p.id))?.hidden ?? p.hidden })) });
+		});
+		return () => { active = false; };
+	}, [account?.roles, exposure]);
 	return catalog;
 }
 

@@ -7,6 +7,8 @@ All notable changes to NPI deck (a fork of bjb2/omp-deck; entries before the for
 
 ### Added
 
+- Usage shows each account's virtual-model budgets, demotion stages, spend history and searchable requests, with shared provider visibility controls.
+- Settings has a fixed section index, live engine/provider/model controls, account drawers and an admin-only Advanced editor for environment variables, NeoPi settings and diagnostics.
 - Skills brings installed skills, marketplace plugins and sources into one page, with SKILL.md drawers, editing, authoring and plugin update checks. Last-used timestamps are marked as preview data.
 - GitHub adds a preview implementation wheel, repository issues and pull requests, review comments, worker assignment and issue filing with an optional live board card.
 - Agents now has a searchable roster, editable restriction templates, spawn and detail drawers, and a judge log with reversible stops. Preview agents sit beside live sessions and their workers.
