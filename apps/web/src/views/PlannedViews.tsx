@@ -53,7 +53,7 @@ function Plan({ items }: { items: ReadonlyArray<{ h: string; p: string }> }) {
 
 export function PeopleView() {
 	return (
-		<Planned title="People" summary="User accounts, sign-in, and who may touch what. The office logs into one NeoDeck on Utopia.">
+		<Planned title="People" summary="User accounts, sign-in, and who may touch what. The office logs into one NeoDeck on the office server.">
 			<Plan
 				items={[
 					{ h: "Accounts", p: "Each person signs in with a username. Private inbox, own threads and own drafts; the shared inbox and board are visible to the team." },
@@ -215,7 +215,7 @@ export function NeoPiView() {
 									instead of importing a source tree in-process.
 								</li>
 								<li>
-									<strong className="text-ink">Hosted threads.</strong> Threads run on Utopia's twenty cores, not on the laptop in front of you.
+									<strong className="text-ink">Hosted threads.</strong> Threads run on the office server, not on the laptop in front of you.
 								</li>
 								<li id="dictation">
 									<strong className="text-ink">Dictation everywhere.</strong> Every text field takes speech through xAI's STT, with a local Parakeet fallback on the office GPU. The
