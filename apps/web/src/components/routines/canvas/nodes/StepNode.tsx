@@ -1,69 +1,69 @@
 /**
- * Custom React Flow node for a single `RoutineStep`. P1.2 ships the basic
- * shell — type strip, id, summary line. P2 will add selection-driven editing
- * via NodePropertyPanel and P4 will overlay run status.
+ * Custom React Flow node for a single `RoutineStep`.
  *
- * Visual style intentionally matches `StepCard` (form-mode): same type-color
- * strip, same id badge style, same 2xs monospace meta line. The canvas is an
- * alternate view, not a different aesthetic.
+ * A node is a small card that answers three questions at a glance: what is
+ * this step called (its id, as words), what kind of action is it (icon and
+ * action label), and what does it do (the prompt, the command, the URL, the
+ * path). The footer appears only when there is something to say: a problem
+ * to fix, a `when` gate, or the result of the last run.
  */
 
 import { Handle, Position, type NodeProps } from "@xyflow/react";
+import { CircleAlert, GitBranch } from "lucide-react";
 import { memo } from "react";
 
-import type { RoutineStep, RoutineStepRun, RoutineStepStatus } from "@npi-deck/protocol";
+import type { RoutineStep, RoutineStepRun } from "@npi-deck/protocol";
 
 import type { StepNode as StepNodeType } from "../graph-types";
-import { actionLabel } from "../../step-form-render";
-import { hasAdvancedContent } from "../../form-primitives";
+import { actionLabel, STEP_ICON, stepIconTone, stepTitle } from "../../step-form-render";
+import { cardBodyParts } from "../../spec-yaml";
 
-/**
- * Type → background-tint class. Same palette as `StepCard.TYPE_BG` so a step
- * authored in form mode and viewed in canvas mode reads identically.
- */
-const TYPE_TINT: Record<RoutineStep["type"], string> = {
-	run: "bg-paper-3/40 border-line",
-	agent: "bg-thinking/10 border-thinking/30",
-	write: "bg-success/10 border-success/30",
-	http: "bg-accent/10 border-accent/30",
-	deck: "bg-accent-soft/40 border-line-strong",
-	mcp: "bg-warn/10 border-warn/30",
-	transform: "bg-paper-3/60 border-line",
-	wait: "bg-paper-3/40 border-line",
-	set_state: "bg-paper-3/40 border-line",
-};
+interface Summary {
+	text: string;
+	mono: boolean;
+}
 
-/**
- * One-line summary of the step's most distinctive field. Empty string when the
- * step has no useful surface text yet (renderer omits the line in that case).
- */
-function summarize(step: RoutineStep, advanced: boolean): string {
-	if (!advanced && ["write", "http", "mcp", "transform", "set_state"].includes(step.type)) {
-		return "Advanced action settings";
-	}
+/** What the step does, in one to three lines. Empty text means "nothing yet". */
+export function summarizeStep(step: RoutineStep): Summary {
 	switch (step.type) {
 		case "agent":
-			return !advanced && hasAdvancedContent(step.prompt) ? "Advanced prompt" : step.prompt.slice(0, 80);
+			return { text: step.prompt.trim(), mono: false };
 		case "http":
-			return `${step.method} ${step.url}`;
+			return { text: step.url ? `${step.method} ${step.url}` : "", mono: true };
 		case "write":
-			return step.path;
+			return { text: step.path, mono: true };
 		case "run":
-			return !advanced && hasAdvancedContent(step.command) ? "Advanced command" : step.command;
-		case "deck":
-			return "title" in step
-				? !advanced && hasAdvancedContent(step.title) ? "Advanced title" : step.title
-				: actionLabel(step);
+			return { text: step.command.trim(), mono: true };
+		case "deck": {
+			if ("title" in step && step.title) return { text: step.title, mono: false };
+			if ("task_ref" in step && step.task_ref) return { text: `Card ${step.task_ref}`, mono: false };
+			if ("inbox_ref" in step && step.inbox_ref) return { text: `Inbox item ${step.inbox_ref}`, mono: false };
+			if ("path" in step && step.path) return { text: step.path, mono: true };
+			if (step.action === "list_tasks") return { text: step.state_ref ? `Cards in ${step.state_ref}` : "All cards", mono: false };
+			if (step.action === "list_inbox") return { text: step.kind ? `${step.kind} items` : "All inbox items", mono: false };
+			return { text: "", mono: false };
+		}
 		case "mcp":
-			return `${step.server}.${step.tool}`;
+			return { text: step.server || step.tool ? `${step.server}.${step.tool}` : "", mono: true };
 		case "transform":
-			return step.body?.split("\n")[0]?.slice(0, 80) ?? "";
+			return { text: step.body.trim(), mono: true };
 		case "wait":
-			return `wait ${step.duration_secs}s`;
-		case "set_state":
-			return Object.keys(step.state ?? {}).join(", ");
+			return { text: `Wait ${step.duration_secs} s`, mono: false };
+		case "set_state": {
+			const keys = Object.keys(step.state ?? {});
+			return { text: keys.length ? keys.join(", ") : "", mono: true };
+		}
 		default:
-			return "";
+			return { text: "", mono: false };
+	}
+}
+
+/** Card bodies carry frontmatter; the node shows the prose part only. */
+function stripFrontmatter(text: string): string {
+	try {
+		return cardBodyParts(text).content;
+	} catch {
+		return text;
 	}
 }
 
@@ -71,151 +71,105 @@ export const StepNode = memo(function StepNode({
 	data,
 	selected,
 }: NodeProps<StepNodeType>) {
-	const { step, compileError, isIfNode, stepRun, advanced } = data;
-	const summary = summarize(step, advanced === true);
-	const tint = TYPE_TINT[step.type] ?? "bg-paper-2 border-line";
-
-	// Visual priority for the outer ring:
-	//  1. Compile errors — must surface even mid-edit; broken graphs ship nothing.
-	//  2. Run status — when the user is reviewing a recent run, the per-step
-	//     status is the most useful signal.
-	//  3. Selection — neutral accent ring for the in-flight inspector target.
-	const statusRing = stepRun ? STATUS_RING[stepRun.status] : "";
-	const ringClass = compileError
-		? " ring-2 ring-danger ring-offset-1 ring-offset-paper"
-		: statusRing
-			? ` ring-2 ${statusRing} ring-offset-1 ring-offset-paper`
-			: selected
-				? " ring-1 ring-accent ring-offset-1 ring-offset-paper"
-				: "";
+	const { step, compileError, fieldErrors, isIfNode, stepRun } = data;
+	const summary = summarizeStep(step);
+	const summaryText = summary.mono ? summary.text : stripFrontmatter(summary.text);
+	const Icon = STEP_ICON[step.type];
+	const problem = compileError ?? firstFieldProblem(fieldErrors);
 
 	return (
 		<div
-			className={
-				"min-w-[200px] max-w-[260px] rounded border bg-paper-2 shadow-sm transition-colors " +
-				tint +
-				ringClass
-			}
-			title={compileError ?? undefined}
+			className="neo-node"
+			data-kind="step"
+			data-selected={selected ? "true" : undefined}
+			data-problem={problem ? "true" : undefined}
+			data-run={!problem && stepRun ? stepRun.status : undefined}
 			data-step-id={step.id}
 			data-status={stepRun?.status ?? "none"}
+			title={problem ?? undefined}
 		>
-			<Handle
-				type="target"
-				position={Position.Top}
-				className="!h-2 !w-2 !border-line !bg-paper-2"
-			/>
-			<div className="flex items-center gap-2 border-b border-line/60 px-2 py-1">
-				<span className="font-mono text-2xs uppercase tracking-meta text-ink-3">
-					{actionLabel(step)}
+			<Handle type="target" position={Position.Top} />
+			<div className="neo-node-head">
+				<span className="neo-node-icon" data-tone={stepIconTone(step)}>
+					<Icon size={14} />
 				</span>
-				{compileError ? (
-					<span
-						className="font-mono text-2xs font-bold text-danger"
-						aria-label="Compile error"
-					>
-						!
-					</span>
-				) : null}
-				{stepRun && !compileError ? <StatusBadge run={stepRun} /> : null}
-				{advanced ? <span className="ml-auto font-mono text-2xs text-ink-2">{step.id}</span> : null}
+				<div className="neo-node-titles">
+					<div className="neo-node-title">{stepTitle(step)}</div>
+					<div className="neo-node-kicker">{actionLabel(step)}</div>
+				</div>
+				{stepRun && !problem ? <span className="neo-dot" data-tone={runTone(stepRun)} data-pulse={stepRun.status === "running" || undefined} aria-label={`status: ${stepRun.status}`} /> : null}
 			</div>
-			{summary ? (
-				<div className="px-2 py-1.5 font-mono text-2xs leading-snug text-ink-2 line-clamp-2">
-					{summary}
-				</div>
-			) : (
-				<div className="px-2 py-1.5 font-mono text-2xs italic text-ink-4">
-					(empty)
-				</div>
-			)}
-			{advanced && step.when ? (
-				<div
-					className="border-t border-line/60 px-2 py-1 font-mono text-2xs text-ink-3"
-					title={step.when}
-				>
-					when: <span className="text-ink-2">{step.when.slice(0, 40)}</span>
-					{step.when.length > 40 ? "…" : ""}
+			<div className="neo-node-body" data-mono={summary.mono || undefined} data-empty={summaryText ? undefined : "true"}>
+				{summaryText || "Nothing here yet. Select the step to fill it in."}
+			</div>
+			{problem ? (
+				<div className="neo-node-foot" data-tone="bad">
+					<CircleAlert size={12} />
+					<span>{problem}</span>
 				</div>
 			) : null}
-			{compileError ? (
-				<div className="border-t border-danger/40 bg-danger/10 px-2 py-1 font-mono text-2xs text-danger">
-					{compileError.length > 60 ? compileError.slice(0, 57) + "…" : compileError}
+			{!problem && step.when ? (
+				<div className="neo-node-foot" title={step.when}>
+					<GitBranch size={12} />
+					<span className="truncate">Only when <span className="neo-mono">{step.when}</span></span>
 				</div>
 			) : null}
-			{stepRun && !compileError ? <RunFootline run={stepRun} /> : null}
+			{stepRun && !problem ? <RunFootline run={stepRun} /> : null}
 			{isIfNode ? (
 				<>
-					{/* Two source handles labeled `true` and `false`. The ids are
-					    consumed by `handleConnect` so a drag from this handle persists
-					    the right edge kind. Placed at 30%/70% horizontal so they read
-					    left-to-right as truthy → falsy. */}
-					{advanced ? <div className="flex border-t border-line/60 bg-paper-3/40 px-2 py-1 font-mono text-2xs text-ink-3">
-						<span className="flex-1 text-success">true →</span>
-						<span className="flex-1 text-right text-danger">→ false</span>
-					</div> : null}
-					<Handle
-						id="true"
-						type="source"
-						position={Position.Bottom}
-						style={{ left: "30%" }}
-						className="!h-2 !w-2 !border-success !bg-success"
-					/>
-					<Handle
-						id="false"
-						type="source"
-						position={Position.Bottom}
-						style={{ left: "70%" }}
-						className="!h-2 !w-2 !border-danger !bg-danger"
-					/>
+					<div className="neo-node-branches">
+						<span className="text-success">true ↓</span>
+						<span className="text-danger">↓ false</span>
+					</div>
+					<Handle id="true" type="source" position={Position.Bottom} style={{ left: "30%" }} />
+					<Handle id="false" type="source" position={Position.Bottom} style={{ left: "70%" }} />
 				</>
 			) : (
-				<Handle
-					type="source"
-					position={Position.Bottom}
-					className="!h-2 !w-2 !border-line !bg-paper-2"
-				/>
+				<Handle type="source" position={Position.Bottom} />
 			)}
 		</div>
 	);
 });
 
-/**
- * Status → ring tailwind class. Running pulses to convey activity; everything
- * else is solid. Skipped/aborted stay dim so they don't draw attention away
- * from the steps that actually executed.
- */
-const STATUS_RING: Record<RoutineStepStatus, string> = {
-	pending: "ring-line-strong",
-	running: "ring-accent animate-pulse",
-	success: "ring-success",
-	skipped: "ring-line-strong opacity-80",
-	failed: "ring-danger",
-	aborted: "ring-warn",
+function firstFieldProblem(errors: Readonly<Record<string, string>> | undefined): string | undefined {
+	if (!errors) return undefined;
+	const [field, message] = Object.entries(errors)[0] ?? [];
+	if (!field || !message) return undefined;
+	return `${FIELD_WORDS[field] ?? field}: ${message.replace(/\.$/, "").replace(/^./, (c) => c.toLowerCase())}`;
+}
+
+/** Field names as the forms label them, so the node and the inspector agree. */
+const FIELD_WORDS: Record<string, string> = {
+	id: "Name",
+	prompt: "Prompt",
+	command: "Command",
+	path: "Path",
+	content: "Content",
+	url: "URL",
+	method: "Method",
+	server: "Server",
+	tool: "Tool",
+	body: "Body",
+	title: "Title",
+	duration_secs: "Duration",
+	state: "Values",
+	action: "Action",
+	when: "Run only when",
 };
 
-const STATUS_DOT: Record<RoutineStepStatus, string> = {
-	pending: "bg-line-strong",
-	running: "bg-accent animate-pulse",
-	success: "bg-success",
-	skipped: "bg-line-strong",
-	failed: "bg-danger",
-	aborted: "bg-warn",
-};
-
-/**
- * Short status pill rendered in the node header. Uses the same colour scheme
- * as RunDetailView.StatusPill so the canvas and run-detail panes read as one
- * design system.
- */
-function StatusBadge({ run }: { run: RoutineStepRun }): JSX.Element {
-	return (
-		<span
-			className={`h-2 w-2 rounded-full ${STATUS_DOT[run.status]}`}
-			aria-label={`status: ${run.status}`}
-			title={`status: ${run.status}`}
-		/>
-	);
+function runTone(run: RoutineStepRun): "ok" | "live" | "warn" | "bad" | "accent" | undefined {
+	switch (run.status) {
+		case "success":
+			return "ok";
+		case "running":
+			return "accent";
+		case "failed":
+			return "bad";
+		case "aborted":
+			return "warn";
+		default:
+			return undefined;
+	}
 }
 
 /**
@@ -227,22 +181,26 @@ function RunFootline({ run }: { run: RoutineStepRun }): JSX.Element | null {
 	const tokensTotal = (run.llmTokensIn ?? 0) + (run.llmTokensOut ?? 0);
 	const costUsd =
 		run.llmCostMicros != null ? run.llmCostMicros / 1_000_000 : null;
-	const parts: string[] = [];
+	const parts: string[] = [STATUS_WORDS[run.status] ?? run.status];
 	if (run.durationMs != null) parts.push(formatDur(run.durationMs));
 	if (run.model) parts.push(run.model);
-	if (tokensTotal > 0) parts.push(`${tokensTotal}t`);
+	if (tokensTotal > 0) parts.push(`${tokensTotal.toLocaleString()} tokens`);
 	if (costUsd != null && costUsd > 0) parts.push(`$${costUsd.toFixed(3)}`);
-	if (parts.length === 0) return null;
 	return (
-		<div className="flex items-center gap-1.5 border-t border-line/60 px-2 py-1 font-mono text-2xs text-ink-3">
-			{parts.map((p, i) => (
-				<span key={i} className={i === 0 ? "text-ink-2" : ""}>
-					{p}
-				</span>
-			))}
+		<div className="neo-node-foot">
+			<span className="neo-mono truncate">{parts.join(" · ")}</span>
 		</div>
 	);
 }
+
+const STATUS_WORDS: Record<string, string> = {
+	pending: "Waiting",
+	running: "Running",
+	success: "Ran",
+	skipped: "Skipped",
+	failed: "Failed",
+	aborted: "Stopped",
+};
 
 function formatDur(ms: number): string {
 	if (ms < 1000) return `${Math.round(ms)}ms`;

@@ -3,20 +3,43 @@
  * step extract and emits a new step of the same type. Common fields (id, when,
  * on_failure, retry, timeout_secs) live in <StepCommonFields/>; this file only
  * renders the type-specific tail.
+ *
+ * `errors` maps a field name (as it appears in the spec) to the message the
+ * validator produced for it; each form hands the message to the field it
+ * belongs to, so a problem is shown where it is fixed.
  */
 import { Link } from "react-router-dom";
 import type { RoutineStep } from "@npi-deck/protocol";
 import { useState, type ReactNode } from "react";
 
-import { ActionTextField, Field, hasAdvancedContent, KeyValueEditor, NumInput, TagInput, TextArea, TextInput } from "./form-primitives";
+import {
+	ActionTextField,
+	AdvancedNotice,
+	Checkbox,
+	Field,
+	hasAdvancedContent,
+	KeyValueEditor,
+	NumInput,
+	Select,
+	TagInput,
+	TextArea,
+	TextInput,
+} from "./form-primitives";
 import { cardBodyParts, cardPropertyDocument, setCardBodyContent, setCardBodyProperty } from "./spec-yaml";
 
 type Extract2<T extends RoutineStep["type"]> = Extract<RoutineStep, { type: T }>;
+
+export type StepFieldErrors = Readonly<Record<string, string>>;
 
 interface FormProps<T extends RoutineStep["type"]> {
 	step: Extract2<T>;
 	onChange: (next: Extract2<T>) => void;
 	advanced?: boolean;
+	errors?: StepFieldErrors;
+}
+
+function Help({ children }: { children: ReactNode }) {
+	return <p className="text-[12px] leading-relaxed text-ink-3">{children}</p>;
 }
 
 function CardBodyProperties({ body, onChange, advanced, children }: {
@@ -32,8 +55,8 @@ function CardBodyProperties({ body, onChange, advanced, children }: {
 		parsed = cardPropertyDocument(body);
 	} catch {
 		return <details>
-			<summary className="cursor-pointer text-2xs text-ink-2">Card properties</summary>
-			<p className="text-2xs text-ink-3">Turn on Advanced to correct the existing frontmatter in the body editor.</p>
+			<summary className="cursor-pointer text-[12.5px] text-ink-2">Card properties</summary>
+			<Help>Turn on Advanced to correct the existing frontmatter in the body editor.</Help>
 			{children}
 		</details>;
 	}
@@ -53,47 +76,47 @@ function CardBodyProperties({ body, onChange, advanced, children }: {
 		&& newPropertyName !== "worktree" && !parsed.document.has(newPropertyName)
 		&& !hasAdvancedContent(newPropertyName) && !hasAdvancedContent(propertyValue);
 	return (
-		<details className="space-y-2">
-			<summary className="cursor-pointer text-2xs text-ink-2">Card properties</summary>
+		<details className="space-y-3">
+			<summary className="cursor-pointer text-[12.5px] text-ink-2">Card properties</summary>
 			{readOnly === undefined || typeof readOnly === "boolean" ? (
-				<label className="flex items-center gap-2 text-2xs text-ink-2">
-					<input type="checkbox" checked={readOnly === true}
-						onChange={(e) => onChange(setCardBodyProperty(body, "read-only", e.target.checked))} />
+				<Checkbox checked={readOnly === true} onChange={(on) => onChange(setCardBodyProperty(body, "read-only", on))}>
 					Read-only research
-				</label>
-			) : <p className="text-2xs text-ink-3">Edit the existing read-only value in Other properties.</p>}
+				</Checkbox>
+			) : <Help>Edit the existing read-only value in Other properties.</Help>}
 			{worktree === undefined || typeof worktree === "string" ? (
-				<Field label="Linked worktree (optional)">
+				<Field label="Linked worktree" optional>
 					{!advanced && typeof worktree === "string" && hasAdvancedContent(worktree) ? (
-						<p className="text-2xs text-ink-3">Turn on Advanced to edit the existing worktree expression.</p>
+						<AdvancedNotice>Turn on Advanced to edit the existing worktree expression.</AdvancedNotice>
 					) : <TextInput value={worktree ?? ""} placeholder="Absolute worktree directory"
 						onChange={(v) => onChange(setCardBodyProperty(body, "worktree", v === "" ? undefined : v))} />}
 				</Field>
-			) : <p className="text-2xs text-ink-3">Edit the existing worktree value in Other properties.</p>}
+			) : <Help>Edit the existing worktree value in Other properties.</Help>}
 			{children}
 			{Object.entries(properties).map(([key, value]) => (
 				<Field key={key} label={key}>
-					<div className="flex items-center gap-1">
+					<div className="flex items-center gap-1.5">
 						<TextInput value={value} onChange={(next) => onChange(setCardBodyProperty(body, key, next))} />
-						<button type="button" className="btn-ghost text-2xs" aria-label={`Remove property ${key}`}
+						<button type="button" className="neo-btn" data-variant="ghost" data-size="sm" data-icon="true" aria-label={`Remove property ${key}`}
 							onClick={() => onChange(setCardBodyProperty(body, key, undefined))}>×</button>
 					</div>
 				</Field>
 			))}
-			<Field label="Other properties">
-				<TextInput value={propertyName} onChange={setPropertyName} placeholder="Property name" />
-				<TextInput value={propertyValue} onChange={setPropertyValue} placeholder="Property value" />
-				<button type="button" className="btn-ghost text-2xs" disabled={!canAddProperty}
-					onClick={() => {
-						onChange(setCardBodyProperty(body, newPropertyName, propertyValue));
-						setPropertyName("");
-						setPropertyValue("");
-					}}>Add property</button>
+			<Field label="Add a property">
+				<div className="grid grid-cols-[1fr_1fr_auto] gap-1.5">
+					<TextInput value={propertyName} onChange={setPropertyName} placeholder="Name" />
+					<TextInput value={propertyValue} onChange={setPropertyValue} placeholder="Value" />
+					<button type="button" className="neo-btn" data-size="sm" disabled={!canAddProperty}
+						onClick={() => {
+							onChange(setCardBodyProperty(body, newPropertyName, propertyValue));
+							setPropertyName("");
+							setPropertyValue("");
+						}}>Add</button>
+				</div>
 			</Field>
-			{!advanced && hiddenProperties ? <p className="text-2xs text-ink-3">
+			{!advanced && hiddenProperties ? <Help>
 				Other existing properties use advanced content. Turn on Advanced to edit them.
-			</p> : null}
-			{advanced ? <Field label="Other properties (YAML)">
+			</Help> : null}
+			{advanced ? <Field label="Other properties" help="YAML frontmatter, kept verbatim.">
 				<TextArea value={parsed.header} rows={4}
 					onChange={(header) => onChange(header === "" ? parsed.content : `---\n${header.endsWith("\n") ? header : `${header}\n`}---\n${parsed.content}`)} />
 			</Field> : null}
@@ -101,40 +124,44 @@ function CardBodyProperties({ body, onChange, advanced, children }: {
 	);
 }
 
-function CardBodyField({ label, body, onChange, advanced, rows, placeholder }: {
+function CardBodyField({ label, body, onChange, advanced, rows, placeholder, optional, error }: {
 	label: string;
 	body: string;
 	onChange: (body: string) => void;
 	advanced: boolean;
 	rows: number;
 	placeholder: string;
+	optional?: boolean;
+	error?: string;
 }) {
 	let value = body;
 	if (!advanced) {
 		try {
 			value = cardBodyParts(body).content;
 		} catch {
-			return <Field label={label}><p className="text-2xs text-ink-3">Turn on Advanced to edit this body.</p></Field>;
+			return <Field label={label} optional={optional}><AdvancedNotice>Turn on Advanced to edit this body.</AdvancedNotice></Field>;
 		}
 	}
-	return <ActionTextField label={label} value={value} advanced={advanced} rows={rows} placeholder={placeholder}
+	return <ActionTextField label={label} value={value} advanced={advanced} rows={rows} placeholder={placeholder} optional={optional} error={error} mono={false}
 		onChange={(content) => onChange(advanced ? content : setCardBodyContent(body, content))} />;
 }
 
 // ─── run ──────────────────────────────────────────────────────────────────
 
-export function RunStepForm({ step, onChange, advanced = true }: FormProps<"run">) {
+export function RunStepForm({ step, onChange, advanced = true, errors }: FormProps<"run">) {
 	return (
-		<div className="space-y-2">
+		<div className="space-y-3">
 			<ActionTextField
 				label="Command"
 				value={step.command}
 				onChange={(v) => onChange({ ...step, command: v })}
 				advanced={advanced}
-				rows={2}
+				rows={3}
 				placeholder="echo hello"
+				error={errors?.command}
+				help="Runs in a shell. Output lands in the step's stdout."
 			/>
-			{advanced ? <Field label="Working directory (optional)">
+			{advanced ? <Field label="Working directory" optional error={errors?.cwd}>
 				<TextInput
 					value={step.cwd ?? ""}
 					onChange={(v) => {
@@ -143,7 +170,7 @@ export function RunStepForm({ step, onChange, advanced = true }: FormProps<"run"
 						else next.cwd = v;
 						onChange(next);
 					}}
-					placeholder="C:/path/to/repo"
+					placeholder="/path/to/repo"
 					mono
 				/>
 			</Field> : null}
@@ -162,25 +189,23 @@ function AllowlistField({ label, allLabel, placeholder, values, onChange }: {
 }) {
 	return (
 		<Field label={label}>
-			<select
-				aria-label={`${label} scope`}
+			<Select
+				ariaLabel={`${label} scope`}
 				value={values === undefined ? "all" : "listed"}
-				onChange={(e) => onChange(e.target.value === "all" ? undefined : values ?? [])}
-				className="field h-7 w-full px-2 font-mono text-2xs"
-			>
-				<option value="all">{allLabel}</option>
-				<option value="listed">Only listed (empty: none)</option>
-			</select>
+				onChange={(v) => onChange(v === "all" ? undefined : values ?? [])}
+				options={[
+					{ value: "all", label: allLabel },
+					{ value: "listed", label: "Only the ones listed" },
+				]}
+			/>
 			{values !== undefined && (
-				<div className="mt-1">
-					<TagInput values={values} onChange={onChange} placeholder={placeholder} />
-				</div>
+				<TagInput values={values} onChange={onChange} placeholder={placeholder} />
 			)}
 		</Field>
 	);
 }
 
-export function AgentStepForm({ step, onChange, advanced = true }: FormProps<"agent">) {
+export function AgentStepForm({ step, onChange, advanced = true, errors }: FormProps<"agent">) {
 	function patch(p: Partial<Extract2<"agent">>): void {
 		onChange({ ...step, ...p });
 	}
@@ -191,21 +216,23 @@ export function AgentStepForm({ step, onChange, advanced = true }: FormProps<"ag
 		onChange(next);
 	}
 	return (
-		<div className="space-y-2">
+		<div className="space-y-3">
 			<ActionTextField
 				label="Prompt"
 				value={step.prompt}
 				onChange={(v) => patch({ prompt: v })}
 				advanced={advanced}
 				rows={6}
+				mono={false}
 				placeholder="Describe what you want the agent to do."
+				error={errors?.prompt}
 			/>
-			<Field label="KB inputs (explicit note paths; empty means none)">
+			<Field label="Notes to read first" optional help="Knowledge-base note paths the agent gets as input." error={errors?.kb_inputs}>
 				<TagInput values={step.kb_inputs ?? []} onChange={paths => patch({ kb_inputs: paths })}
 					placeholder="projects/neodeck/overview.md" />
 			</Field>
 			{advanced ? <>
-			<Field label="model (optional)">
+			<Field label="Model" optional help="Defaults to the engine's active model." error={errors?.model}>
 				<TextInput
 					value={step.model ?? ""}
 					onChange={(v) => {
@@ -214,21 +241,21 @@ export function AgentStepForm({ step, onChange, advanced = true }: FormProps<"ag
 						else next.model = v;
 						onChange(next);
 					}}
-					placeholder="claude-sonnet-4-5 (defaults to omp's active model)"
+					placeholder="claude-sonnet-4-5"
 					mono
 				/>
 			</Field>
-			<div className="grid grid-cols-2 gap-2">
+			<div className="grid grid-cols-2 gap-3">
 				<AllowlistField
-					label="skills_allowed"
+					label="Skills"
 					allLabel="All installed skills"
 					placeholder="skill-name"
 					values={step.skills_allowed}
 					onChange={(names) => updateAllowlist("skills_allowed", names)}
 				/>
 				<AllowlistField
-					label="mcp_servers_allowed"
-					allLabel="All configured MCP servers"
+					label="MCP servers"
+					allLabel="All configured servers"
 					placeholder="server-name"
 					values={step.mcp_servers_allowed}
 					onChange={(names) => updateAllowlist("mcp_servers_allowed", names)}
@@ -241,13 +268,13 @@ export function AgentStepForm({ step, onChange, advanced = true }: FormProps<"ag
 
 // ─── write ────────────────────────────────────────────────────────────────
 
-export function WriteStepForm({ step, onChange }: FormProps<"write">) {
+export function WriteStepForm({ step, onChange, errors }: FormProps<"write">) {
 	function patch(p: Partial<Extract2<"write">>): void {
 		onChange({ ...step, ...p });
 	}
 	return (
-		<div className="space-y-2">
-			<Field label="path">
+		<div className="space-y-3">
+			<Field label="Path" error={errors?.path}>
 				<TextInput
 					value={step.path}
 					onChange={(v) => patch({ path: v })}
@@ -255,7 +282,7 @@ export function WriteStepForm({ step, onChange }: FormProps<"write">) {
 					mono
 				/>
 			</Field>
-			<Field label="content">
+			<Field label="Content" error={errors?.content}>
 				<TextArea
 					value={step.content}
 					onChange={(v) => patch({ content: v })}
@@ -263,19 +290,17 @@ export function WriteStepForm({ step, onChange }: FormProps<"write">) {
 					placeholder="# Heading\n\n{{ steps.summarize.stdout }}"
 				/>
 			</Field>
-			<label className="flex items-center gap-2 font-mono text-2xs text-ink-2">
-				<input
-					type="checkbox"
-					checked={step.append === true}
-					onChange={(e) => {
-						const next = { ...step };
-						if (e.target.checked) next.append = true;
-						else delete next.append;
-						onChange(next);
-					}}
-				/>
-				<span>append (otherwise overwrite)</span>
-			</label>
+			<Checkbox
+				checked={step.append === true}
+				onChange={(on) => {
+					const next = { ...step };
+					if (on) next.append = true;
+					else delete next.append;
+					onChange(next);
+				}}
+			>
+				Append instead of overwriting
+			</Checkbox>
 		</div>
 	);
 }
@@ -290,27 +315,17 @@ const HTTP_METHODS: Array<{ value: Extract2<"http">["method"]; label: string }> 
 	{ value: "DELETE", label: "DELETE" },
 ];
 
-export function HttpStepForm({ step, onChange }: FormProps<"http">) {
+export function HttpStepForm({ step, onChange, errors }: FormProps<"http">) {
 	function patch(p: Partial<Extract2<"http">>): void {
 		onChange({ ...step, ...p });
 	}
 	return (
-		<div className="space-y-2">
-			<div className="grid grid-cols-[5rem_1fr] gap-2">
-				<Field label="method">
-					<select
-						value={step.method}
-						onChange={(e) => patch({ method: e.target.value as Extract2<"http">["method"] })}
-						className="field h-7 w-full px-2 font-mono text-2xs"
-					>
-						{HTTP_METHODS.map((m) => (
-							<option key={m.value} value={m.value}>
-								{m.label}
-							</option>
-						))}
-					</select>
+		<div className="space-y-3">
+			<div className="grid grid-cols-[6.5rem_1fr] gap-3">
+				<Field label="Method" error={errors?.method}>
+					<Select value={step.method} onChange={(method) => patch({ method })} options={HTTP_METHODS} />
 				</Field>
-				<Field label="url">
+				<Field label="URL" error={errors?.url}>
 					<TextInput
 						value={step.url}
 						onChange={(v) => patch({ url: v })}
@@ -319,7 +334,7 @@ export function HttpStepForm({ step, onChange }: FormProps<"http">) {
 					/>
 				</Field>
 			</div>
-			<Field label="headers">
+			<Field label="Headers" optional>
 				<KeyValueEditor
 					pairs={(step.headers as Record<string, string>) ?? {}}
 					onChange={(v) => {
@@ -332,7 +347,7 @@ export function HttpStepForm({ step, onChange }: FormProps<"http">) {
 					valuePlaceholder="value"
 				/>
 			</Field>
-			<Field label="query">
+			<Field label="Query parameters" optional>
 				<KeyValueEditor
 					pairs={objToStringMap(step.query)}
 					onChange={(v) => {
@@ -346,7 +361,7 @@ export function HttpStepForm({ step, onChange }: FormProps<"http">) {
 				/>
 			</Field>
 			{step.method !== "GET" && step.method !== "DELETE" ? (
-				<Field label="body (JSON or template)">
+				<Field label="Body" optional help="JSON, or a template that renders to JSON." error={errors?.body}>
 					<TextArea
 						value={bodyToString(step.body)}
 						onChange={(v) => {
@@ -360,19 +375,17 @@ export function HttpStepForm({ step, onChange }: FormProps<"http">) {
 					/>
 				</Field>
 			) : null}
-			<label className="flex items-center gap-2 font-mono text-2xs text-ink-2">
-				<input
-					type="checkbox"
-					checked={step.expect_json !== false}
-					onChange={(e) => {
-						const next = { ...step };
-						if (e.target.checked) delete next.expect_json;
-						else next.expect_json = false;
-						onChange(next);
-					}}
-				/>
-				<span>expect JSON response (writes to steps.{step.id}.json)</span>
-			</label>
+			<Checkbox
+				checked={step.expect_json !== false}
+				onChange={(on) => {
+					const next = { ...step };
+					if (on) delete next.expect_json;
+					else next.expect_json = false;
+					onChange(next);
+				}}
+			>
+				Expect a JSON response <span className="neo-mono text-ink-3">(steps.{step.id}.json)</span>
+			</Checkbox>
 		</div>
 	);
 }
@@ -401,7 +414,16 @@ function bodyToString(b: unknown): string {
 
 type DeckStep = Extract2<"deck">;
 
-export function DeckStepForm({ step, onChange, advanced = true }: FormProps<"deck">) {
+const INBOX_KINDS = [
+	{ value: "capture", label: "Capture" },
+	{ value: "idea", label: "Idea" },
+	{ value: "investigation", label: "Investigation" },
+	{ value: "decision", label: "Decision" },
+	{ value: "ticket", label: "Ticket" },
+	{ value: "email", label: "Email" },
+] as const;
+
+export function DeckStepForm({ step, onChange, advanced = true, errors }: FormProps<"deck">) {
 	function swapAction(action: DeckStep["action"]): void {
 		const common = {
 			id: step.id,
@@ -508,207 +530,183 @@ export function DeckStepForm({ step, onChange, advanced = true }: FormProps<"dec
 	}
 
 	return (
-		<div className="space-y-2">
-			{advanced ? <Field label="action">
-				<select
+		<div className="space-y-3">
+			{advanced ? <Field label="Deck action" error={errors?.action}>
+				<Select
 					value={step.action}
-					onChange={(e) => swapAction(e.target.value as DeckStep["action"])}
-					className="field h-7 w-full px-2 font-mono text-2xs"
-				>
-					<option value="create_inbox_item">create_inbox_item</option>
-					<option value="create_task">create_task</option>
-					<option value="move_task">move_task</option>
-					<option value="promote_inbox_item_to_task">promote_inbox_item_to_task</option>
-					<option value="list_tasks">list_tasks</option>
-					<option value="list_inbox">list_inbox</option>
-					<option value="get_task">get_task</option>
-					<option value="get_inbox_item">get_inbox_item</option>
-					<option value="kb_orphan_census">kb_orphan_census</option>
-					<option value="kb_read">kb_read (explicit input)</option>
-				</select>
+					onChange={(v) => swapAction(v)}
+					options={[
+						{ value: "create_inbox_item", label: "Create inbox item" },
+						{ value: "create_task", label: "Create card" },
+						{ value: "move_task", label: "Move card" },
+						{ value: "promote_inbox_item_to_task", label: "Make a card from an inbox item" },
+						{ value: "list_tasks", label: "Find cards" },
+						{ value: "list_inbox", label: "Read inbox" },
+						{ value: "get_task", label: "Read card" },
+						{ value: "get_inbox_item", label: "Read inbox item" },
+						{ value: "kb_orphan_census", label: "Find unlinked notes" },
+						{ value: "kb_read", label: "Read a note" },
+					]}
+				/>
 			</Field> : null}
 			{step.action === "create_inbox_item" ? (
-				<div className="space-y-2">
-					<Field label="kind">
-						<select
+				<div className="space-y-3">
+					<Field label="Kind" error={errors?.kind}>
+						<Select
 							value={step.kind}
-							onChange={(e) => onChange({ ...step, kind: e.target.value as Extract<DeckStep, { action: "create_inbox_item" }>["kind"] })}
-							className="field h-7 w-full px-2 font-mono text-2xs"
-						>
-							<option value="capture">capture</option>
-							<option value="email">email</option>
-							<option value="ticket">ticket</option>
-							<option value="idea">idea</option>
-							<option value="decision">decision</option>
-							<option value="investigation">investigation</option>
-						</select>
+							onChange={(kind) => onChange({ ...step, kind })}
+							options={INBOX_KINDS}
+						/>
 					</Field>
-					<ActionTextField label="Title" value={step.title} onChange={(v) => onChange({ ...step, title: v })} advanced={advanced} placeholder="Morning briefing" />
-					<CardBodyField label="Body" body={step.body ?? ""} onChange={(body) => onChange({ ...step, body: body === "" ? undefined : body })} advanced={advanced} rows={5} placeholder="What should be saved in the inbox?" />
-					{advanced ? <Field label="source (optional)">
+					<ActionTextField label="Title" value={step.title} onChange={(v) => onChange({ ...step, title: v })} advanced={advanced} placeholder="Morning briefing" error={errors?.title} />
+					<CardBodyField label="Body" body={step.body ?? ""} onChange={(body) => onChange({ ...step, body: body === "" ? undefined : body })} advanced={advanced} rows={5} placeholder="What should be saved in the inbox?" error={errors?.body} />
+					{advanced ? <Field label="Source" optional error={errors?.source}>
 						<TextInput value={step.source ?? ""} onChange={(v) => onChange({ ...step, source: v === "" ? undefined : v })} placeholder="routine:daily-briefing" mono />
 					</Field> : null}
 					<CardBodyProperties body={step.body ?? ""} advanced={advanced} onChange={(body) => onChange({ ...step, body })} />
 				</div>
 			) : null}
 			{step.action === "create_task" ? (
-				<div className="space-y-2">
-					<ActionTextField label="Title" value={step.title} onChange={(v) => onChange({ ...step, title: v })} advanced={advanced} placeholder="Follow up" />
-					<CardBodyField label="Body (optional)" body={step.body ?? ""} onChange={(body) => onChange({ ...step, body: body === "" ? undefined : body })} advanced={advanced} rows={4} placeholder="Describe the card." />
+				<div className="space-y-3">
+					<ActionTextField label="Title" value={step.title} onChange={(v) => onChange({ ...step, title: v })} advanced={advanced} placeholder="Follow up" error={errors?.title} />
+					<CardBodyField label="Body" optional body={step.body ?? ""} onChange={(body) => onChange({ ...step, body: body === "" ? undefined : body })} advanced={advanced} rows={4} placeholder="Describe the card." error={errors?.body} />
 					<CardBodyProperties body={step.body ?? ""} advanced={advanced} onChange={(body) => onChange({ ...step, body })}>
-					{advanced ? <><Field label="Column (optional)">
+					{advanced ? <><Field label="Column" optional error={errors?.state_ref}>
 						<TextInput value={step.state_ref ?? ""} onChange={(v) => onChange({ ...step, state_ref: v === "" ? undefined : v })} placeholder="backlog or s_backlog" mono />
 					</Field>
-					<Field label="Working directory (optional)">
-						<TextInput value={step.cwd ?? ""} onChange={(v) => onChange({ ...step, cwd: v === "" ? undefined : v })} placeholder="C:/path/to/repo" mono />
+					<Field label="Working directory" optional error={errors?.cwd}>
+						<TextInput value={step.cwd ?? ""} onChange={(v) => onChange({ ...step, cwd: v === "" ? undefined : v })} placeholder="/path/to/repo" mono />
 					</Field></> : null}
 					</CardBodyProperties>
 				</div>
 			) : null}
 			{advanced && step.action === "move_task" ? (
-				<div className="space-y-2">
-					<Field label="task_ref">
-						<TextInput value={step.task_ref} onChange={(v) => onChange({ ...step, task_ref: v })} placeholder="T-58 or t_01..." mono />
+				<div className="space-y-3">
+					<Field label="Card" error={errors?.task_ref}>
+						<TextInput value={step.task_ref} onChange={(v) => onChange({ ...step, task_ref: v })} placeholder="T-58 or t_01…" mono />
 					</Field>
-					<Field label="state_ref">
+					<Field label="Destination column" error={errors?.state_ref}>
 						<TextInput value={step.state_ref} onChange={(v) => onChange({ ...step, state_ref: v })} placeholder="done or s_done" mono />
 					</Field>
-					<Field label="index (0 = top of destination column)">
+					<Field label="Position" help="0 puts the card at the top of the column." error={errors?.index}>
 						<NumInput value={step.index} onChange={(v) => onChange({ ...step, index: v ?? 0 })} placeholder="0" />
 					</Field>
 				</div>
 			) : null}
 			{step.action === "promote_inbox_item_to_task" ? (
-				<div className="space-y-2">
+				<div className="space-y-3">
 					{advanced ? <>
-					<Field label="inbox_ref">
-						<TextInput value={step.inbox_ref} onChange={(v) => onChange({ ...step, inbox_ref: v })} placeholder="i_..." mono />
+					<Field label="Inbox item" error={errors?.inbox_ref}>
+						<TextInput value={step.inbox_ref} onChange={(v) => onChange({ ...step, inbox_ref: v })} placeholder="i_…" mono />
 					</Field>
-					<Field label="state_ref (optional)">
+					<Field label="Destination column" optional error={errors?.state_ref}>
 						<TextInput value={step.state_ref ?? ""} onChange={(v) => onChange({ ...step, state_ref: v === "" ? undefined : v })} placeholder="backlog or s_backlog" mono />
 					</Field>
-					</> : <p className="text-2xs text-ink-3">Turn on Advanced to choose the inbox item and destination column.</p>}
+					</> : <AdvancedNotice>Turn on Advanced to choose the inbox item and destination column.</AdvancedNotice>}
 					{advanced ? <>
-						<CardBodyField label="Body override (optional)" body={step.body ?? ""} onChange={(body) => onChange({ ...step, body: body === "" ? undefined : body })} advanced={advanced} rows={5} placeholder="Research this capture" />
+						<CardBodyField label="Body override" optional body={step.body ?? ""} onChange={(body) => onChange({ ...step, body: body === "" ? undefined : body })} advanced={advanced} rows={5} placeholder="Research this capture" error={errors?.body} />
 						<CardBodyProperties body={step.body ?? ""} advanced={advanced} onChange={(body) => onChange({ ...step, body })} />
-						<Field label="cwd / project routing (optional)">
-							<TextInput value={step.cwd ?? ""} onChange={(v) => onChange({ ...step, cwd: v === "" ? undefined : v })} placeholder="Unassigned when omitted" mono />
+						<Field label="Working directory" optional help="Project routing; unassigned when empty." error={errors?.cwd}>
+							<TextInput value={step.cwd ?? ""} onChange={(v) => onChange({ ...step, cwd: v === "" ? undefined : v })} placeholder="/path/to/repo" mono />
 						</Field>
 					</> : null}
-					<p className="text-2xs text-ink-3">Card text and properties are kept from the inbox item unless overridden in Advanced. <Link to="/inbox" className="text-accent underline">Edit them in Inbox.</Link></p>
-					<label className="flex items-center gap-2 font-mono text-2xs text-ink-2">
-						<input
-							type="checkbox"
-							checked={step.mark_processed !== false}
-							onChange={(e) => {
-								const next = { ...step };
-								if (e.target.checked) delete next.mark_processed;
-								else next.mark_processed = false;
-								onChange(next);
-							}}
-						/>
-						<span>mark inbox item processed after promotion</span>
-					</label>
+					<Help>Card text and properties are kept from the inbox item unless overridden in Advanced. <Link to="/inbox" className="text-accent underline">Edit them in Inbox.</Link></Help>
+					<Checkbox
+						checked={step.mark_processed !== false}
+						onChange={(on) => {
+							const next = { ...step };
+							if (on) delete next.mark_processed;
+							else next.mark_processed = false;
+							onChange(next);
+						}}
+					>
+						Mark the inbox item processed afterwards
+					</Checkbox>
 				</div>
 			) : null}
 			{step.action === "list_tasks" ? (
-				<div className="space-y-2">
-					{advanced ? <Field label="state_ref (optional — name like 'active' or id like 's_active')">
+				<div className="space-y-3">
+					{advanced ? <Field label="Column" optional help="A name like active, or an id like s_active." error={errors?.state_ref}>
 						<TextInput value={step.state_ref ?? ""} onChange={(v) => onChange({ ...step, state_ref: v === "" ? undefined : v })} placeholder="active" mono />
 					</Field> : null}
-					<Field label="Updated within hours (optional)">
-						<NumInput value={step.since_hours} onChange={(v) => onChange({ ...step, since_hours: v ?? undefined })} placeholder="24" />
-					</Field>
-					<Field label="limit (optional)">
-						<NumInput value={step.limit} onChange={(v) => onChange({ ...step, limit: v ?? undefined })} placeholder="50" />
-					</Field>
-					<label className="flex items-center gap-2 font-mono text-2xs text-ink-2">
-						<input
-							type="checkbox"
-							checked={step.include_archived === true}
-							onChange={(e) => {
-								const next = { ...step };
-								if (e.target.checked) next.include_archived = true;
-								else delete next.include_archived;
-								onChange(next);
-							}}
-						/>
-						<span>include archived tasks</span>
-					</label>
+					<div className="grid grid-cols-2 gap-3">
+						<Field label="Updated within" optional help="Hours." error={errors?.since_hours}>
+							<NumInput value={step.since_hours} onChange={(v) => onChange({ ...step, since_hours: v ?? undefined })} placeholder="24" />
+						</Field>
+						<Field label="Limit" optional error={errors?.limit}>
+							<NumInput value={step.limit} onChange={(v) => onChange({ ...step, limit: v ?? undefined })} placeholder="50" />
+						</Field>
+					</div>
+					<Checkbox
+						checked={step.include_archived === true}
+						onChange={(on) => {
+							const next = { ...step };
+							if (on) next.include_archived = true;
+							else delete next.include_archived;
+							onChange(next);
+						}}
+					>
+						Include archived cards
+					</Checkbox>
 				</div>
 			) : null}
 			{step.action === "list_inbox" ? (
-				<div className="space-y-2">
-					<Field label="kind (optional)">
-						<select
+				<div className="space-y-3">
+					<Field label="Kind" optional error={errors?.kind}>
+						<Select
 							value={step.kind ?? ""}
-							onChange={(e) => {
-								const v = e.target.value;
+							onChange={(v) => {
 								const next = { ...step };
 								if (v === "") delete next.kind;
 								else next.kind = v as Extract<DeckStep, { action: "list_inbox" }>["kind"];
 								onChange(next);
 							}}
-							className="field h-7 w-full px-2 font-mono text-2xs"
-						>
-							<option value="">(any)</option>
-							<option value="capture">capture</option>
-							<option value="email">email</option>
-							<option value="ticket">ticket</option>
-							<option value="idea">idea</option>
-							<option value="decision">decision</option>
-							<option value="investigation">investigation</option>
-						</select>
-					</Field>
-					<Field label="Received within hours (optional)">
-						<NumInput value={step.since_hours} onChange={(v) => onChange({ ...step, since_hours: v ?? undefined })} placeholder="24" />
-					</Field>
-					<Field label="limit (optional)">
-						<NumInput value={step.limit} onChange={(v) => onChange({ ...step, limit: v ?? undefined })} placeholder="50" />
-					</Field>
-					<label className="flex items-center gap-2 font-mono text-2xs text-ink-2">
-						<input
-							type="checkbox"
-							checked={step.include_processed === true}
-							onChange={(e) => {
-								const next = { ...step };
-								if (e.target.checked) next.include_processed = true;
-								else delete next.include_processed;
-								onChange(next);
-							}}
+							options={[{ value: "", label: "Any" }, ...INBOX_KINDS]}
 						/>
-						<span>include already-processed items</span>
-					</label>
+					</Field>
+					<div className="grid grid-cols-2 gap-3">
+						<Field label="Received within" optional help="Hours." error={errors?.since_hours}>
+							<NumInput value={step.since_hours} onChange={(v) => onChange({ ...step, since_hours: v ?? undefined })} placeholder="24" />
+						</Field>
+						<Field label="Limit" optional error={errors?.limit}>
+							<NumInput value={step.limit} onChange={(v) => onChange({ ...step, limit: v ?? undefined })} placeholder="50" />
+						</Field>
+					</div>
+					<Checkbox
+						checked={step.include_processed === true}
+						onChange={(on) => {
+							const next = { ...step };
+							if (on) next.include_processed = true;
+							else delete next.include_processed;
+							onChange(next);
+						}}
+					>
+						Include already-processed items
+					</Checkbox>
 				</div>
 			) : null}
 			{advanced && step.action === "get_task" ? (
-				<div className="space-y-2">
-					<Field label="task_ref">
-						<TextInput value={step.task_ref} onChange={(v) => onChange({ ...step, task_ref: v })} placeholder="T-58 or t_01..." mono />
-					</Field>
-				</div>
+				<Field label="Card" error={errors?.task_ref}>
+					<TextInput value={step.task_ref} onChange={(v) => onChange({ ...step, task_ref: v })} placeholder="T-58 or t_01…" mono />
+				</Field>
 			) : null}
 			{advanced && step.action === "get_inbox_item" ? (
-				<div className="space-y-2">
-					<Field label="inbox_ref">
-						<TextInput value={step.inbox_ref} onChange={(v) => onChange({ ...step, inbox_ref: v })} placeholder="i_..." mono />
-					</Field>
-				</div>
+				<Field label="Inbox item" error={errors?.inbox_ref}>
+					<TextInput value={step.inbox_ref} onChange={(v) => onChange({ ...step, inbox_ref: v })} placeholder="i_…" mono />
+				</Field>
 			) : null}
 			{step.action === "kb_read" ? (
-				<Field label="KB note path (explicit input)">
+				<Field label="Note path" error={errors?.path}>
 					<TextInput value={step.path} onChange={path => onChange({ ...step, path })} placeholder="README.md" mono />
 				</Field>
 			) : null}
 			{step.action === "kb_orphan_census" ? (
-				<div className="space-y-2">
-					<Field label="Maximum notes (optional)">
-						<NumInput value={step.limit} onChange={(v) => onChange({ ...step, limit: v ?? undefined })} placeholder="200" />
-					</Field>
-				</div>
+				<Field label="Maximum notes" optional error={errors?.limit}>
+					<NumInput value={step.limit} onChange={(v) => onChange({ ...step, limit: v ?? undefined })} placeholder="200" />
+				</Field>
 			) : null}
 			{!advanced && ["move_task", "get_task", "get_inbox_item"].includes(step.action) ? (
-				<p className="text-2xs text-ink-3">Turn on Advanced to choose the card, inbox item or destination column.</p>
+				<AdvancedNotice>Turn on Advanced to choose the card, inbox item or destination column.</AdvancedNotice>
 			) : null}
 		</div>
 	);
@@ -716,19 +714,19 @@ export function DeckStepForm({ step, onChange, advanced = true }: FormProps<"dec
 
 // ─── mcp ──────────────────────────────────────────────────────────────────
 
-export function McpStepForm({ step, onChange }: FormProps<"mcp">) {
+export function McpStepForm({ step, onChange, errors }: FormProps<"mcp">) {
 	function patch(p: Partial<Extract2<"mcp">>): void {
 		onChange({ ...step, ...p });
 	}
 	return (
-		<div className="space-y-2">
-			<div className="rounded border border-line bg-paper-2 px-2 py-1.5 font-mono text-2xs text-ink-3">
-				Calls one tool on a server enabled for the routine's cwd, without a model. <code>args</code> are
+		<div className="space-y-3">
+			<Help>
+				Calls one tool on a server enabled for the routine's working directory, without a model. Arguments are
 				templated, then checked against the tool's input schema. Servers and their tools are listed on the{" "}
-				<Link to="/integrations" className="text-accent hover:underline">Integrations</Link> page.
-			</div>
-			<div className="grid grid-cols-2 gap-2">
-				<Field label="server">
+				<Link to="/integrations" className="text-accent hover:underline">MCP servers</Link> page.
+			</Help>
+			<div className="grid grid-cols-2 gap-3">
+				<Field label="Server" error={errors?.server}>
 					<TextInput
 						value={step.server}
 						onChange={(v) => patch({ server: v })}
@@ -736,7 +734,7 @@ export function McpStepForm({ step, onChange }: FormProps<"mcp">) {
 						mono
 					/>
 				</Field>
-				<Field label="tool">
+				<Field label="Tool" error={errors?.tool}>
 					<TextInput
 						value={step.tool}
 						onChange={(v) => patch({ tool: v })}
@@ -745,7 +743,7 @@ export function McpStepForm({ step, onChange }: FormProps<"mcp">) {
 					/>
 				</Field>
 			</div>
-			<Field label="args (JSON)">
+			<Field label="Arguments" help="JSON." error={errors?.args}>
 				<TextArea
 					value={step.args ? JSON.stringify(step.args, null, 2) : "{}"}
 					onChange={(v) => {
@@ -766,10 +764,14 @@ export function McpStepForm({ step, onChange }: FormProps<"mcp">) {
 
 // ─── transform ────────────────────────────────────────────────────────────
 
-export function TransformStepForm({ step, onChange }: FormProps<"transform">) {
+export function TransformStepForm({ step, onChange, errors }: FormProps<"transform">) {
 	return (
-		<div className="space-y-2">
-			<Field label="body (JS expression, returns the json output)">
+		<div className="space-y-3">
+			<Field
+				label="Expression"
+				help={<>JavaScript; whatever it returns becomes this step's JSON output. Sandboxed (100 ms). Globals: <code>run</code>, <code>trigger</code>, <code>steps</code>, <code>state</code>, <code>env</code>, <code>secrets</code>.</>}
+				error={errors?.body}
+			>
 				<TextArea
 					value={step.body}
 					onChange={(v) => onChange({ ...step, body: v })}
@@ -777,19 +779,15 @@ export function TransformStepForm({ step, onChange }: FormProps<"transform">) {
 					placeholder={"const tasks = steps.fetch_tasks.json.tasks;\nreturn { count: tasks.length };"}
 				/>
 			</Field>
-			<div className="font-mono text-2xs text-ink-3">
-				Sandboxed (quickjs, 100ms cap). Globals: <code>run</code>, <code>trigger</code>,{" "}
-				<code>steps</code>, <code>state</code>, <code>env</code>, <code>secrets</code>.
-			</div>
 		</div>
 	);
 }
 
 // ─── wait ─────────────────────────────────────────────────────────────────
 
-export function WaitStepForm({ step, onChange }: FormProps<"wait">) {
+export function WaitStepForm({ step, onChange, errors }: FormProps<"wait">) {
 	return (
-		<Field label="Duration (seconds)">
+		<Field label="Duration" help="Seconds." error={errors?.duration_secs}>
 			<NumInput
 				value={step.duration_secs}
 				onChange={(v) => onChange({ ...step, duration_secs: v ?? 0 })}
@@ -801,9 +799,9 @@ export function WaitStepForm({ step, onChange }: FormProps<"wait">) {
 
 // ─── set_state ────────────────────────────────────────────────────────────
 
-export function SetStateStepForm({ step, onChange }: FormProps<"set_state">) {
+export function SetStateStepForm({ step, onChange, errors }: FormProps<"set_state">) {
 	return (
-		<Field label="state (keys to upsert, values may use {{ template }})">
+		<Field label="Values to remember" help="Keys are upserted into the routine's state; values may use {{ templates }}." error={errors?.state}>
 			<KeyValueEditor
 				pairs={objToStringMap(step.state)}
 				onChange={(v) => onChange({ ...step, state: v })}

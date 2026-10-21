@@ -1,5 +1,6 @@
 /** Canvas-first authoring with deliberate advanced controls and source access. */
 import { useEffect, useMemo, useRef, useState } from "react";
+import { CircleAlert, Play, Save } from "lucide-react";
 
 import {
 	validateRoutineSpec,
@@ -16,10 +17,12 @@ import { routinesApi } from "@/lib/routines-api";
 import { formatDurationMs } from "@/lib/utils";
 
 import { compileGraph } from "./canvas/graph-compile";
-import { RoutineCanvas } from "./canvas/RoutineCanvas";
+import { RoutineCanvas, type CanvasSelectRequest } from "./canvas/RoutineCanvas";
 import { SavePreviewDialog, shouldSkipSavePreview } from "./canvas/SavePreviewDialog";
 import { useRunOverlay } from "./canvas/use-run-overlay";
 import { AddStepPicker } from "./AddStepPicker";
+import { Field, Select, TextArea, TextInput } from "./form-primitives";
+import { stepTitle } from "./step-form-render";
 import { SettingsForm } from "./SettingsForm";
 import { StepCard } from "./StepCard";
 import { TriggerPicker } from "./TriggerPicker";
@@ -32,7 +35,8 @@ import {
 	removeStepRenderKey,
 } from "./step-render-keys";
 import {
-	type RoutineValidationMessage,
+	fieldErrorsForSpec,
+	type RoutineFieldErrors,
 	summarizeRoutineValidationErrors,
 } from "./routine-validation";
 import {
@@ -106,7 +110,8 @@ export function RoutineBuilder({ routine, onSaved, onError }: Props) {
 	const [enabled, setEnabled] = useState<boolean>(routine?.enabled ?? false);
 	const [runs, setRuns] = useState<RoutineRun[]>([]);
 	const [showRuns, setShowRuns] = useState(false);
-	// T-70: pre-save diff preview state. When non-null, the SavePreviewDialog is
+	const [selectRequest, setSelectRequest] = useState<CanvasSelectRequest | null>(null);
+	// Pre-save diff preview state. When non-null, the SavePreviewDialog is
 	// open and the contained `specToSave` + `specYaml` are what will be PATCHed
 	// or POSTed when the user confirms. Cancelling clears this back to null.
 	const [pendingSave, setPendingSave] = useState<{
@@ -151,8 +156,8 @@ export function RoutineBuilder({ routine, onSaved, onError }: Props) {
 		setYamlError(undefined);
 		setSchemaErrors(undefined);
 	}
-	// YAML -> form sync (debounced via blur; the textarea-onChange just tracks
-	// the buffer; we re-parse when the user clicks "Apply" or switches tab).
+	// YAML -> form sync: the textarea onChange just tracks the buffer; we
+	// re-parse when the user clicks "Apply", switches tab or saves.
 	function applyYaml(): RoutineSpec | undefined {
 		const result = parseSpec(yamlBuffer);
 		if (!result.ok) {
@@ -172,8 +177,8 @@ export function RoutineBuilder({ routine, onSaved, onError }: Props) {
 	}
 
 	function switchTab(next: Tab): void {
-		// If leaving the YAML tab with unsaved YAML, try to apply it first; if
-		// invalid, keep the user on the YAML tab so they can see the error.
+		// If leaving the source tab with unapplied YAML, try to apply it first;
+		// if invalid, stay on the source tab so the problem is visible.
 		if (tab === "spec" && yamlDirty && next !== "spec") {
 			const ok = applyYaml();
 			if (!ok) return;
@@ -183,7 +188,6 @@ export function RoutineBuilder({ routine, onSaved, onError }: Props) {
 
 	function toggleAdvanced(): void {
 		if (advanced) {
-			// Invalid source must be fixed before hiding it or changing views.
 			if (tab === "spec" && yamlDirty && !applyYaml()) return;
 			setTab("canvas");
 		}
@@ -191,19 +195,18 @@ export function RoutineBuilder({ routine, onSaved, onError }: Props) {
 	}
 
 	const specValidation = useMemo(() => validateRoutineSpec(spec), [spec]);
-	const specValidationMessages = useMemo(
-		() => summarizeRoutineValidationErrors(specValidation.errors, spec),
-		[specValidation.errors, spec],
+	const fieldErrors = useMemo<RoutineFieldErrors>(
+		() => legacy ? { top: {}, steps: new Map(), count: 0 } : fieldErrorsForSpec(specValidation.errors, spec),
+		[specValidation.errors, spec, legacy],
 	);
 	// Compile the canvas graph on every spec change. In the linear short-circuit
 	// path (no `layout.edges`), this is the identity function; it only does work
 	// when the user has wired explicit edges via the canvas. Errors gate Save
-	// and feed the canvas's red-ring overlay + bottom error strip.
+	// and feed the canvas's node marks + pill.
 	const compile = useMemo(() => legacy ? { steps: spec.steps, errors: [] } : compileGraph(spec), [spec, legacy]);
 
-	// T-71: run-status overlay state. Shared between the canvas (ring colors
-	// + badges + last-run picker) and the inspector (per-step output preview
-	// in T-72). Subscribes to WS for live updates while the routine runs.
+	// Run-status overlay state. Shared between the canvas (node marks + last-
+	// run picker) and the inspector (per-step output preview).
 	const runOverlay = useRunOverlay(routine?.id);
 
 	async function save(): Promise<void> {
@@ -213,7 +216,7 @@ export function RoutineBuilder({ routine, onSaved, onError }: Props) {
 		}
 		const currentSpec = yamlDirty ? applyYaml() : spec;
 		if (!currentSpec) {
-			onError("Source has validation errors. Fix them before saving.");
+			onError("The source has problems. Fix them before saving.");
 			return;
 		}
 		const validation = validateRoutineSpec(currentSpec);
@@ -292,6 +295,8 @@ export function RoutineBuilder({ routine, onSaved, onError }: Props) {
 			}
 			setPendingSave(null);
 			persistedSpec.current = specToSave;
+			setSpec(specToSave);
+			setYamlBuffer(specYaml || stringifySpec(specToSave));
 		} catch (e) {
 			onError(String(e));
 		} finally {
@@ -342,8 +347,10 @@ export function RoutineBuilder({ routine, onSaved, onError }: Props) {
 	// ─── Render ────────────────────────────────────────────────────────────
 
 	const legacyAction = spec.steps[0];
+	const nameMissing = spec.name.trim().length === 0;
+	const nameError = fieldErrors.top.name ?? (nameMissing ? "Give the routine a name." : undefined);
 	const canSave =
-		spec.name.trim().length > 0 &&
+		!nameMissing &&
 		spec.trigger.length > 0 &&
 		spec.steps.length > 0 &&
 		(legacy
@@ -352,42 +359,80 @@ export function RoutineBuilder({ routine, onSaved, onError }: Props) {
 				: legacyAction?.type === "run"
 					? legacyAction.command
 					: routine?.actionBody ?? "").trim().length > 0
-			: specValidation.valid) &&
+			: specValidation.valid && fieldErrors.count === 0) &&
 		compile.errors.length === 0 &&
 		!busy;
+	const dirty = yamlDirty || spec !== persistedSpec.current || (routine !== undefined && enabled !== routine.enabled);
+
+	// What stands between the author and Save, with somewhere to click.
+	const attention = useMemo(() => {
+		if (legacy) return null;
+		const items: Array<{ label: string; target?: string | "trigger" }> = [];
+		for (const [stepId, fields] of fieldErrors.steps) {
+			const step = spec.steps.find((s) => s.id === stepId);
+			const title = step ? stepTitle(step) : stepId;
+			items.push({ label: `${title}: ${Object.keys(fields).length === 1 ? "one field" : `${Object.keys(fields).length} fields`}`, target: stepId });
+		}
+		if (spec.trigger.length === 0 || fieldErrors.top.trigger) items.push({ label: "No trigger", target: "trigger" });
+		for (const err of compile.errors) {
+			const target = err.nodeIds[0];
+			if (target) items.push({ label: err.message, target });
+		}
+		if (spec.steps.length === 0) items.push({ label: "No actions yet" });
+		return items.length > 0 ? items : null;
+	}, [fieldErrors, compile.errors, spec.steps, spec.trigger.length, legacy]);
+
+	function showFirstProblem(): void {
+		const first = attention?.[0];
+		if (!first) return;
+		if (tab !== "canvas") {
+			// Leaving the source tab applies the buffer first; an invalid buffer
+			// keeps the author on Source where the problem is shown.
+			if (tab === "spec" && yamlDirty && !applyYaml()) return;
+			setTab("canvas");
+		}
+		if (!first.target) return;
+		setSelectRequest({ target: first.target, seq: Date.now() });
+	}
 
 	return (
 		<div
 			className={
-				// T-77: canvas tab claims the full viewport so the graph + inspector
-				// can spread out; form tabs stay capped at 5xl for readability.
+				// The canvas tab claims the full width so the graph + inspector can
+				// spread out; the form tabs stay capped for readability.
 				tab === "canvas"
-					? "flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-line bg-paper shadow-[0_1px_0_0_rgb(var(--ink)/0.03)]"
-					: "mx-auto flex min-h-0 w-full flex-1 max-w-5xl flex-col overflow-hidden rounded-lg border border-line bg-paper shadow-[0_1px_0_0_rgb(var(--ink)/0.03)]"
+					? "flex min-h-0 flex-1 flex-col overflow-hidden"
+					: "mx-auto flex min-h-0 w-full max-w-4xl flex-1 flex-col overflow-hidden"
 			}
 		>
-			<div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-line px-3 py-2">
-				<label className="flex min-w-0 flex-1 items-center gap-2 text-xs text-ink-2">
-					Name
-					<input aria-label="Routine name" value={spec.name} onChange={(e) => updateSpec({ ...spec, name: e.target.value })} className="field h-8 min-w-0 flex-1 px-2 text-sm" />
-				</label>
-				<button type="button" aria-expanded={advanced} onClick={toggleAdvanced} className="btn-ghost h-8 px-2 text-xs">
-					{advanced ? "Hide advanced" : "Advanced"}
-				</button>
+			<div className="flex shrink-0 flex-wrap items-start gap-3 px-1 pb-3">
+				<div className="min-w-0 flex-1">
+					<Field label="Name" error={nameError}>
+						<TextInput value={spec.name} onChange={(v) => updateSpec({ ...spec, name: v })} placeholder="morning-briefing" mono ariaLabel="Routine name" />
+					</Field>
+				</div>
+				<div className="pt-[22px]">
+					<button type="button" aria-expanded={advanced} onClick={toggleAdvanced} className="neo-btn" data-variant="ghost" data-on={advanced || undefined}>
+						{advanced ? "Hide advanced" : "Advanced"}
+					</button>
+				</div>
 			</div>
 			{advanced ? <TabBar tab={tab} onChange={switchTab} stepCount={spec.steps.length} triggerCount={spec.trigger.length} legacy={legacy} /> : null}
 			<div
 				className={
 					tab === "canvas"
-						? "flex-1 min-h-0"
-						: "flex-1 overflow-y-auto px-3 py-3"
+						? "neo-card min-h-0 flex-1 overflow-hidden"
+						: tab === "spec"
+							? "flex min-h-0 flex-1 flex-col pt-3"
+							: "min-h-0 flex-1 overflow-y-auto px-1 pt-4"
 				}
 			>
 				{tab === "steps" ? (
-					<div className="space-y-2">
+					<div className="space-y-3">
 						{spec.steps.length === 0 ? (
-							<div className="rounded border border-dashed border-line bg-paper-2 p-4 text-center text-2xs text-ink-3">
-								No steps yet. Pick one to start.
+							<div className="neo-empty rounded-[var(--r-card)] border border-dashed border-[var(--neo-line-2)]">
+								<div className="neo-empty-title">No steps yet</div>
+								<div className="neo-empty-hint">Add one below; the canvas shows the same steps as a graph.</div>
 							</div>
 						) : (
 							spec.steps.map((step, idx) => (
@@ -397,6 +442,7 @@ export function RoutineBuilder({ routine, onSaved, onError }: Props) {
 									index={idx}
 									total={spec.steps.length}
 									existingIds={existingStepIds}
+									errors={fieldErrors.steps.get(step.id)}
 									onChange={(n) => onChangeStep(idx, n)}
 									onRemove={() => onRemoveStep(idx)}
 									onMoveUp={() => onMoveUp(idx)}
@@ -412,7 +458,10 @@ export function RoutineBuilder({ routine, onSaved, onError }: Props) {
 					<RoutineCanvas
 						spec={spec}
 						onChange={updateSpec}
+						onChangeTriggers={legacy ? undefined : onChangeTriggers}
 						compileErrors={compile.errors}
+						fieldErrors={fieldErrors}
+						selectRequest={selectRequest}
 						routineId={routine?.id}
 						runs={runOverlay.runs}
 						selectedRunId={runOverlay.selectedRunId}
@@ -426,40 +475,40 @@ export function RoutineBuilder({ routine, onSaved, onError }: Props) {
 				) : null}
 
 				{tab === "triggers" ? (
-					<TriggerPicker triggers={spec.trigger} onChange={onChangeTriggers} />
+					<TriggerPicker triggers={spec.trigger} onChange={onChangeTriggers} error={fieldErrors.top.trigger} />
 				) : null}
 
 				{tab === "settings" ? (
-					<div className="space-y-3">
+					<div className="space-y-4">
 						{legacy ? (
-							<div className="space-y-3">
-								<label className="block text-xs text-ink-2">Description
-									<textarea aria-label="Routine description" value={spec.description ?? ""} onChange={(e) => updateSpec({ ...spec, description: e.target.value })} rows={3} className="field mt-1 w-full px-2 py-1" />
-								</label>
-								<label className="block text-xs text-ink-2">Schedule (cron; empty for on demand)
-									<input aria-label="Routine schedule" value={spec.trigger.flatMap((trigger) => "cron" in trigger ? [trigger.cron] : [])[0] ?? ""} onChange={(e) => updateSpec({ ...spec, trigger: e.target.value ? [{ cron: e.target.value }] : [{ manual: {} }] })} className="field mt-1 h-8 w-full px-2" />
-								</label>
-								<label className="block text-xs text-ink-2">Action
-									<select aria-label="Legacy action kind" value={legacyKind} onChange={(e) => {
-										const kind = e.target.value as Routine["actionKind"];
+							<div className="space-y-4">
+								<Field label="Description" optional>
+									<TextArea mono={false} ariaLabel="Routine description" value={spec.description ?? ""} onChange={(v) => updateSpec({ ...spec, description: v })} rows={3} />
+								</Field>
+								<Field label="Schedule" optional help="Cron expression; empty runs on demand.">
+									<TextInput mono ariaLabel="Routine schedule" value={spec.trigger.flatMap((trigger) => "cron" in trigger ? [trigger.cron] : [])[0] ?? ""} onChange={(v) => updateSpec({ ...spec, trigger: v ? [{ cron: v }] : [{ manual: {} }] })} />
+								</Field>
+								<Field label="Action">
+									<Select ariaLabel="Legacy action kind" value={legacyKind} onChange={(kind) => {
 										const action = spec.steps[0]!;
 										const body = action.type === "agent" ? action.prompt : action.type === "run" ? action.command : "";
 										setLegacyKind(kind);
 										updateSpec({ ...spec, steps: [kind === "prompt" ? { id: "action", type: "agent", prompt: body } : { id: "action", type: "run", command: body, cwd: action.type === "run" ? action.cwd : legacyCwd }] });
-									}} className="field mt-1 h-8 w-full px-2">
-										<option value="bash">Shell command</option><option value="script">Script</option><option value="prompt">Ask an agent</option>
-									</select>
-								</label>
-								<label className="block text-xs text-ink-2">Working directory
-									<input aria-label="Working directory" value={legacyCwd} onChange={(e) => {
-										const cwd = e.target.value;
+									}} options={[
+										{ value: "bash", label: "Shell command" },
+										{ value: "script", label: "Script" },
+										{ value: "prompt", label: "Ask an agent" },
+									]} />
+								</Field>
+								<Field label="Working directory" optional>
+									<TextInput mono ariaLabel="Working directory" value={legacyCwd} onChange={(cwd) => {
 										const action = spec.steps[0];
 										if (action?.type === "run") updateSpec({ ...spec, steps: [{ ...action, cwd }] });
 										else setLegacyCwd(cwd);
-									}} className="field mt-1 h-8 w-full px-2" />
-								</label>
+									}} />
+								</Field>
 							</div>
-						) : <SettingsForm spec={spec} onChange={updateSpec} />}
+						) : <SettingsForm spec={spec} onChange={updateSpec} errors={fieldErrors.top} />}
 						{routine && !legacy ? (
 							<WebhookSecretPanel routineId={routine.id} refreshKey={routine.updatedAt} onError={onError} />
 						) : null}
@@ -467,7 +516,23 @@ export function RoutineBuilder({ routine, onSaved, onError }: Props) {
 				) : null}
 
 				{tab === "spec" ? (
-					<div className="space-y-2">
+					<div className="neo-source">
+						<div className="neo-source-bar">
+							<span>Source</span>
+							<span className="neo-mono text-ink-4">YAML</span>
+							<span className="ml-auto">
+								{yamlDirty ? <span className="neo-badge" data-tone="warn">Not applied yet</span> : <span className="text-ink-4">Matches the canvas</span>}
+							</span>
+							<button
+								type="button"
+								onClick={applyYaml}
+								disabled={!yamlDirty}
+								className="neo-btn"
+								data-size="sm"
+							>
+								Apply to canvas
+							</button>
+						</div>
 						<textarea
 							value={yamlBuffer}
 							aria-label="Routine source"
@@ -475,49 +540,28 @@ export function RoutineBuilder({ routine, onSaved, onError }: Props) {
 								setYamlBuffer(e.target.value);
 								setYamlDirty(true);
 							}}
-							rows={28}
 							spellCheck={false}
-							className="field w-full resize-y px-2 py-1.5 font-mono text-2xs leading-relaxed"
 						/>
-						<div className="flex items-center gap-2">
-							<button
-								type="button"
-								onClick={applyYaml}
-								disabled={!yamlDirty}
-								className="btn-ghost h-7 text-2xs disabled:opacity-40"
-							>
-								Apply to canvas
-							</button>
-							{yamlDirty ? (
-								<span className="font-mono text-2xs text-warn">unsaved YAML edits</span>
-							) : null}
-						</div>
-						{yamlError ? (
-							<div className="rounded border border-danger/40 bg-danger/5 px-2 py-1.5 font-mono text-2xs text-danger">
-								YAML parse: {yamlError}
-							</div>
-						) : null}
-						{schemaErrors ? (
-							<div className="rounded border border-danger/40 bg-danger/5 px-2 py-1.5">
-								<div className="meta mb-0.5 text-danger">Schema errors</div>
-								<ul className="space-y-0.5 font-mono text-2xs text-danger">
-									{schemaErrors.slice(0, 6).map((e, idx) => (
-										<li key={idx}>
-											{e.path || "/"} — {e.message}
-										</li>
-									))}
-								</ul>
+						{yamlError || schemaErrors ? (
+							<div className="neo-source-problems" role="alert">
+								{yamlError ? <div>{yamlError}</div> : null}
+								{schemaErrors?.slice(0, 6).map((e, idx) => (
+									<div key={idx}>
+										<span className="neo-mono">{e.path || "/"}</span>
+										{e.message}
+									</div>
+								))}
 							</div>
 						) : null}
 					</div>
 				) : null}
 
-				{routine && tab !== "canvas" ? (
-					<div className="mt-3 border-t border-line pt-2">
+				{routine && tab !== "canvas" && tab !== "spec" ? (
+					<div className="mt-4 border-t border-[var(--neo-line-1)] pt-3">
 						<button
 							type="button"
 							onClick={() => setShowRuns((s) => !s)}
-							className="flex w-full items-center gap-1 text-left font-mono text-2xs text-ink-3 hover:text-ink"
+							className="flex w-full items-center gap-1 text-left text-[12.5px] text-ink-3 hover:text-ink"
 						>
 							<span>Recent runs ({runs.length})</span>
 							<span className="text-ink-4">{showRuns ? "▾" : "▸"}</span>
@@ -526,15 +570,15 @@ export function RoutineBuilder({ routine, onSaved, onError }: Props) {
 					</div>
 				) : null}
 			</div>
-			{!legacy && spec.steps.length > 0 && specValidationMessages.length > 0 ? (
-				<ValidationSummary messages={specValidationMessages} />
-			) : null}
 			<Footer
 				routine={routine}
 				canSave={canSave}
 				busy={busy}
+				dirty={dirty}
 				enabled={enabled}
 				setEnabled={setEnabled}
+				attention={attention}
+				onShowProblem={showFirstProblem}
 				onSave={() => void save()}
 				onRunNow={() => void runNow()}
 			/>
@@ -575,42 +619,22 @@ function TabBar({
 			{ id: "steps", label: "Steps", badge: stepCount },
 			{ id: "triggers", label: "Triggers", badge: triggerCount },
 			{ id: "settings", label: "Options" },
-			{ id: "spec", label: "View source" },
+			{ id: "spec", label: "Source" },
 		];
 	return (
-		<div className="flex shrink-0 border-b border-line bg-paper">
+		<div className="neo-tabs mb-3 shrink-0">
 			{tabs.map((t) => (
 				<button
 					key={t.id}
 					type="button"
 					onClick={() => onChange(t.id)}
-					className={
-						"relative h-9 px-3 text-2xs uppercase tracking-meta " +
-						(tab === t.id
-							? "text-ink after:absolute after:inset-x-2 after:bottom-0 after:h-px after:bg-accent"
-							: "text-ink-3 hover:text-ink")
-					}
+					className="neo-tab"
+					data-active={tab === t.id}
 				>
 					{t.label}
-					{t.badge !== undefined ? (
-						<span className="ml-1.5 rounded bg-paper-2 px-1 font-mono text-2xs text-ink-3">
-							{t.badge}
-						</span>
-					) : null}
+					{t.badge !== undefined ? <span className="neo-badge" data-mono="true">{t.badge}</span> : null}
 				</button>
 			))}
-		</div>
-	);
-}
-function ValidationSummary({ messages }: { messages: readonly RoutineValidationMessage[] }) {
-	return (
-		<div className="border-t border-danger/30 bg-danger/5 px-3 py-2">
-			<div className="meta mb-1 text-danger">Fix before saving</div>
-			<ul className="space-y-0.5 font-mono text-2xs text-danger">
-				{messages.slice(0, 4).map((message) => (
-					<li key={`${message.path}:${message.message}`}>{message.message}</li>
-				))}
-			</ul>
 		</div>
 	);
 }
@@ -619,28 +643,50 @@ function Footer({
 	routine,
 	canSave,
 	busy,
+	dirty,
 	enabled,
 	setEnabled,
+	attention,
+	onShowProblem,
 	onSave,
 	onRunNow,
 }: {
 	routine: Routine | undefined;
 	canSave: boolean;
 	busy: boolean;
+	dirty: boolean;
 	enabled: boolean;
 	setEnabled: (v: boolean) => void;
+	attention: ReadonlyArray<{ label: string; target?: string }> | null;
+	onShowProblem: () => void;
 	onSave: () => void;
 	onRunNow: () => void;
 }) {
 	return (
-		<div className="flex shrink-0 items-center gap-2 border-t border-line bg-paper px-3 py-2">
-			<label className="flex items-center gap-2 text-xs text-ink-2">
+		<div className="flex shrink-0 flex-wrap items-center gap-3 border-t border-[var(--neo-line-1)] px-1 pt-3" data-testid="routine-save-bar">
+			<label className="neo-check">
 				<input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
 				<span>Enabled</span>
 			</label>
-			<div className="ml-auto flex items-center gap-1.5">
+			<div className="min-w-0 flex-1 text-[12.5px] text-ink-3">
+				{attention ? (
+					<button type="button" onClick={onShowProblem} className="inline-flex max-w-full items-center gap-1.5 text-left text-danger hover:underline" title={attention.map((a) => a.label).join("\n")}>
+						<CircleAlert size={13} />
+						<span className="truncate">
+							{attention.length === 1 ? attention[0]!.label : `${attention.length} things need attention`}
+						</span>
+						{attention[0]!.target ? <span className="text-ink-3">· show me</span> : null}
+					</button>
+				) : dirty ? (
+					<span>Unsaved changes</span>
+				) : routine ? (
+					<span>Saved</span>
+				) : null}
+			</div>
+			<div className="flex items-center gap-2">
 				{routine ? (
-					<button type="button" onClick={onRunNow} className="neo-btn" data-size="sm">
+					<button type="button" onClick={onRunNow} className="neo-btn">
+						<Play size={13} />
 						Run now
 					</button>
 				) : null}
@@ -650,9 +696,9 @@ function Footer({
 					disabled={!canSave}
 					className="neo-btn"
 					data-variant="primary"
-					data-size="sm"
 				>
-					{busy ? "Saving..." : routine ? "Save routine" : "Create routine"}
+					<Save size={13} />
+					{busy ? "Saving…" : routine ? "Save routine" : "Create routine"}
 				</button>
 			</div>
 		</div>
@@ -663,7 +709,7 @@ function RunList({ routine, runs }: { routine: Routine; runs: RoutineRun[] }) {
 	return (
 		<ul className="mt-2 space-y-1">
 			{runs.length === 0 ? (
-				<li className="font-mono text-2xs text-ink-3">No runs yet.</li>
+				<li className="text-[12.5px] text-ink-3">No runs yet.</li>
 			) : (
 				runs.map((r) => {
 					const dur =
@@ -672,16 +718,11 @@ function RunList({ routine, runs }: { routine: Routine; runs: RoutineRun[] }) {
 							: undefined;
 					const ok = !r.error && !r.abortReason;
 					return (
-						<li key={r.id} className="flex items-center gap-2 font-mono text-2xs">
-							<span
-								className={
-									"h-1.5 w-1.5 shrink-0 rounded-full " +
-									(r.endedAt || r.abortedAt ? (ok ? "bg-success" : "bg-danger") : "bg-accent")
-								}
-							/>
-							<span className="text-ink-3">{new Date(r.startedAt).toLocaleString()}</span>
+						<li key={r.id} className="flex items-center gap-2 text-[12.5px]">
+							<span className="neo-dot" data-tone={r.endedAt || r.abortedAt ? (ok ? "ok" : "bad") : "accent"} />
+							<span className="neo-mono text-ink-3">{new Date(r.startedAt).toLocaleString()}</span>
 							<span className="text-ink-4">{r.trigger}</span>
-							{dur !== undefined ? <span className="text-ink-4">{formatDurationMs(dur)}</span> : null}
+							{dur !== undefined ? <span className="neo-mono text-ink-4">{formatDurationMs(dur)}</span> : null}
 							{r.abortReason ? <span className="text-warn">{r.abortReason}</span> : null}
 							<a
 								href={`/routines/${routine.id}/runs/${r.id}`}

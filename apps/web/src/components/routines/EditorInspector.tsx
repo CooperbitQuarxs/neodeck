@@ -104,10 +104,10 @@ export function EditorInspector({ routine, onChange, onDeleted, onError }: Props
 
 	if (!routine) {
 		return (
-			<div className="p-3">
-				<div className="meta mb-2">Inspector</div>
-				<p className="text-xs leading-relaxed text-ink-3">
-					Save this routine to enable run history, quick actions, and metrics.
+			<div className="p-4">
+				<div className="text-[12px] font-medium text-ink-3">This routine</div>
+				<p className="mt-1 text-[12.5px] leading-relaxed text-ink-3">
+					Save it to see run history, quick actions and a success rate here.
 				</p>
 			</div>
 		);
@@ -115,65 +115,66 @@ export function EditorInspector({ routine, onChange, onDeleted, onError }: Props
 
 	return (
 		<div className="flex h-full flex-col overflow-y-auto">
-			<section className="border-b border-line p-3">
-				<div className="meta mb-2">Status</div>
-				<div className="flex items-center justify-between text-sm">
-					<span className="text-ink-2">Enabled</span>
-					<span className="font-mono text-2xs text-ink-3">{routine.enabled ? "yes" : "no"}</span>
-				</div>
-				{routine.nextRunAt ? (
-					<div className="mt-1 flex items-center justify-between text-sm">
-						<span className="text-ink-2">Next</span>
-						<span className="font-mono text-2xs text-ink-3">{new Date(routine.nextRunAt).toLocaleString()}</span>
+			<section className="border-b border-[var(--neo-line-1)] p-4">
+				<h3 className="mb-2 text-[12px] font-medium text-ink-3">Status</h3>
+				<dl className="space-y-1.5 text-[13px]">
+					<div className="flex items-center justify-between gap-2">
+						<dt className="text-ink-2">Enabled</dt>
+						<dd><span className="neo-badge" data-tone={routine.enabled ? "ok" : undefined}>{routine.enabled ? "on" : "off"}</span></dd>
 					</div>
-				) : null}
-				{metrics ? (
-					<div className="mt-1 flex items-center justify-between text-sm">
-						<span className="text-ink-2">Success</span>
-						<span className="font-mono text-2xs text-ink-3">{Math.round(metrics.successRate30d * 100)}%</span>
-					</div>
-				) : null}
+					{routine.nextRunAt ? (
+						<div className="flex items-center justify-between gap-2">
+							<dt className="text-ink-2">Next run</dt>
+							<dd className="neo-mono text-[12px] text-ink-3">{new Date(routine.nextRunAt).toLocaleString()}</dd>
+						</div>
+					) : null}
+					{metrics ? (
+						<div className="flex items-center justify-between gap-2">
+							<dt className="text-ink-2">Success, 30 days</dt>
+							<dd className="neo-mono text-[12px] text-ink-3">{Math.round(metrics.successRate30d * 100)}%</dd>
+						</div>
+					) : null}
+				</dl>
 			</section>
 
-			<section className="border-b border-line p-3">
+			<section className="border-b border-[var(--neo-line-1)] p-4">
 				<div className="mb-2 flex items-center justify-between">
-					<div className="meta">Recent runs</div>
-					<button type="button" onClick={() => void refresh()} disabled={busy === "refresh"} className="btn-ghost h-6 w-6 p-0" aria-label="Refresh runs">
-						<RefreshCcw className="h-3 w-3" />
+					<h3 className="text-[12px] font-medium text-ink-3">Recent runs</h3>
+					<button type="button" onClick={() => void refresh()} disabled={busy === "refresh"} className="neo-btn" data-variant="ghost" data-size="sm" data-icon="true" aria-label="Refresh runs">
+						<RefreshCcw size={13} />
 					</button>
 				</div>
-				<ul className="space-y-1">
+				<ul className="space-y-0.5">
 					{runs.length === 0 ? (
-						<li className="font-mono text-2xs text-ink-3">No runs yet.</li>
+						<li className="text-[12.5px] text-ink-3">No runs yet.</li>
 					) : (
 						runs.map((run) => <RunMini key={run.id} routineId={routine.id} run={run} />)
 					)}
 				</ul>
 			</section>
 
-			<section className="border-b border-line p-3">
-				<div className="meta mb-2">Actions</div>
-				<div className="space-y-1.5">
-					<button type="button" onClick={() => void runNow()} disabled={busy === "run"} className="btn-ghost h-7 w-full justify-start text-xs">
-						<Zap className="h-3.5 w-3.5" />
+			<section className="border-b border-[var(--neo-line-1)] p-4">
+				<h3 className="mb-2 text-[12px] font-medium text-ink-3">Actions</h3>
+				<div className="space-y-1">
+					<button type="button" onClick={() => void runNow()} disabled={busy === "run"} className="neo-btn w-full justify-start" data-variant="ghost" data-size="sm">
+						<Zap size={13} />
 						Run now
 					</button>
-					<button type="button" onClick={() => void toggle()} disabled={busy === "toggle"} className="btn-ghost h-7 w-full justify-start text-xs">
-						<Power className="h-3.5 w-3.5" />
+					<button type="button" onClick={() => void toggle()} disabled={busy === "toggle"} className="neo-btn w-full justify-start" data-variant="ghost" data-size="sm">
+						<Power size={13} />
 						{routine.enabled ? "Disable" : "Enable"}
 					</button>
-					<button type="button" onClick={() => void remove()} disabled={busy === "delete"} className="btn-ghost h-7 w-full justify-start text-xs text-danger">
-						<Trash2 className="h-3.5 w-3.5" />
+					<button type="button" onClick={() => void remove()} disabled={busy === "delete"} className="neo-btn w-full justify-start text-danger" data-variant="ghost" data-size="sm">
+						<Trash2 size={13} />
 						Delete
 					</button>
 				</div>
 			</section>
 
-			<details className="p-3">
-				<summary className="cursor-pointer text-xs text-ink-3">Advanced reference</summary>
-				<div className="mt-2 space-y-1 font-mono text-2xs text-ink-3">
-					<div>Steps: run / agent / http / write / transform / wait / set_state / mcp</div>
-					<div>Template refs: {"{{ run.date }}"}, {"{{ steps.id.json }}"}, {"{{ state.key }}"}</div>
+			<details className="p-4">
+				<summary className="cursor-pointer text-[12.5px] text-ink-3">Template reference</summary>
+				<div className="neo-mono mt-2 space-y-1 text-[11.5px] text-ink-3">
+					<div>{"{{ run.date }}"} · {"{{ steps.<name>.json }}"} · {"{{ steps.<name>.stdout }}"} · {"{{ state.<key> }}"}</div>
 				</div>
 			</details>
 		</div>
@@ -185,9 +186,9 @@ function RunMini({ routineId, run }: { routineId: string; run: RoutineRun }) {
 	const running = !run.endedAt && !run.abortedAt;
 	return (
 		<li>
-			<Link to={`/routines/${routineId}/runs/${run.id}`} className="flex items-center gap-2 rounded px-1 py-0.5 font-mono text-2xs hover:bg-paper-3">
-				<span className={`h-1.5 w-1.5 rounded-full ${running ? "bg-accent" : ok ? "bg-success" : "bg-danger"}`} />
-				<span className="text-ink-3">{new Date(run.startedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+			<Link to={`/routines/${routineId}/runs/${run.id}`} className="flex items-center gap-2 rounded-[var(--r-chip)] px-1.5 py-1 text-[12px] hover:bg-[var(--neo-hover)]">
+				<span className="neo-dot" data-tone={running ? "accent" : ok ? "ok" : "bad"} data-pulse={running || undefined} />
+				<span className="neo-mono text-ink-3">{new Date(run.startedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
 				<span className="text-ink-4">{run.trigger}</span>
 				{run.abortReason ? <span className="ml-auto text-warn">{run.abortReason}</span> : null}
 			</Link>

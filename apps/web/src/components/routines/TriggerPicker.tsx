@@ -3,26 +3,32 @@
  * Event triggers are reserved in the schema for V1.5 — not surfaced here yet.
  */
 import { useEffect, useState } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { Clock, Play, Plus, Trash2, Webhook } from "lucide-react";
 
 import type { RoutineTrigger } from "@npi-deck/protocol";
 
-import { Field, NumInput as _NumInput, TextInput } from "./form-primitives";
+import { Field, TextInput } from "./form-primitives";
+import { cronInWords, describeTrigger, triggerKind, type TriggerKind } from "./trigger-summary";
 
 interface Props {
 	triggers: RoutineTrigger[];
 	onChange: (next: RoutineTrigger[]) => void;
+	/** Validation message for the trigger list as a whole. */
+	error?: string;
 }
 
 const PRESET_CRONS: ReadonlyArray<{ label: string; expr: string }> = [
-	{ label: "every minute", expr: "* * * * *" },
-	{ label: "hourly :00", expr: "0 * * * *" },
-	{ label: "daily 7am", expr: "0 7 * * *" },
-	{ label: "weekdays 9am", expr: "0 9 * * 1-5" },
-	{ label: "weekly Sun 9am", expr: "0 9 * * 0" },
+	{ label: "Every minute", expr: "* * * * *" },
+	{ label: "Hourly", expr: "0 * * * *" },
+	{ label: "Daily 07:00", expr: "0 7 * * *" },
+	{ label: "Weekdays 09:00", expr: "0 9 * * 1-5" },
+	{ label: "Sundays 09:00", expr: "0 9 * * 0" },
 ];
 
-export function TriggerPicker({ triggers, onChange }: Props) {
+const KIND_ICON = { cron: Clock, webhook: Webhook, manual: Play, event: Clock } as const;
+const KIND_WORDS: Record<TriggerKind, string> = { cron: "On a schedule", webhook: "From a webhook", manual: "By hand", event: "On an event" };
+
+export function TriggerPicker({ triggers, onChange, error }: Props) {
 	function add(kind: "cron" | "webhook" | "manual"): void {
 		const next = triggers.slice();
 		if (kind === "cron") next.push({ cron: "0 9 * * *" });
@@ -44,27 +50,30 @@ export function TriggerPicker({ triggers, onChange }: Props) {
 	}
 
 	return (
-		<div className="space-y-2">
-			{triggers.length === 0 ? (
-				<div className="rounded border border-warn/40 bg-warn/5 px-2 py-1.5 font-mono text-2xs text-warn">
-					This routine has no triggers. Add at least one below.
+		<div className="space-y-3">
+			<Field
+				label="Starts"
+				help={triggers.length === 0 ? "A routine needs at least one way to start." : "Any of these starts the routine."}
+				error={error ?? (triggers.length === 0 ? "Add at least one trigger." : undefined)}
+			>
+				<div className="space-y-2">
+					{triggers.map((t, idx) => (
+						<TriggerCard key={idx} trigger={t} onChange={(v) => replace(idx, v)} onRemove={() => remove(idx)} />
+					))}
 				</div>
-			) : null}
-			{triggers.map((t, idx) => (
-				<TriggerCard key={idx} trigger={t} onChange={(v) => replace(idx, v)} onRemove={() => remove(idx)} />
-			))}
+			</Field>
 			<div className="flex flex-wrap gap-1.5">
-				<button type="button" onClick={() => add("cron")} className="btn-ghost h-7 px-2 text-2xs">
-					<Plus className="h-3 w-3" />
-					cron
+				<button type="button" onClick={() => add("cron")} className="neo-btn" data-size="sm">
+					<Plus size={13} />
+					Schedule
 				</button>
-				<button type="button" onClick={() => add("webhook")} className="btn-ghost h-7 px-2 text-2xs">
-					<Plus className="h-3 w-3" />
-					webhook
+				<button type="button" onClick={() => add("webhook")} className="neo-btn" data-size="sm">
+					<Plus size={13} />
+					Webhook
 				</button>
-				<button type="button" onClick={() => add("manual")} className="btn-ghost h-7 px-2 text-2xs">
-					<Plus className="h-3 w-3" />
-					manual
+				<button type="button" onClick={() => add("manual")} className="neo-btn" data-size="sm">
+					<Plus size={13} />
+					By hand
 				</button>
 			</div>
 		</div>
@@ -80,38 +89,36 @@ function TriggerCard({
 	onChange: (next: RoutineTrigger) => void;
 	onRemove: () => void;
 }) {
-	const kind: "cron" | "webhook" | "manual" | "event" = (() => {
-		if ("cron" in trigger) return "cron";
-		if ("webhook" in trigger) return "webhook";
-		if ("manual" in trigger) return "manual";
-		return "event";
-	})();
+	const kind = triggerKind(trigger);
+	const Icon = KIND_ICON[kind];
+	const summary = describeTrigger(trigger);
 	return (
-		<div className="rounded border border-line bg-paper-2/40 p-2">
-			<div className="flex items-center justify-between">
-				<div className="meta">{kind}</div>
-				<button type="button" onClick={onRemove} className="btn-ghost h-6 w-6 p-0 text-ink-4 hover:text-danger">
-					<Trash2 className="h-3 w-3" />
+		<div className="neo-card">
+			<div className="flex items-center gap-2.5 px-3 py-2">
+				<span className="neo-node-icon"><Icon size={13} /></span>
+				<div className="min-w-0 flex-1">
+					<div className={`truncate text-[13px] font-medium text-ink ${summary.mono ? "neo-mono" : ""}`}>{summary.text}</div>
+					<div className="text-[11.5px] text-ink-3">{KIND_WORDS[kind]}</div>
+				</div>
+				<button type="button" onClick={onRemove} className="neo-btn text-ink-3 hover:!text-danger" data-variant="ghost" data-size="sm" data-icon="true" aria-label="Remove trigger">
+					<Trash2 size={13} />
 				</button>
 			</div>
-			<div className="mt-1.5">
-				{"cron" in trigger ? <CronEditor expr={trigger.cron} onChange={(c) => onChange({ cron: c })} /> : null}
-				{"webhook" in trigger ? (
-					<WebhookEditor
-						path={trigger.webhook.path}
-						secretEnv={trigger.webhook.secret_env}
-						onChange={(path, secret_env) => onChange({ webhook: { path, secret_env } })}
-					/>
-				) : null}
-				{"manual" in trigger ? (
-					<div className="font-mono text-2xs text-ink-3">
-						Fired via the Run-now button or <code>POST /api/routines/:id/run</code>.
-					</div>
-				) : null}
-				{"event" in trigger ? (
-					<div className="font-mono text-2xs text-ink-4">event triggers ship in V1.5</div>
-				) : null}
-			</div>
+			{kind === "manual" ? null : (
+				<div className="border-t border-[var(--neo-line-1)] px-3 py-3">
+					{"cron" in trigger ? <CronEditor expr={trigger.cron} onChange={(c) => onChange({ cron: c })} /> : null}
+					{"webhook" in trigger ? (
+						<WebhookEditor
+							path={trigger.webhook.path}
+							secretEnv={trigger.webhook.secret_env}
+							onChange={(path, secret_env) => onChange({ webhook: { path, secret_env } })}
+						/>
+					) : null}
+					{"event" in trigger ? (
+						<div className="text-[12px] text-ink-3">Event triggers are not available yet.</div>
+					) : null}
+				</div>
+			)}
 		</div>
 	);
 }
@@ -141,37 +148,31 @@ function CronEditor({ expr, onChange }: { expr: string; onChange: (v: string) =>
 		}, 250);
 		return () => clearTimeout(t);
 	}, [expr]);
+	const words = cronInWords(expr);
 	return (
-		<div className="space-y-1.5">
-			<TextInput value={expr} onChange={onChange} placeholder="0 9 * * *" mono />
+		<div className="space-y-2.5">
+			<Field
+				label="Schedule"
+				help={preview?.valid === true && preview.nextRuns.length > 0
+					? <>Next: {preview.nextRuns.slice(0, 2).map((iso) => new Date(iso).toLocaleString()).join(", ")}</>
+					: words ?? "Five-field cron expression: minute, hour, day of month, month, day of week."}
+				error={preview?.valid === false ? preview.error : undefined}
+			>
+				<TextInput value={expr} onChange={onChange} placeholder="0 9 * * *" mono ariaLabel="Cron expression" />
+			</Field>
 			<div className="flex flex-wrap gap-1">
 				{PRESET_CRONS.map((p) => (
 					<button
 						key={p.expr}
 						type="button"
 						onClick={() => onChange(p.expr)}
-						className="rounded border border-line bg-paper-2 px-1.5 py-0.5 font-mono text-2xs text-ink-3 hover:bg-paper-3 hover:text-ink"
+						className="neo-chip-btn"
+						data-on={p.expr === expr.trim() || undefined}
 					>
 						{p.label}
 					</button>
 				))}
 			</div>
-			{preview ? (
-				preview.valid ? (
-					<div className="rounded border border-success/30 bg-success/5 px-2 py-1">
-						<div className="meta mb-0.5 text-success">next {preview.nextRuns.length}</div>
-						<ul className="space-y-0.5 font-mono text-2xs text-ink-2">
-							{preview.nextRuns.slice(0, 3).map((iso) => (
-								<li key={iso}>{new Date(iso).toLocaleString()}</li>
-							))}
-						</ul>
-					</div>
-				) : (
-					<div className="rounded border border-danger/40 bg-danger/5 px-2 py-1 font-mono text-2xs text-danger">
-						{preview.error}
-					</div>
-				)
-			) : null}
 		</div>
 	);
 }
@@ -186,11 +187,11 @@ function WebhookEditor({
 	onChange: (path: string, secretEnv: string) => void;
 }) {
 	return (
-		<div className="space-y-1.5">
-			<Field label="path">
+		<div className="space-y-3">
+			<Field label="Path">
 				<TextInput value={path} onChange={(v) => onChange(v, secretEnv)} placeholder="/hooks/my-routine" mono />
 			</Field>
-			<Field label="secret_env (env var name holding the shared secret)">
+			<Field label="Secret" help="Name of the environment variable holding the shared secret.">
 				<TextInput
 					value={secretEnv}
 					onChange={(v) => onChange(path, v)}
@@ -198,11 +199,11 @@ function WebhookEditor({
 					mono
 				/>
 			</Field>
-			<div className="font-mono text-2xs text-ink-3">
-				Once saved, use the "Rotate secret" button on the Settings tab to mint a server-side secret. Senders send{" "}
-				<code>X-Routine-Timestamp: &lt;unix seconds&gt;</code> and{" "}
-				<code>X-Routine-Signature: sha256=&lt;HMAC-SHA256(secret, "&lt;timestamp&gt;.&lt;raw body&gt;")&gt;</code>.
-			</div>
+			<p className="text-[12px] leading-relaxed text-ink-3">
+				Once saved, Options → Rotate secret mints a server-side secret. Senders include{" "}
+				<code className="neo-mono">X-Routine-Timestamp</code> (unix seconds) and{" "}
+				<code className="neo-mono">X-Routine-Signature: sha256=HMAC(secret, "timestamp.body")</code>.
+			</p>
 		</div>
 	);
 }
