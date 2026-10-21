@@ -41,6 +41,7 @@ export type ThreadMessage = ChatMessage & { agentId?: string; addressedTo?: stri
 export interface ThreadTranscript { messages: ThreadMessage[]; toolCalls: Record<string, ToolCallStream> }
 export interface ThreadsClient {
 	list(): Promise<ThreadSummary[]>;
+	previewList(): ThreadSummary[];
 	agents(threadId: string): Promise<ThreadAgent[]>;
 	addAgent(threadId: string, input: AddThreadAgentInput): Promise<ThreadAgent>;
 	removeAgent(threadId: string, agentId: string): Promise<void>;
@@ -111,6 +112,7 @@ function liveAgents(id: string): ThreadAgent[] {
 	return [main, ...(extraAgents.get(id) ?? []), ...(store.subagentsBySession[id] ?? []).map((node, i) => ({ ...agent(node.id, node.name, [40, 260, 150, 20][i % 4]!, "worker", /running|working|streaming/.test(node.status) ? "working" : "idle", node.parentId), model: "Model not reported" }))];
 }
 const preview: ThreadsClient = {
+	previewList() { return fixtures.map((item) => ({ ...item, agents: [...item.agents] })); },
 	async list() { return fixtures.map((item) => ({ ...item, agents: [...item.agents] })); },
 	async agents(id) { return fixtures.find((item) => item.id === id)?.agents ?? extraAgents.get(id) ?? []; },
 	async addAgent(id, input) {
@@ -145,7 +147,7 @@ const live: ThreadsClient = {
 	...preview,
 	async list() {
 		const store = useStore.getState();
-		const persisted = store.sessions;
+		const persisted = store.sessions.length ? store.sessions : (await api.listSessions()).sessions;
 		const rows = new Map<string, ThreadSummary>();
 		for (const session of persisted) rows.set(session.id, { id: session.id, title: session.title || "Untitled thread", project: session.cwd, agents: liveAgents(session.id), state: "settled", updatedAt: session.updatedAt || session.createdAt, live: true, sessionPath: session.path });
 		for (const session of Object.values(store.sessionsById)) {

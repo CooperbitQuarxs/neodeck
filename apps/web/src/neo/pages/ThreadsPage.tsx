@@ -2,7 +2,7 @@ import "./threads.css";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Check, MessagesSquare, MoreHorizontal, Plus } from "lucide-react";
-import { Dot, Empty, ErrorState, NeoBadge, NeoButton, NeoSelect, PageHeader, SearchInput, Segmented, formatShortRelative } from "@/components/neo";
+import { Dot, Empty, ErrorState, NeoBadge, NeoButton, NeoSelect, Notice, PageHeader, SearchInput, Segmented, formatShortRelative } from "@/components/neo";
 import { ExtUiDialog } from "@/components/chat/ExtUiDialog";
 import { api } from "@/lib/api";
 import { initSession } from "@/lib/reducer";
@@ -30,7 +30,8 @@ export function ThreadsPage() {
 	const workspaces = useStore((s) => s.workspaces);
 	const defaultCwd = useStore((s) => s.defaultCwd);
 	const revision = useThreadsRevision();
-	const [rows, setRows] = useState<ThreadSummary[]>([]);
+	const [rows, setRows] = useState<ThreadSummary[]>(() => threads.previewList());
+	const [listError, setListError] = useState<string>();
 	const [search, setSearch] = useState("");
 	const [project, setProject] = useState("");
 	const [error, setError] = useState<string>();
@@ -53,8 +54,8 @@ export function ThreadsPage() {
 	const targeted = target === ALL_TARGETS ? mainAgents : mainAgents.filter((a) => a.id === target);
 	const busy = target === ALL_TARGETS ? mainAgents.some((a) => a.state === "working") : targetAgent?.state === "working";
 	const select = useCallback((next: string | null) => { setCreating(false); setEditing(false); setMenu(false); setError(undefined); setParams((previous) => { const p = new URLSearchParams(previous); if (next) p.set("thread", next); else p.delete("thread"); return p; }); }, [setParams]);
-	const refresh = useCallback(async () => { try { setRows(await threads.list()); } catch (e) { setError(`Could not load threads. ${String(e)}`); } }, []);
-	useEffect(() => { let cancelled = false; void threads.list().then((next) => { if (!cancelled) setRows(next); }, (e: unknown) => { if (!cancelled) setError(String(e)); }); return () => { cancelled = true; }; }, [sessions, sessionsById, nodes, revision]);
+	const refresh = useCallback(async () => { try { setRows(await threads.list()); setListError(undefined); } catch (e) { setListError(String(e)); } }, []);
+	useEffect(() => { let cancelled = false; void threads.list().then((next) => { if (!cancelled) { setRows(next); setListError(undefined); } }, (e: unknown) => { if (!cancelled) setListError(String(e)); }); return () => { cancelled = true; }; }, [sessions, sessionsById, nodes, revision]);
 	useEffect(() => { setChildren(EMPTY_CHILDREN); if (depth !== "spawned" || !session) return; let cancelled = false; void Promise.all((nodes[session.sessionId] ?? []).filter((node) => node.sessionFile).map(async (node) => { const response = await api.getSubagentTranscript(session.sessionId, node.id); const ui = initSession({ sessionId: node.id, cwd: session.cwd, isStreaming: false, messages: response.messages, todoPhases: [] }); return { messages: ui.messages.map((m) => ({ ...m, agentId: node.id })), toolCalls: ui.toolCalls }; })).then((parts) => { if (!cancelled) setChildren({ messages: parts.flatMap((part) => part.messages), toolCalls: Object.assign({}, ...parts.map((part) => part.toolCalls)) as ThreadTranscript["toolCalls"] }); }, (e: unknown) => { if (!cancelled) setError(`Could not load spawned agents. ${String(e)}`); }); return () => { cancelled = true; }; }, [depth, id, nodes]);
 	const openRequest = useRef(0);
 	useEffect(() => {
@@ -92,6 +93,7 @@ export function ThreadsPage() {
 	return <div className="neo-fill neo-threads"><PageHeader title={nav.label} description={nav.blurb} badge={<PreviewChip domains={["threadAgents"]} />} actions={<NeoButton variant="primary" onClick={() => { setCreating(true); setError(undefined); }}><Plus size={14} />New thread</NeoButton>} />
 		<div className="neo-split neo-fill-body" style={{ "--split-w": "300px" } as CSSProperties}>
 			<aside className="neo-split-list"><div className="neo-split-list-head"><SearchInput value={search} onChange={setSearch} placeholder="Search threads" aria-label="Search threads" size="sm" /><NeoSelect value={project} onChange={(e) => setProject(e.target.value)} aria-label="Filter threads by project" size="sm"><option value="">All projects</option>{projects.map((value) => <option key={value} value={value}>{projectLabel(value)}</option>)}</NeoSelect></div><div className="neo-split-rows" onKeyDown={(e) => { if (!["ArrowDown", "ArrowUp", "j", "k"].includes(e.key) || !(e.target instanceof HTMLButtonElement)) return; const buttons = Array.from(e.currentTarget.querySelectorAll<HTMLButtonElement>(".neo-row")); const i = buttons.indexOf(e.target); const next = buttons[i + (e.key === "ArrowDown" || e.key === "j" ? 1 : -1)]; if (next) { e.preventDefault(); next.focus(); next.click(); } }}>
+				{listError ? <div className="neo-threads-list-notice" title={listError}><Notice tone="warn">Live sessions unavailable. Preview threads still work.</Notice></div> : null}
 				{GROUPS.map((group) => { const items = visible.filter((row) => row.state === group.state).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)); return items.length ? <section key={group.state} aria-label={group.label}><div className="neo-split-group">{group.label}<span className="neo-num">{items.length}</span></div>{items.map((row) => <button key={row.id} type="button" className="neo-row" data-active={row.id === id && !creating} data-settled={row.state === "settled"} data-state={row.state} title={row.title} onClick={() => select(row.id)}><span className="neo-row-lead"><Dot tone={row.state === "needs-you" ? "accent" : row.state === "working" ? "live" : undefined} pulse={row.state !== "settled"} /></span><span className="neo-row-title">{row.title}</span><span className="neo-row-when">{formatShortRelative(row.updatedAt)}</span><span className="neo-row-sub">{projectLabel(row.project)}<span>·</span><span className="neo-threads-mini-agents">{row.agents.filter((a) => !a.spawnedBy).slice(0, 3).map((a) => <AgentSwatch key={a.id} hue={a.hue} size={8} />)}</span><span>{row.agents.filter((a) => !a.spawnedBy).length} {row.agents.filter((a) => !a.spawnedBy).length === 1 ? "agent" : "agents"}</span>{row.live ? <span className="neo-threads-live-label">session</span> : null}</span></button>)}</section> : null; })}
 				{visible.length === 0 ? <Empty title="No threads match" hint="Clear the search or choose another project." /> : null}
 			</div></aside>
