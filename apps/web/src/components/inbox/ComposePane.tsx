@@ -96,6 +96,8 @@ export function ComposePane({
 					onChange={setBody}
 					onDraftChange={(next) => { bodyDraft.current = next; }}
 					autoEdit
+					autoFocus={false}
+					keepEmptyEditing
 					placeholder="Details, context, links… (markdown). Leave it empty if the title says it all."
 				/>
 			</div>
