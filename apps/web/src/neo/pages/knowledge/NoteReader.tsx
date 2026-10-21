@@ -20,7 +20,7 @@ function wikiBody(body: string): string {
 	return body.replace(/\]\(kb-(link|unresolved):([^\n)]*)\)/g, (_match, kind: string, destination: string) => {
 		const [rawPath, query = ""] = destination.split("?");
 		let path = rawPath ?? "";
-		try { path = decodeURI(path); } catch { /* A malformed escape stays visible as the original target. */ }
+		try { path = decodeURIComponent(path); } catch { /* A malformed escape stays visible as the original target. */ }
 		const params = new URLSearchParams({ [kind === "link" ? "note" : "unresolved"]: path });
 		const anchor = new URLSearchParams(query).get("anchor");
 		return `](/knowledge?${params}${anchor ? `#${encodeURIComponent(anchor)}` : ""}${kind === "unresolved" ? ' "No note with this name yet"' : ""})`;
