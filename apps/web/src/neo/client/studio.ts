@@ -46,11 +46,11 @@ function fixture(id: string, nodes: StudioNode[], edges: StudioEdge[], settings:
    : { x: node.position.x * .75, y: node.position.y * .75 };
   if (id === "c_kind" && node.type === "cls.output") {
    const outputIndex = index - 2;
-   position = { x: outputIndex % 3 * 270, y: 370 + Math.floor(outputIndex / 3) * 160 };
+   position = { x: outputIndex * 150, y: 400 };
   }
   if (id === "p_inbox" && node.type.startsWith("out.")) {
    const outputIndex = index - 3;
-   position = { x: 140 + outputIndex % 2 * 310, y: 480 + Math.floor(outputIndex / 2) * 170 };
+   position = { x: outputIndex * 190, y: 480 };
   }
   return { ...node, position };
  });

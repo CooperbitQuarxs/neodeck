@@ -18,28 +18,28 @@
 .neo-studio-canvas { position: relative; height: 100%; min-height: 0; flex: 1; }
 .neo-studio-canvas .react-flow__handle { width: 8px; height: 8px; border: 1px solid var(--neo-line-4); background: var(--neo-card); }
 .neo-studio-canvas .react-flow__handle:hover, .neo-studio-canvas .react-flow__handle.connecting { background: rgb(var(--accent)); border-color: rgb(var(--accent)); }
-.neo-studio-canvas .react-flow__controls, .neo-studio-canvas .react-flow__minimap { border-radius: var(--r-control); overflow: hidden; }
-.neo-studio-canvas .react-flow__minimap { left: 120px; bottom: 0; width: 100px !important; height: 60px !important; background: var(--neo-panel) !important; border: 1px solid var(--neo-line-2) !important; }
-.neo-studio-canvas .react-flow__minimap-node { fill: var(--neo-line-4); stroke: none; }
-.neo-studio-canvas .react-flow__minimap-mask { fill: color-mix(in srgb, var(--neo-bg) 55%, transparent); }
+.neo-studio-canvas .react-flow__controls { border-radius: var(--r-control); overflow: hidden; }
+.neo-studio-canvas .react-flow__minimap, .neo-studio-flow .react-flow__minimap { display: none; }
 .neo-studio-canvas .react-flow__controls-button { background: var(--neo-raised); color: rgb(var(--ink-2)); border-color: var(--neo-line-2); }
 .neo-studio-canvas .react-flow__controls-button:hover { background: var(--neo-selected); }
 .neo-studio-canvas .react-flow__controls-button svg { fill: currentColor; }
 .neo-studio-canvas .react-flow__edge.selected .react-flow__edge-path { stroke: rgb(var(--accent)) !important; }
 .neo-studio-node { width: 224px; }
 .neo-studio-node[data-branches="4"], .neo-studio-node[data-branches="5"] { width: 300px; }
+.neo-studio-node[data-type="cls.output"] { width: 120px; }
+.neo-studio-node[data-type^="out."] { width: 180px; }
 .neo-studio-node .neo-node-title { font-size: 14px; }
 .neo-studio-node .neo-node-body { -webkit-line-clamp: 4; min-height: 52px; font-size: 13.5px; }
 .neo-studio-node .neo-node-body[data-mono="true"] { font-size: 12.5px; }
 .neo-studio-node .neo-node-branches { justify-content: space-around; gap: 6px; padding-left: 0; padding-right: 0; font-size: 11.5px; color: rgb(var(--ink-2)); }
 .neo-studio-node .neo-node-branches > span { flex: 1; text-align: center; }
 .neo-studio-node-extra { display: block; margin-top: 4px; font-size: 11.5px; font-family: var(--font-sans); color: rgb(var(--ink-3)); white-space: pre-line; overflow-wrap: anywhere; }
+.neo-studio-node-extra[data-mono="true"] { font-family: var(--font-mono); }
+.neo-studio-node[data-horizontal="true"] .neo-studio-node-extra { font-size: 12.5px; color: rgb(var(--ink-2)); line-height: 1.5; }
 .neo-studio-node[data-horizontal="true"] { width: 180px; }
 .neo-studio-node[data-horizontal="true"] .neo-node-body { min-height: 98px; -webkit-line-clamp: unset; display: block; }
 .neo-studio-node[data-horizontal="true"] .neo-node-head { padding-left: 10px; padding-right: 10px; }
 .neo-studio-node[data-horizontal="true"] .neo-node-body { padding-left: 10px; padding-right: 10px; }
-.neo-studio-canvas-caption { position: absolute; left: 16px; top: 14px; pointer-events: none; display: flex; flex-direction: column; gap: 3px; font-size: 11.5px; color: rgb(var(--ink-3)); }
-.neo-studio-canvas-caption > span { color: rgb(var(--ink-4)); }
 .neo-studio-canvas-empty { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; }
 .neo-studio-add { left: 14px; transform: none; }
 .neo-studio-problems { max-width: calc(100% - 260px); height: auto; min-height: 28px; padding-top: 5px; padding-bottom: 5px; text-align: left; }
