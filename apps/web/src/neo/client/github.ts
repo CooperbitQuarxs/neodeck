@@ -42,7 +42,7 @@ const pulls: GitHubPull[] = [
 	{ ...issue("atlas", 228, "Keep the table of contents in view", 2), branch: "fix/sticky-toc", base: "nightly", checks: [{ name: "Typecheck", state: "success" }, { name: "Visual checks", state: "pending" }], review: "waiting", comments: [] },
 	{ ...issue("portal", 44, "File depot: resumable uploads", 0), branch: "feat/resumable-uploads", base: "main", checks: [{ name: "Upload tests", state: "success" }], review: "waiting", agent: worker, comments: [] },
 ];
-const wheel: GitHubWheelItem[] = PREVIEW_WHEEL.map((item): GitHubWheelItem => ({ ...item, thread: item.stage === "implementing" ? item.number === 226 ? "anchors" : "theme" : undefined, timeline: [{ stage: "ready", at: ago(600), detail: "Marked ready for implementation" }, ...(item.stage === "ready" ? [] : [{ stage: item.stage, at: item.since, agent: item.agent, detail: item.stage === "implementing" ? "Started from the linked board card" : `Moved to ${WHEEL_STAGES.find((s) => s.id === item.stage)!.label.toLowerCase()}` }])] }));
+const wheel: GitHubWheelItem[] = PREVIEW_WHEEL.map((item): GitHubWheelItem => ({ ...item, thread: item.stage === "implementing" ? item.number === 226 ? "preview:anchors" : "preview:theme" : undefined, timeline: [{ stage: "ready", at: ago(600), detail: "Marked ready for implementation" }, ...(item.stage === "ready" ? [] : [{ stage: item.stage, at: item.since, agent: item.agent, detail: item.stage === "implementing" ? "Started from the linked board card" : `Moved to ${WHEEL_STAGES.find((s) => s.id === item.stage)!.label.toLowerCase()}` }])] }));
 const state: GitHubSnapshot = { repos: structuredClone([...PREVIEW_REPOS]), issues, pulls, wheel };
 const preview: GitHubClient = {
 	async snapshot() { return structuredClone(state); },

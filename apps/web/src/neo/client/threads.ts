@@ -65,12 +65,12 @@ function agent(id: string, name: string, hue: number, template = "blank", state:
 	return { id, name, hue, template, state, model: t.model, restrictions: t.restrictions.map((r) => ({ ...r })), ...(spawnedBy ? { spawnedBy } : {}) };
 }
 const fixtures: ThreadSummary[] = [
-	{ id: "anchors", title: "Fix the broken anchor links in getting-started", project: "atlas", agents: [agent("main", "Main", 190, "blank", "needs-you"), agent("reviewer", "Reviewer", 300, "advisor")], state: "needs-you", updatedAt: ago(12), live: false },
-	{ id: "build", title: "Why is the build slower since 0.4?", project: "atlas", agents: [agent("main", "Main", 190, "blank", "working"), agent("worker", "Worker", 40, "worker", "working", "main")], state: "working", updatedAt: ago(3), live: false },
-	{ id: "release", title: "Draft 0.5 release notes", project: "atlas", agents: [agent("main", "Main", 190, "blank", "working"), agent("chronicler", "Chronicler", 260, "chronicler")], state: "working", updatedAt: ago(24), live: false },
-	{ id: "theme", title: "Dark theme toggle", project: "portal", agents: [agent("main", "Main", 190)], state: "settled", updatedAt: ago(180), live: false },
-	{ id: "flaky", title: "Freeze the clock in the flaky test", project: "atlas", agents: [agent("main", "Main", 190)], state: "settled", updatedAt: ago(360), live: false },
-	{ id: "sitemap", title: "Sitemap lastmod dates", project: "portal", agents: [agent("main", "Main", 190)], state: "settled", updatedAt: ago(1500), live: false },
+	{ id: "preview:anchors", title: "Fix the broken anchor links in getting-started", project: "atlas", agents: [agent("main", "Main", 190, "blank", "needs-you"), agent("reviewer", "Reviewer", 300, "advisor")], state: "needs-you", updatedAt: ago(12), live: false },
+	{ id: "preview:build", title: "Why is the build slower since 0.4?", project: "atlas", agents: [agent("main", "Main", 190, "blank", "working"), agent("worker", "Worker", 40, "worker", "working", "main")], state: "working", updatedAt: ago(3), live: false },
+	{ id: "preview:release", title: "Draft 0.5 release notes", project: "atlas", agents: [agent("main", "Main", 190, "blank", "working"), agent("chronicler", "Chronicler", 260, "chronicler")], state: "working", updatedAt: ago(24), live: false },
+	{ id: "preview:theme", title: "Dark theme toggle", project: "portal", agents: [agent("main", "Main", 190)], state: "settled", updatedAt: ago(180), live: false },
+	{ id: "preview:flaky", title: "Freeze the clock in the flaky test", project: "atlas", agents: [agent("main", "Main", 190)], state: "settled", updatedAt: ago(360), live: false },
+	{ id: "preview:sitemap", title: "Sitemap lastmod dates", project: "portal", agents: [agent("main", "Main", 190)], state: "settled", updatedAt: ago(1500), live: false },
 ];
 const transcripts = new Map<string, ThreadTranscript>();
 function user(id: string, text: string, minutes = 120): ThreadMessage { return { id, role: "user", text, timestamp: Date.now() - minutes * 60_000 }; }
@@ -89,13 +89,13 @@ const anchorMessages: ThreadMessage[] = [
 	user("a9", "Yes, fix all three. Should we make the link checker fail the build too?", 18),
 	reply("a10", "All three links are updated. The checker currently only warns. **Should broken internal anchors fail CI**, or would you rather keep that as a warning for now?", "main", 1800),
 ];
-transcripts.set("anchors", { messages: anchorMessages, toolCalls: {
+transcripts.set("preview:anchors", { messages: anchorMessages, toolCalls: {
 	"read-anchors": { id: "read-anchors", name: "read", args: { path: "docs/getting-started.md" }, status: "complete", isError: false, startedAt: 1000, endedAt: 2200, result: "# Getting started\n## Install the CLI", resultContent: [{ type: "text", text: "# Getting started\n## Install the CLI" }] },
 	"grep-anchors": { id: "grep-anchors", name: "grep", args: { pattern: "#install", path: "docs/" }, status: "complete", isError: false, startedAt: 3000, endedAt: 3300, result: "3 matching links", resultContent: [{ type: "text", text: "3 matching links" }] },
 	"read-sidebar": { id: "read-sidebar", name: "read", args: { path: "docs/sidebar.ts" }, status: "complete", isError: false, startedAt: 4000, endedAt: 4500, result: "{ label: 'Install', href: 'getting-started#install' }", resultContent: [{ type: "text", text: "{ label: 'Install', href: 'getting-started#install' }" }] },
 } });
-transcripts.set("build", { messages: [user("b1", "The docs build takes 38 seconds now. It was 12 before 0.4. Find out where the time goes."), reply("b2", "The content set hasn't grown enough to explain it. Worker is measuring the render and asset passes separately."), reply("b3", "The asset manifest is being rebuilt once per page. I'm tracing the change that moved it inside the render loop.", "worker")], toolCalls: {} });
-transcripts.set("release", { messages: [user("r1", "Draft the 0.5 release notes from the merged work, without promising anything still on a branch."), reply("r2", "I'll group the changes by what a person can do now. Chronicler is checking the decisions behind the new defaults."), reply("r3", "The new defaults and their rationale are captured in `decisions/0004-release-cadence.md`.", "chronicler")], toolCalls: {} });
+transcripts.set("preview:build", { messages: [user("b1", "The docs build takes 38 seconds now. It was 12 before 0.4. Find out where the time goes."), reply("b2", "The content set hasn't grown enough to explain it. Worker is measuring the render and asset passes separately."), reply("b3", "The asset manifest is being rebuilt once per page. I'm tracing the change that moved it inside the render loop.", "worker")], toolCalls: {} });
+transcripts.set("preview:release", { messages: [user("r1", "Draft the 0.5 release notes from the merged work, without promising anything still on a branch."), reply("r2", "I'll group the changes by what a person can do now. Chronicler is checking the decisions behind the new defaults."), reply("r3", "The new defaults and their rationale are captured in `decisions/0004-release-cadence.md`.", "chronicler")], toolCalls: {} });
 for (const item of fixtures.slice(3)) transcripts.set(item.id, { messages: [user(`${item.id}-u`, `Let's finish ${item.title.toLowerCase()}.`), reply(`${item.id}-a`, "The change is in place and the evidence is recorded on its card. Nothing else is waiting here.")], toolCalls: {} });
 const extraAgents = new Map<string, ThreadAgent[]>();
 const timers = new Map<string, number>();
