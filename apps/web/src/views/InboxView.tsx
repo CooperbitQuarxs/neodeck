@@ -1,38 +1,55 @@
+/**
+ * `/inbox` — the office's front door.
+ *
+ * The flow the vision describes (neocore docs/vision/2026-10-20): a thought
+ * is a slip of paper you drop in the inbox; it labels itself or you label
+ * it; it settles out of the way; later something appears. Here that is:
+ * Capture opens a slip at the top of the list; the captured slip lands in
+ * the list with its label; only slips that still need you are visible
+ * (processed ones hide behind "Show settled"); opening a slip gives it one
+ * primary way out, a card on the board, with chat and "done" beside it.
+ *
+ * Shared vs private, and intake from GitHub / Telegram / dictation, are
+ * shown as what they are: a visible split, not yet implemented.
+ */
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import {
 	Archive,
+	Check,
+	GitBranch,
 	Inbox as InboxIcon,
-	ListPlus,
+	KanbanSquare,
+	LayoutGrid,
 	MessageSquarePlus,
+	Mic,
 	Plus,
 	RotateCcw,
+	Send,
 	Trash2,
+	Users,
 	X,
 } from "lucide-react";
-import type { InboxItem, InboxKind } from "@npi-deck/protocol";
+import type { BridgeInfo, InboxItem, InboxKind } from "@npi-deck/protocol";
 
-import { ComposePane, KIND_LABEL, KIND_ORDER } from "@/components/inbox/ComposePane";
+import { ComposePane, KIND_LABEL, KIND_ORDER, KIND_WORD } from "@/components/inbox/ComposePane";
 import { Layout } from "@/components/Layout";
 import { MarkdownEdit } from "@/components/MarkdownEdit";
+import { Card, Construction, NeoBadge, NeoButton, Page, PageHeader, PlannedBadge, Segmented, type NeoTone } from "@/components/neo";
+import { bridgesApi } from "@/lib/bridges-api";
 import { inboxApi } from "@/lib/inbox-api";
 import { useStore } from "@/lib/store";
-import { cn } from "@/lib/utils";
 
-const KIND_TONE: Record<InboxKind, string> = {
-	email: "text-ink-2",
-	ticket: "text-ink-2",
-	idea: "text-accent",
-	decision: "text-thinking",
-	investigation: "text-warn",
-	capture: "text-success",
+const KIND_TONE: Partial<Record<InboxKind, NeoTone>> = {
+	idea: "accent",
+	ticket: "warn",
 };
 
 type Filter = InboxKind | "all";
+type Scope = "private" | "shared";
 type ReaderState =
 	| { mode: "empty" }
-	| { mode: "item"; item: InboxItem }
-	| { mode: "compose" };
+	| { mode: "item"; item: InboxItem };
 
 export function InboxView() {
 	const setInspectorOpen = useStore((s) => s.setInspectorOpen);
@@ -40,27 +57,40 @@ export function InboxView() {
 	const createSession = useStore((s) => s.createSession);
 	const defaultCwd = useStore((s) => s.defaultCwd);
 	const navigate = useNavigate();
+	const [params, setParams] = useSearchParams();
 
 	const [items, setItems] = useState<InboxItem[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | undefined>();
 	const [filter, setFilter] = useState<Filter>("all");
-	const [includeProcessed, setIncludeProcessed] = useState(false);
+	const [showSettled, setShowSettled] = useState(false);
+	const [scope, setScope] = useState<Scope>("private");
+	const [composing, setComposing] = useState(() => params.get("capture") === "1");
 	const [reader, setReader] = useState<ReaderState>({ mode: "empty" });
+	const [bridges, setBridges] = useState<BridgeInfo[]>([]);
 
-	// Hide the global inspector — the reader IS the second pane now.
+	// The reader is the second column here; the global inspector stays shut.
 	useEffect(() => {
 		setInspectorOpen(false);
 	}, [setInspectorOpen]);
 
+	// `/inbox?capture=1` (Home's Capture button) opens the slip once, then
+	// drops the flag so a reload does not reopen it.
+	useEffect(() => {
+		if (params.get("capture") !== "1") return;
+		setParams((previous) => {
+			const next = new URLSearchParams(previous);
+			next.delete("capture");
+			return next;
+		}, { replace: true });
+	}, [params, setParams]);
+
 	const refresh = useCallback(async (): Promise<void> => {
 		try {
-			const opts: { kind?: InboxKind; includeProcessed?: boolean } = { includeProcessed };
+			const opts: { kind?: InboxKind; includeProcessed?: boolean } = { includeProcessed: showSettled };
 			if (filter !== "all") opts.kind = filter;
 			const res = await inboxApi.list(opts);
 			setItems(res.items);
-			// Keep reader selection in sync — if the selected item is no longer
-			// in the list (filtered out / deleted), drop back to empty.
 			setReader((prev) => {
 				if (prev.mode !== "item") return prev;
 				const found = res.items.find((x) => x.id === prev.item.id);
@@ -72,11 +102,15 @@ export function InboxView() {
 		} finally {
 			setLoading(false);
 		}
-	}, [filter, includeProcessed]);
+	}, [filter, showSettled]);
 
 	useEffect(() => {
 		void refresh();
 	}, [refresh]);
+
+	useEffect(() => {
+		void bridgesApi.list().then((r) => setBridges(r.bridges)).catch(() => setBridges([]));
+	}, []);
 
 	const counts = useMemo(() => {
 		const m: Record<string, number> = { all: items.length };
@@ -84,14 +118,16 @@ export function InboxView() {
 		for (const it of items) m[it.kind] = (m[it.kind] ?? 0) + 1;
 		return m;
 	}, [items]);
+	const open = useMemo(() => items.filter((it) => !it.processedAt).length, [items]);
 
-	async function toggleProcessed(it: InboxItem): Promise<void> {
+	function replaceItem(updated: InboxItem): void {
+		setItems((prev) => prev.map((x) => (x.id === updated.id ? updated : x)));
+		setReader((prev) => (prev.mode === "item" && prev.item.id === updated.id ? { mode: "item", item: updated } : prev));
+	}
+
+	async function toggleSettled(it: InboxItem): Promise<void> {
 		try {
-			const updated = await inboxApi.update(it.id, { processed: !it.processedAt });
-			setItems((prev) => prev.map((x) => (x.id === updated.id ? updated : x)));
-			if (reader.mode === "item" && reader.item.id === updated.id) {
-				setReader({ mode: "item", item: updated });
-			}
+			replaceItem(await inboxApi.update(it.id, { processed: !it.processedAt }));
 		} catch (e) {
 			setError(String(e));
 		}
@@ -102,9 +138,7 @@ export function InboxView() {
 		try {
 			await inboxApi.remove(it.id);
 			setItems((prev) => prev.filter((x) => x.id !== it.id));
-			if (reader.mode === "item" && reader.item.id === it.id) {
-				setReader({ mode: "empty" });
-			}
+			setReader((prev) => (prev.mode === "item" && prev.item.id === it.id ? { mode: "empty" } : prev));
 		} catch (e) {
 			setError(String(e));
 		}
@@ -112,20 +146,15 @@ export function InboxView() {
 
 	async function patch(it: InboxItem, body: Parameters<typeof inboxApi.update>[1]): Promise<void> {
 		try {
-			const updated = await inboxApi.update(it.id, body);
-			setItems((prev) => prev.map((x) => (x.id === updated.id ? updated : x)));
-			if (reader.mode === "item" && reader.item.id === updated.id) {
-				setReader({ mode: "item", item: updated });
-			}
+			replaceItem(await inboxApi.update(it.id, body));
 		} catch (e) {
 			setError(String(e));
 		}
 	}
 
-	async function openInChat(it: InboxItem): Promise<void> {
-		const cwd = defaultCwd;
+	async function openInThread(it: InboxItem): Promise<void> {
 		try {
-			await createSession({ cwd });
+			await createSession({ cwd: defaultCwd });
 		} catch (e) {
 			console.warn("createSession failed; using draft only", e);
 		}
@@ -143,413 +172,294 @@ export function InboxView() {
 			`task, POST /api/tasks and report the new task id.`,
 		].join("\n");
 		setPendingDraft({ text: draft });
-		navigate("/chat");
+		navigate("/threads");
 	}
 
-	async function promoteToTask(it: InboxItem): Promise<void> {
+	async function makeCard(it: InboxItem): Promise<void> {
 		try {
 			const { task, inbox } = await inboxApi.promote(it.id);
-			// Reflect the now-processed item locally so the reader pane updates
-			// without a refetch round-trip; refresh in the background so the
-			// "unprocessed" filter view recomputes its counts.
-			setItems((prev) => prev.map((x) => (x.id === inbox.id ? inbox : x)));
-			if (reader.mode === "item" && reader.item.id === inbox.id) {
-				setReader({ mode: "item", item: inbox });
-			}
-			// Deep-link to /tasks with the new task id so the TaskModal opens on
-			// arrival. The route reads `?open=<id>` and resolves it once the list
-			// has loaded.
+			replaceItem(inbox);
 			navigate(`/tasks?open=${encodeURIComponent(task.id)}`);
 		} catch (e) {
 			setError(String(e));
 		}
 	}
 
+	const telegram = bridges.find((b) => b.name === "telegram");
+
 	return (
 		<Layout
-			sidebar={
-				<InboxSidebar
-					counts={counts}
-					filter={filter}
-					setFilter={setFilter}
-					includeProcessed={includeProcessed}
-					setIncludeProcessed={setIncludeProcessed}
-					onCompose={() => setReader({ mode: "compose" })}
-				/>
-			}
+			sidebar={null}
+			inspector={null}
 			main={
-				<div className="flex h-full min-h-0 flex-row">
-					{/* Left pane: list. On <md the list collapses to full-width and
-					    the reader/compose pane replaces it once an item is selected
-					    (Gmail-mobile pattern); above md they sit side-by-side. */}
-					<div
-						className={cn(
-							"flex flex-col border-line bg-paper",
-							"w-full md:w-[360px] md:shrink-0 md:border-r",
-							reader.mode === "empty" ? "flex" : "hidden md:flex",
-						)}
-					>
-						<div className="flex h-10 shrink-0 items-center gap-2 border-b border-line bg-paper px-3">
-							<div className="meta">
-								{filter === "all" ? "All inbox" : KIND_LABEL[filter]}
-							</div>
-							<div className="ml-auto font-mono text-2xs text-ink-3">
-								{items.length}
-							</div>
-						</div>
+				<div className="h-full overflow-y-auto">
+					<Page>
+						<PageHeader
+							title="Inbox"
+							description="Drop a thought in. Label it, or leave that to the office. What still needs you stays here; the rest settles away."
+							actions={
+								<>
+									<Segmented<Scope>
+										label="Which inbox"
+										value={scope}
+										onChange={setScope}
+										options={[
+											{ value: "private", label: "Private" },
+											{ value: "shared", label: <span className="inline-flex items-center gap-1.5">Shared <PlannedBadge>soon</PlannedBadge></span>, title: "The office's shared inbox arrives with accounts" },
+										]}
+									/>
+									<NeoButton variant="primary" onClick={() => { setScope("private"); setComposing(true); }} disabled={composing}>
+										<Plus size={14} /> Capture
+									</NeoButton>
+								</>
+							}
+						/>
 
-						{error ? (
-							<div className="border-b border-line bg-danger/10 px-3 py-1 font-mono text-xs text-danger">
-								{error}
-							</div>
+						{scope === "shared" ? (
+							<Construction>
+								<strong className="text-ink">The shared inbox is not built yet.</strong> It arrives with accounts: one inbox the whole office drops slips
+								into, next to each person's private one. Until then every slip here is yours. See <a href="/people" className="text-accent underline-offset-2 hover:underline">People</a>.
+							</Construction>
 						) : null}
 
-						<div className="min-h-0 flex-1 overflow-y-auto">
-							{loading ? (
-								<EmptyHint>Loading…</EmptyHint>
-							) : items.length === 0 ? (
-								<EmptyHint>
-									{filter === "all" ? "Inbox is empty." : `No ${KIND_LABEL[filter]}.`}
-								</EmptyHint>
-							) : (
-								<ul className="divide-y divide-line">
-									{items.map((it) => (
-										<ListRow
-											key={it.id}
-											item={it}
-											active={reader.mode === "item" && reader.item.id === it.id}
-											onClick={() => setReader({ mode: "item", item: it })}
-										/>
+						{error ? (
+							<div role="alert" className="rounded-[var(--r-control)] border border-danger/30 bg-[var(--neo-bad-soft)] px-3 py-2 text-[12.5px] text-danger">{error}</div>
+						) : null}
+
+						<div className="neo-grid neo-grid-main-side items-start">
+							<Card
+								flush
+								index={1}
+								title={filter === "all" ? "Needs you" : KIND_WORD[filter] + "s"}
+								description={loading ? "Loading…" : open === 0 ? "Nothing waiting." : `${open} ${open === 1 ? "slip" : "slips"} waiting${showSettled ? `, ${items.length - open} settled` : ""}`}
+								actions={
+									<button
+										type="button"
+										className="neo-chip-btn"
+										data-on={showSettled || undefined}
+										onClick={() => setShowSettled((v) => !v)}
+										aria-pressed={showSettled}
+									>
+										{showSettled ? "Hide settled" : "Show settled"}
+									</button>
+								}
+								className={scope === "shared" ? "opacity-60" : undefined}
+								aria-disabled={scope === "shared" || undefined}
+							>
+								<div className="flex flex-wrap items-center gap-1.5 border-b border-[var(--neo-line-1)] px-4 py-2.5" role="radiogroup" aria-label="Filter by kind">
+									<FilterChip active={filter === "all"} count={counts.all ?? 0} onClick={() => setFilter("all")}>All</FilterChip>
+									{KIND_ORDER.map((k) => (
+										<FilterChip key={k} active={filter === k} count={counts[k] ?? 0} onClick={() => setFilter(k)}>
+											{KIND_LABEL[k][0]!.toUpperCase() + KIND_LABEL[k].slice(1)}
+										</FilterChip>
 									))}
-								</ul>
+								</div>
+								{composing ? (
+									<ComposePane
+										initialKind={filter === "all" ? "capture" : filter}
+										onClose={() => setComposing(false)}
+										onCreated={(it) => {
+											setItems((prev) => [it, ...prev]);
+											setComposing(false);
+											setReader({ mode: "item", item: it });
+										}}
+									/>
+								) : null}
+								{loading ? (
+									<div className="neo-empty"><div className="neo-empty-hint">Loading…</div></div>
+								) : items.length === 0 ? (
+									<div className="neo-empty">
+										<InboxIcon size={22} />
+										<div className="neo-empty-title">{filter === "all" ? "Nothing needs you" : `No ${KIND_LABEL[filter]} waiting`}</div>
+										<div className="neo-empty-hint">
+											{showSettled ? "Nothing has been captured yet." : "Capture a thought, or show the settled slips to look back."}
+										</div>
+										{!composing ? (
+											<div className="mt-2">
+												<NeoButton size="sm" onClick={() => setComposing(true)}><Plus size={13} /> Capture</NeoButton>
+											</div>
+										) : null}
+									</div>
+								) : (
+									<ul>
+										{items.map((it) => (
+											<Slip
+												key={it.id}
+												item={it}
+												active={reader.mode === "item" && reader.item.id === it.id}
+												onClick={() => setReader({ mode: "item", item: it })}
+											/>
+										))}
+									</ul>
+								)}
+							</Card>
+
+							{reader.mode === "item" ? (
+								<ReaderCard
+									item={reader.item}
+									onOpenInThread={() => void openInThread(reader.item)}
+									onMakeCard={() => void makeCard(reader.item)}
+									onSettle={() => void toggleSettled(reader.item)}
+									onDelete={() => void removeItem(reader.item)}
+									onPatch={(body) => void patch(reader.item, body)}
+									onClose={() => setReader({ mode: "empty" })}
+								/>
+							) : (
+								<HowItWorks telegram={telegram} />
 							)}
 						</div>
-					</div>
-
-					{/* Right pane: reader / compose / empty placeholder. Hidden on <md
-					    when nothing's selected so the list owns the full viewport. */}
-					<div
-						className={cn(
-							"min-w-0 flex-1 bg-paper",
-							reader.mode === "empty" ? "hidden md:block" : "block",
-						)}
-					>
-						{reader.mode === "empty" ? (
-							<EmptyReader onCompose={() => setReader({ mode: "compose" })} />
-						) : reader.mode === "compose" ? (
-							<ComposePane
-								onClose={() => setReader({ mode: "empty" })}
-								onCreated={(it) => {
-									setItems((prev) => [it, ...prev]);
-									setReader({ mode: "item", item: it });
-								}}
-							/>
-						) : (
-							<ReaderPane
-								item={reader.item}
-								onOpenInChat={() => void openInChat(reader.item)}
-								onPromote={() => void promoteToTask(reader.item)}
-								onProcess={() => void toggleProcessed(reader.item)}
-								onDelete={() => void removeItem(reader.item)}
-								onPatch={(body) => void patch(reader.item, body)}
-								onClose={() => setReader({ mode: "empty" })}
-							/>
-						)}
-					</div>
+					</Page>
 				</div>
 			}
-			inspector={null}
-			topBar={null}
 		/>
 	);
 }
 
-// ─── Sidebar ───────────────────────────────────────────────────────────────
+// ─── Pieces ────────────────────────────────────────────────────────────────
 
-function InboxSidebar({
-	counts,
-	filter,
-	setFilter,
-	includeProcessed,
-	setIncludeProcessed,
-	onCompose,
-}: {
-	counts: Record<string, number>;
-	filter: Filter;
-	setFilter: (f: Filter) => void;
-	includeProcessed: boolean;
-	setIncludeProcessed: (v: boolean) => void;
-	onCompose: () => void;
-}) {
+function FilterChip({ active, count, onClick, children }: { active: boolean; count: number; onClick: () => void; children: React.ReactNode }) {
 	return (
-		<div className="flex h-full min-h-0 flex-col">
-			<div className="border-b border-line px-3 py-3">
-				<button type="button" onClick={onCompose} className="btn-primary h-8 w-full text-sm">
-					<Plus className="h-3.5 w-3.5" />
-					Capture
-				</button>
-			</div>
-			<div className="border-b border-line px-3 py-3">
-				<div className="meta mb-1.5">Filter</div>
-				<ul className="space-y-0.5">
-					<KindRow
-						active={filter === "all"}
-						label="all"
-						count={counts.all ?? 0}
-						onClick={() => setFilter("all")}
-					/>
-					{KIND_ORDER.map((k) => (
-						<KindRow
-							key={k}
-							active={filter === k}
-							label={KIND_LABEL[k]}
-							count={counts[k] ?? 0}
-							onClick={() => setFilter(k)}
-						/>
-					))}
-				</ul>
-			</div>
-			<div className="px-3 py-3">
-				<label className="flex items-center gap-2 text-sm text-ink-2">
-					<input
-						type="checkbox"
-						checked={includeProcessed}
-						onChange={(e) => setIncludeProcessed(e.target.checked)}
-					/>
-					<span>Show processed</span>
-				</label>
-			</div>
-		</div>
+		<button type="button" role="radio" aria-checked={active} className="neo-chip-btn inline-flex items-center gap-1.5" data-on={active || undefined} onClick={onClick}>
+			{children}
+			<span className="neo-mono text-ink-3">{count}</span>
+		</button>
 	);
 }
 
-function KindRow({
-	active,
-	label,
-	count,
-	onClick,
-}: {
-	active: boolean;
-	label: string;
-	count: number;
-	onClick: () => void;
-}) {
+function Slip({ item, active, onClick }: { item: InboxItem; active: boolean; onClick: () => void }) {
+	const settled = Boolean(item.processedAt);
 	return (
 		<li>
-			<button
-				type="button"
-				onClick={onClick}
-				className={cn(
-					"flex w-full items-center justify-between gap-2 rounded px-2 py-1 text-left text-sm",
-					active ? "bg-paper-3 text-ink" : "text-ink-2 hover:bg-paper-3/60",
-				)}
-			>
-				<span>{label}</span>
-				<span className="font-mono text-2xs text-ink-3">{count}</span>
+			<button type="button" onClick={onClick} className="neo-slip" data-active={active || undefined} data-settled={settled || undefined} aria-current={active || undefined}>
+				<span className={settled ? "neo-slip-dot neo-dot opacity-30" : "neo-slip-dot neo-dot"} aria-label={settled ? "settled" : "needs you"} />
+				<span className="min-w-0">
+					<span className="neo-slip-title block">{item.title || "Untitled"}</span>
+					{item.body ? <span className="neo-slip-line block">{firstLine(item.body)}</span> : null}
+				</span>
+				<span className="neo-slip-meta">
+					<NeoBadge tone={KIND_TONE[item.kind]}>{KIND_WORD[item.kind]}</NeoBadge>
+					<span className="neo-mono">{formatRelative(item.createdAt)}{item.source ? ` · ${sourceWord(item.source)}` : ""}</span>
+				</span>
 			</button>
 		</li>
 	);
 }
 
-// ─── List row ──────────────────────────────────────────────────────────────
-
-function ListRow({
+function ReaderCard({
 	item,
-	active,
-	onClick,
-}: {
-	item: InboxItem;
-	active: boolean;
-	onClick: () => void;
-}) {
-	return (
-		<li>
-			<button
-				type="button"
-				onClick={onClick}
-				className={cn(
-					"flex w-full items-start gap-2 px-3 py-2.5 text-left transition-colors",
-					active ? "bg-paper-3" : "hover:bg-paper-3/60",
-				)}
-			>
-				<span
-					className={cn(
-						"mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full",
-						item.processedAt ? "bg-line-strong" : "bg-accent",
-					)}
-					aria-label={item.processedAt ? "processed" : "unprocessed"}
-				/>
-				<div className="min-w-0 flex-1">
-					<div className="flex items-baseline gap-2">
-						<span
-							className={cn(
-								"font-mono text-2xs uppercase tracking-meta shrink-0",
-								KIND_TONE[item.kind],
-							)}
-						>
-							{item.kind}
-						</span>
-						<span
-							className={cn(
-								"truncate text-[13px] font-medium",
-								item.processedAt ? "text-ink-3 line-through" : "text-ink",
-							)}
-						>
-							{item.title}
-						</span>
-					</div>
-					{item.body ? (
-						<div className="mt-0.5 line-clamp-1 text-xs text-ink-3">
-							{firstLine(item.body)}
-						</div>
-					) : null}
-					<div className="mt-0.5 font-mono text-2xs text-ink-4">
-						{formatRelative(item.createdAt)}
-						{item.source ? ` · ${item.source}` : ""}
-					</div>
-				</div>
-			</button>
-		</li>
-	);
-}
-
-// ─── Reader pane ───────────────────────────────────────────────────────────
-
-function ReaderPane({
-	item,
-	onOpenInChat,
-	onPromote,
-	onProcess,
+	onOpenInThread,
+	onMakeCard,
+	onSettle,
 	onDelete,
 	onPatch,
 	onClose,
 }: {
 	item: InboxItem;
-	onOpenInChat: () => void;
-	onPromote: () => void;
-	onProcess: () => void;
+	onOpenInThread: () => void;
+	onMakeCard: () => void;
+	onSettle: () => void;
 	onDelete: () => void;
 	onPatch: (body: Parameters<typeof inboxApi.update>[1]) => void;
 	onClose: () => void;
 }) {
+	const settled = Boolean(item.processedAt);
 	return (
-		<div className="flex h-full min-h-0 flex-col">
-			{/* Action bar — Gmail-style row with the primary action on the right. */}
-			<div className="flex h-12 shrink-0 items-center gap-2 border-b border-line bg-paper px-3">
-				<select
-					value={item.kind}
-					onChange={(e) => onPatch({ kind: e.target.value as InboxKind })}
-					className="field h-7 min-w-0 max-w-[8rem] flex-shrink px-2 font-mono text-2xs uppercase tracking-meta"
-				>
-					{KIND_ORDER.map((k) => (
-						<option key={k} value={k}>
-							{KIND_LABEL[k]}
-						</option>
-					))}
-				</select>
-				<div className="ml-auto flex shrink-0 items-center gap-1">
-					<IconAction
-						label={item.processedAt ? "Mark unprocessed" : "Mark processed"}
-						onClick={onProcess}
-						icon={item.processedAt ? RotateCcw : Archive}
-					/>
-					<IconAction label="Delete" onClick={onDelete} icon={Trash2} tone="danger" />
-					<IconAction
-						label="Promote to task"
-						onClick={onPromote}
-						icon={ListPlus}
-						tone="accent"
-					/>
-					<button
-						type="button"
-						onClick={onOpenInChat}
-						className="btn-primary h-8 shrink-0 gap-1.5 whitespace-nowrap px-2.5 text-sm"
-						title="Open this item as a new chat session"
+		<Card
+			index={2}
+			className="lg:sticky lg:top-0"
+			data-testid="inbox-reader"
+			title={
+				<span className="inline-flex items-center gap-2">
+					<select
+						value={item.kind}
+						onChange={(e) => onPatch({ kind: e.target.value as InboxKind })}
+						className="neo-input"
+						data-size="sm"
+						aria-label="Kind"
 					>
-						<MessageSquarePlus className="h-4 w-4 shrink-0" />
-						<span>Open in chat</span>
-					</button>
-					<IconAction label="Close" onClick={onClose} icon={X} />
+						{KIND_ORDER.map((k) => (
+							<option key={k} value={k}>
+								{KIND_WORD[k]}
+							</option>
+						))}
+					</select>
+					{settled ? <NeoBadge>settled</NeoBadge> : <NeoBadge tone="accent">needs you</NeoBadge>}
+				</span>
+			}
+			actions={
+				<>
+					<NeoButton variant="ghost" size="sm" icon onClick={onSettle} aria-label={settled ? "Put it back" : "Mark settled"} title={settled ? "Put it back in the inbox" : "Settle it: done, nothing to build"}>
+						{settled ? <RotateCcw size={14} /> : <Archive size={14} />}
+					</NeoButton>
+					<NeoButton variant="ghost" size="sm" icon onClick={onDelete} aria-label="Delete" title="Delete" className="hover:!text-danger">
+						<Trash2 size={14} />
+					</NeoButton>
+					<NeoButton variant="ghost" size="sm" icon onClick={onClose} aria-label="Close" title="Close">
+						<X size={14} />
+					</NeoButton>
+				</>
+			}
+			footer={
+				<div className="flex flex-wrap items-center gap-2">
+					<NeoButton variant="primary" size="sm" onClick={onMakeCard} disabled={settled} title="Put it on the board as a card">
+						<KanbanSquare size={13} /> Make a card
+					</NeoButton>
+					<NeoButton size="sm" onClick={onOpenInThread} title="Open a thread with this slip as the first message">
+						<MessageSquarePlus size={13} /> Open in a thread
+					</NeoButton>
+					{!settled ? (
+						<NeoButton variant="ghost" size="sm" onClick={onSettle} className="ml-auto">
+							<Check size={13} /> Done
+						</NeoButton>
+					) : null}
 				</div>
+			}
+		>
+			<input
+				value={item.title}
+				onChange={(e) => onPatch({ title: e.target.value })}
+				className="neo-reader-title"
+				placeholder="Untitled"
+				aria-label="Title"
+			/>
+			<div className="neo-mono mt-1.5 text-[11.5px] text-ink-3">
+				captured {new Date(item.createdAt).toLocaleString()}
+				{item.source ? ` · from ${sourceWord(item.source)}` : ""}
+				{item.processedAt ? ` · settled ${new Date(item.processedAt).toLocaleString()}` : ""}
 			</div>
-
-			{/* Title — large, editable inline */}
-			<div className="border-b border-line px-6 pt-5 pb-3">
-				<input
-					value={item.title}
-					onChange={(e) => onPatch({ title: e.target.value })}
-					className="w-full bg-transparent text-xl font-semibold text-ink placeholder:text-ink-4 focus:outline-none"
-					placeholder="Untitled"
-				/>
-				<div className="mt-1 font-mono text-2xs text-ink-3">
-					{new Date(item.createdAt).toLocaleString()}
-					{item.source ? ` · source: ${item.source}` : ""}
-					{item.processedAt
-						? ` · processed ${new Date(item.processedAt).toLocaleString()}`
-						: ""}
-				</div>
-			</div>
-
-			{/* Body — rendered markdown, click to edit */}
-			<div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+			<div className="mt-4 border-t border-[var(--neo-line-1)] pt-4">
 				<MarkdownEdit
 					value={item.body}
 					onChange={(next) => onPatch({ body: next })}
 					placeholder="Click to add notes…"
 				/>
 			</div>
-		</div>
+		</Card>
 	);
 }
 
-function IconAction({
-	label,
-	onClick,
-	icon: Icon,
-	tone = "default",
-}: {
-	label: string;
-	onClick: () => void;
-	icon: typeof Trash2;
-	tone?: "default" | "danger" | "accent";
-}) {
+/** The right column when no slip is open: how the inbox works and where slips come from. */
+function HowItWorks({ telegram }: { telegram: BridgeInfo | undefined }) {
+	const telegramOn = telegram?.status === "running";
 	return (
-		<button
-			type="button"
-			onClick={onClick}
-			aria-label={label}
-			title={label}
-			className={cn(
-				"flex h-8 w-8 items-center justify-center rounded-md transition-colors",
-				tone === "danger" && "text-ink-3 hover:bg-danger/10 hover:text-danger",
-				tone === "accent" && "text-accent hover:bg-accent-soft/60 hover:text-accent",
-				tone === "default" && "text-ink-3 hover:bg-paper-3 hover:text-ink",
-			)}
-		>
-			<Icon className="h-4 w-4" />
-		</button>
-	);
-}
-
-// ─── Empty states ──────────────────────────────────────────────────────────
-
-function EmptyReader({ onCompose }: { onCompose: () => void }) {
-	return (
-		<div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
-			<InboxIcon className="h-8 w-8 text-ink-4" />
-			<div className="text-sm text-ink-3">Pick an item to read, or capture a new one.</div>
-			<button type="button" onClick={onCompose} className="btn-primary h-8 px-3 text-sm">
-				<Plus className="h-3.5 w-3.5" />
-				Capture
-			</button>
-		</div>
-	);
-}
-
-function EmptyHint({ children }: { children: React.ReactNode }) {
-	return (
-		<div className="flex h-full items-center justify-center px-6 py-8 text-center font-mono text-2xs text-ink-3">
-			{children}
+		<div className="flex flex-col gap-4">
+			<Card index={2} title="How a slip moves" description="Pick a slip on the left to read it, or capture a new one.">
+				<ol className="space-y-2.5 text-[13px] leading-relaxed text-ink-2">
+					<li className="flex gap-2.5"><span className="neo-mono text-ink-4">1</span><span><span className="text-ink">Drop it in.</span> A title is enough; the body can wait.</span></li>
+					<li className="flex gap-2.5"><span className="neo-mono text-ink-4">2</span><span><span className="text-ink">It gets a label.</span> Capture, idea, ticket, decision… yours or the office's.</span></li>
+					<li className="flex gap-2.5"><span className="neo-mono text-ink-4">3</span><span><span className="text-ink">It settles.</span> Make a card and an agent picks it up; or mark it done and it leaves this list.</span></li>
+					<li className="flex gap-2.5"><span className="neo-mono text-ink-4">4</span><span><span className="text-ink">Something appears.</span> A card moves, a feature lands in nightly.</span></li>
+				</ol>
+			</Card>
+			<Card index={3} title="Where slips come from" description="The deck is the front door; the others are being wired.">
+				<div className="neo-intake">
+					<div className="neo-intake-row"><LayoutGrid size={14} /><span>This deck</span><NeoBadge tone="ok">on</NeoBadge></div>
+					<div className="neo-intake-row"><Send size={14} /><span>Telegram</span>{telegramOn ? <NeoBadge tone="ok">bridge running</NeoBadge> : <NeoBadge>bridge off</NeoBadge>}</div>
+					<div className="neo-intake-row"><GitBranch size={14} /><span>GitHub issues</span><PlannedBadge /></div>
+					<div className="neo-intake-row"><Mic size={14} /><span>Dictation</span><PlannedBadge /></div>
+					<div className="neo-intake-row"><Users size={14} /><span>Shared office inbox</span><PlannedBadge /></div>
+				</div>
+			</Card>
 		</div>
 	);
 }
@@ -559,6 +469,11 @@ function EmptyHint({ children }: { children: React.ReactNode }) {
 function firstLine(body: string): string {
 	const line = body.split(/\r?\n/).find((l) => l.trim().length > 0) ?? "";
 	return line.replace(/^[#>*\-\s]+/, "").slice(0, 140);
+}
+
+function sourceWord(source: string): string {
+	if (source.startsWith("routine:")) return `routine ${source.slice("routine:".length)}`;
+	return source;
 }
 
 function formatRelative(iso: string): string {

@@ -1,3 +1,12 @@
+/**
+ * The compose slip: a title, an optional body, a kind. It sits at the top
+ * of the inbox list and collapses back once captured.
+ *
+ * The body is read from a synchronous draft ref at submit time (via
+ * `MarkdownEdit.onDraftChange`) so a click on Capture that never blurs the
+ * editor still saves what was typed; `onChange` keeps commit semantics and
+ * Escape in the editor restores the committed draft.
+ */
 import { useRef, useState } from "react";
 import { Check } from "lucide-react";
 import type { InboxItem, InboxKind } from "@npi-deck/protocol";
@@ -13,6 +22,7 @@ export const KIND_ORDER: ReadonlyArray<InboxKind> = [
 	"email",
 ];
 
+/** Plural, for filters and counts. */
 export const KIND_LABEL: Record<InboxKind, string> = {
 	email: "emails",
 	ticket: "tickets",
@@ -22,18 +32,30 @@ export const KIND_LABEL: Record<InboxKind, string> = {
 	capture: "captures",
 };
 
+/** Singular, for the label on one slip. */
+export const KIND_WORD: Record<InboxKind, string> = {
+	email: "Email",
+	ticket: "Ticket",
+	idea: "Idea",
+	decision: "Decision",
+	investigation: "Investigation",
+	capture: "Capture",
+};
+
 export function ComposePane({
 	onClose,
 	onCreated,
+	initialKind = "capture",
 }: {
 	onClose: () => void;
 	onCreated: (item: InboxItem) => void;
+	initialKind?: InboxKind;
 }) {
 	const [title, setTitle] = useState("");
 	const [body, setBody] = useState("");
 	// Capture may activate without blurring the markdown editor first.
 	const bodyDraft = useRef("");
-	const [kind, setKind] = useState<InboxKind>("capture");
+	const [kind, setKind] = useState<InboxKind>(initialKind);
 	const [busy, setBusy] = useState(false);
 	const [err, setErr] = useState<string | undefined>();
 
@@ -53,63 +75,69 @@ export function ComposePane({
 	}
 
 	return (
-		<div className="flex h-full min-h-0 flex-col">
-			<div className="flex h-12 shrink-0 items-center gap-2 border-b border-line bg-paper px-4">
+		<div className="neo-slip-compose" data-testid="inbox-compose">
+			<div className="px-4 pt-4">
+				<input
+					autoFocus
+					data-title="true"
+					value={title}
+					onChange={(e) => setTitle(e.target.value)}
+					onKeyDown={(e) => {
+						if ((e.ctrlKey || e.metaKey) && e.key === "Enter") void submit();
+						if (e.key === "Escape") onClose();
+					}}
+					placeholder="What's on your mind?"
+					aria-label="Title"
+				/>
+			</div>
+			<div className="px-4 pb-2 pt-2">
+				<MarkdownEdit
+					value={body}
+					onChange={setBody}
+					onDraftChange={(next) => { bodyDraft.current = next; }}
+					autoEdit
+					placeholder="Details, context, links… (markdown). Leave it empty if the title says it all."
+				/>
+			</div>
+			<div className="flex flex-wrap items-center gap-2 border-t border-[var(--neo-line-1)] px-4 py-2.5">
+				<span className="text-[12px] text-ink-3">Label it</span>
 				<select
 					value={kind}
 					onChange={(e) => setKind(e.target.value as InboxKind)}
-					className="field h-7 px-2 font-mono text-2xs uppercase tracking-meta"
+					className="neo-input"
+					data-size="sm"
+					aria-label="Kind"
 				>
 					{KIND_ORDER.map((k) => (
 						<option key={k} value={k}>
-							{KIND_LABEL[k]}
+							{KIND_WORD[k]}
 						</option>
 					))}
 				</select>
+				<span className="hidden text-[12px] text-ink-4 sm:inline">or let the office label it later</span>
 				<div className="ml-auto flex items-center gap-1.5">
-					<button type="button" onClick={onClose} className="btn-ghost h-8 px-3 text-sm">
+					<span className="mr-1 hidden items-center gap-1 text-[11.5px] text-ink-4 md:inline-flex">
+						<kbd className="neo-kbd">⌘</kbd><kbd className="neo-kbd">↵</kbd>
+					</span>
+					<button type="button" onClick={onClose} className="neo-btn" data-variant="ghost" data-size="sm">
 						Cancel
 					</button>
 					<button
 						type="button"
 						onClick={() => void submit()}
 						disabled={busy || !title.trim()}
-						className="btn-primary h-8 px-3 text-sm"
+						className="neo-btn"
+						data-variant="primary"
+						data-size="sm"
+						aria-label="Capture"
 					>
-						<Check className="h-4 w-4" />
+						<Check size={13} />
 						Capture
 					</button>
 				</div>
 			</div>
-
-			<div className="border-b border-line px-6 pt-5 pb-3">
-				<input
-					autoFocus
-					value={title}
-					onChange={(e) => setTitle(e.target.value)}
-					onKeyDown={(e) => {
-						if ((e.ctrlKey || e.metaKey) && e.key === "Enter") void submit();
-					}}
-					placeholder="Title — short summary of the thought"
-					className="w-full bg-transparent text-xl font-semibold text-ink placeholder:text-ink-4 focus:outline-none"
-				/>
-				<div className="mt-1 font-mono text-2xs text-ink-3">
-					⌘+enter to save · esc to cancel
-				</div>
-			</div>
-
-			<div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
-				<MarkdownEdit
-					value={body}
-					onChange={setBody}
-					onDraftChange={(next) => { bodyDraft.current = next; }}
-					autoEdit
-					placeholder="Body — details, context, links… (markdown supported)"
-				/>
-			</div>
-
 			{err ? (
-				<div className="border-t border-line bg-danger/10 px-4 py-1.5 text-xs text-danger">
+				<div className="border-t border-[var(--neo-line-1)] bg-[var(--neo-bad-soft)] px-4 py-1.5 text-[12px] text-danger" role="alert">
 					{err}
 				</div>
 			) : null}

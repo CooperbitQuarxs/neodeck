@@ -35,7 +35,7 @@ function typeBody(value: string) {
 
 async function capture() {
 	await act(async () => {
-		renderer!.root.findAllByType("button").find((button) => button.props.className.includes("btn-primary"))!.props.onClick();
+		renderer!.root.findAllByType("button").find((button) => button.props["aria-label"] === "Capture")!.props.onClick();
 	});
 }
 
