@@ -17,6 +17,17 @@ export interface AuthClient {
 	me(): Promise<Account | null>;
 	logout(): Promise<void>;
 }
+/** Shared mutable preview directory. Account settings and sign-in use the same records. */
+export const previewAccountRecords: Account[] = PREVIEW_ACCOUNTS.map(account => ({ ...account }));
+export const previewPasswords = new Map(PREVIEW_ACCOUNTS.map(account => [account.id, "deck"]));
+
+/** Refresh the signed-in account after an in-memory account edit. */
+export function publishPreviewAccount(account: Account): void {
+	if (cached?.id !== account.id) return;
+	cached = account;
+	localStorage.setItem(STORAGE_KEY, JSON.stringify(account));
+	emit();
+}
 
 const STORAGE_KEY = "neodeck.session";
 const listeners = new Set<() => void>();
@@ -38,8 +49,8 @@ function readStored(): Account | null {
 const previewAuth: AuthClient = {
 	async login(handle, password) {
 		await new Promise((r) => setTimeout(r, 350));
-		const account = PREVIEW_ACCOUNTS.find((a) => a.handle === handle.trim().toLowerCase());
-		if (!account || password !== "deck") throw new Error("That handle and password do not match an account on this deck.");
+		const account = previewAccountRecords.find((a) => a.handle === handle.trim().toLowerCase());
+		if (!account || password !== previewPasswords.get(account.id)) throw new Error("That handle and password do not match an account on this deck.");
 		localStorage.setItem(STORAGE_KEY, JSON.stringify(account));
 		cached = account;
 		emit();

@@ -1,0 +1,50 @@
+import { useEffect, useSyncExternalStore } from "react";
+import { PREVIEW_PROVIDERS, type ProviderExposure } from "./preview-data";
+import { SOURCES } from "./source";
+
+export type { ProviderExposure };
+/** Provider exposure changes picker visibility, never whether inference is served. */
+export interface ProvidersClient {
+ list(): Promise<ProviderExposure[]>;
+ setHidden(id: string, hidden: boolean): Promise<ProviderExposure[]>;
+}
+const fixtures = PREVIEW_PROVIDERS.map(p => ({ ...p }));
+const preview: ProvidersClient = {
+ async list() { return fixtures.map(p => ({ ...p })); },
+ async setHidden(id, hidden) {
+  const provider = fixtures.find(p => p.id === id);
+  if (!provider) throw new Error("Provider not found. Reload the provider list.");
+  provider.hidden = hidden;
+  return this.list();
+ },
+};
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+ const response = await fetch(path, init);
+ if (!response.ok) throw new Error(`Provider update failed (${response.status}). Reload and try again.`);
+ return await response.json() as T;
+}
+const live: ProvidersClient = {
+ async list() { return (await request<{providers: ProviderExposure[]}>("/api/providers")).providers; },
+ async setHidden(id, hidden) {
+  await request(`/api/providers/${encodeURIComponent(id)}`, { method: "PATCH", headers: {"content-type":"application/json"}, body: JSON.stringify({hidden}) });
+  return this.list();
+ },
+};
+const adapter = SOURCES.providers === "live" ? live : preview;
+let snapshot: readonly ProviderExposure[] = SOURCES.providers === "preview" ? fixtures.map(p => ({...p})) : [];
+const listeners = new Set<() => void>();
+function publish(next: ProviderExposure[]): ProviderExposure[] {
+ snapshot = next;
+ for (const listener of listeners) listener();
+ return next;
+}
+export const providers: ProvidersClient = {
+ async list() { return publish(await adapter.list()); },
+ async setHidden(id, hidden) { return publish(await adapter.setHidden(id, hidden)); },
+};
+/** Shared reactive snapshot, so exposure edits also update mounted model pickers. */
+export function useProviders(): readonly ProviderExposure[] {
+ const value = useSyncExternalStore(fn => { listeners.add(fn); return () => { listeners.delete(fn); }; }, () => snapshot);
+ useEffect(() => { void providers.list().catch(() => {}); }, []);
+ return value;
+}
