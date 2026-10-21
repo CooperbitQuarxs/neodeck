@@ -23,6 +23,7 @@ export interface UsageRequest { id: string; at: string; virtualModel: string; mo
 /** Account usage for the selected reporting period. Spend always includes fourteen daily buckets. */
 export interface UsageSummary { pools: UsagePool[]; spend: SpendPoint[]; requests: UsageRequest[]; requestCount: number; resetsAt: string; allotment: number }
 export interface UsageClient { me(period: UsagePeriod): Promise<UsageSummary>; account(id: string, period: UsagePeriod): Promise<UsageSummary> }
+const REQUEST_TOKENS = [9_800, 41_280, 1_870, 230_400, 12_640, 3_920, 86_100, 7_310, 184_600, 2_450, 28_900, 15_720, 940, 63_400, 5_180, 112_800];
 function fixture(id: string, period: UsagePeriod): UsageSummary {
  const account = previewAccountRecords.find(a => a.id === id) ?? previewAccountRecords[0]!;
  const allotment = account.allotment ?? 1;
@@ -36,7 +37,7 @@ function fixture(id: string, period: UsagePeriod): UsageSummary {
   const pool = pools[i % pools.length]!;
   const stage = pool.stages[i % pool.stages.length]!;
   const kind = i % 3 === 0 ? "card" : i % 3 === 1 ? "thread" : "routine";
-  return { id:`${id}-${period}-${i}`, at:new Date(Date.now() - (i * 47 + 4) * 60_000).toISOString(), virtualModel:pool.name, model:stage.model, where:{kind, label: kind === "card" ? `T-${5 + i % 8}` : kind === "thread" ? "Fix anchor links" : "Nightly docs", href: kind === "card" ? `/board?card=T-${5+i%8}` : kind === "thread" ? "/threads" : "/studio"}, tokens:Math.round((9800 + i * 2381) * scale), costUsd: (0.014 + (i%7)*0.018) * scale };
+  return { id:`${id}-${period}-${i}`, at:new Date(Date.now() - (i * 47 + 4) * 60_000).toISOString(), virtualModel:pool.name, model:stage.model, where:{kind, label: kind === "card" ? `T-${5 + i % 8}` : kind === "thread" ? "Fix anchor links" : "Nightly docs", href: kind === "card" ? `/board?card=T-${5+i%8}` : kind === "thread" ? "/threads" : "/studio"}, tokens:Math.round(REQUEST_TOKENS[i % REQUEST_TOKENS.length]! * (1 + (i % 5) * 0.037) * scale), costUsd: (0.014 + (i%7)*0.018) * scale };
  });
  return {pools, requests, requestCount:pools.reduce((sum,p)=>sum+p.requests,0), spend:PREVIEW_SPEND.map(p=>({...p,usd:p.usd*scale})), resetsAt:new Date(Date.now() + (5*24+14)*3_600_000).toISOString(), allotment};
 }
