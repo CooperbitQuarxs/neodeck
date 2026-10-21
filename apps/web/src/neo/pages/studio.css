@@ -24,7 +24,7 @@
 .neo-studio-canvas .react-flow__controls-button:hover { background: var(--neo-selected); }
 .neo-studio-canvas .react-flow__controls-button svg { fill: currentColor; }
 .neo-studio-canvas .react-flow__edge.selected .react-flow__edge-path { stroke: rgb(var(--accent)) !important; }
-.neo-studio-node { width: 224px; }
+.neo-studio-canvas .neo-studio-node { width: 224px; }
 .neo-studio-node[data-branches="4"], .neo-studio-node[data-branches="5"] { width: 300px; }
 .neo-studio-node[data-type="cls.output"] { width: 120px; }
 .neo-studio-node[data-type^="out."] { width: 180px; }
@@ -41,8 +41,8 @@
 .neo-studio-node[data-horizontal="true"] .neo-node-head { padding-left: 10px; padding-right: 10px; }
 .neo-studio-node[data-horizontal="true"] .neo-node-body { padding-left: 10px; padding-right: 10px; }
 .neo-studio-canvas-empty { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; }
-.neo-studio-add { left: 14px; transform: none; }
-.neo-studio-problems { max-width: calc(100% - 260px); height: auto; min-height: 28px; padding-top: 5px; padding-bottom: 5px; text-align: left; }
+.neo-studio-canvas .neo-studio-add { left: 14px; transform: none; }
+.neo-studio-canvas .neo-studio-problems { max-width: calc(100% - 260px); height: auto; min-height: 28px; padding-top: 5px; padding-bottom: 5px; text-align: left; }
 .neo-studio-palette { position: absolute; left: 14px; bottom: 52px; width: 340px; max-width: calc(100% - 28px); max-height: min(620px, calc(100% - 70px)); z-index: 30; display: flex; flex-direction: column; border: 1px solid var(--neo-line-3); border-radius: var(--r-card); background: var(--neo-raised); box-shadow: var(--neo-shadow-3); }
 .neo-studio-palette > header { display: flex; padding: 10px 12px; align-items: center; justify-content: space-between; font-size: 13.5px; }
 .neo-studio-palette > .neo-search { margin: 0 10px 8px; width: auto; }
