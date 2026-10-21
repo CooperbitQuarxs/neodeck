@@ -60,6 +60,7 @@ All notable changes to NPI deck (a fork of bjb2/omp-deck; entries before the for
 
 ### Fixed
 
+- Inbox captures retain the current notes even when Capture activates before the editor loses focus ([#235](https://github.com/PsychedelicShayna/neodeck/issues/235)).
 - NeoPi setup and backend preflight accept current nightly native version stamps as well as the tested pin's legacy sentinels, while retaining native provenance checks ([#231](https://github.com/PsychedelicShayna/neodeck/issues/231)).
 - Native addon records work when Windows Git and Bun report the same checkout through different short and long path names ([#172](https://github.com/PsychedelicShayna/neodeck/issues/172)).
 - Windows KB watchers no longer broadcast changes for directories excluded by directory-only `.kbignore` rules; edits to `.kbignore` still reload the KB ([#168](https://github.com/PsychedelicShayna/neodeck/issues/168)).
