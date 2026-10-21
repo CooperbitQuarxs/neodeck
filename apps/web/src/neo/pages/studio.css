@@ -1,0 +1,104 @@
+.neo-studio { padding: 16px 16px 16px; }
+.neo-studio-layout { --split-w: 260px; --side-w: 320px; }
+.neo-studio-new { position: relative; }
+.neo-studio-new .neo-menu { z-index: 60; }
+.neo-studio-map-row { margin-top: auto; padding-top: 12px; }
+.neo-studio-list-foot { display: flex; align-items: center; gap: 7px; padding: 12px 16px; border-top: 1px solid var(--neo-line-1); font-size: 11.5px; color: rgb(var(--ink-3)); }
+.neo-studio-toolbar { display: flex; min-height: 48px; flex-wrap: wrap; align-items: center; gap: 10px; padding: 9px 12px; border-bottom: 1px solid var(--neo-line-2); background: var(--neo-card); flex: none; }
+.neo-studio-title { display: flex; gap: 8px; align-items: center; flex: 1; min-width: 150px; }
+.neo-studio-name { width: 100%; max-width: 210px; min-width: 60px; font-size: 13.5px; font-weight: 550; background: transparent; border: 1px solid transparent; border-radius: var(--r-control); padding: 3px 4px; color: rgb(var(--ink)); text-overflow: ellipsis; }
+.neo-studio-name:hover { border-color: var(--neo-line-2); }
+.neo-studio-name:focus { outline: none; border-color: var(--neo-focus); }
+.neo-studio-enabled { display: flex; gap: 6px; align-items: center; font-size: 11.5px; color: rgb(var(--ink-3)); }
+.neo-studio-toolbar-actions { display: flex; gap: 4px; margin-left: auto; }
+.neo-studio-view { flex: 1; min-height: 0; position: relative; display: flex; flex-direction: column; background: var(--neo-panel); }
+.neo-studio-view > .neo-empty { margin: auto; }
+.neo-studio-status { min-height: 28px; padding: 6px 12px; display: flex; justify-content: space-between; gap: 12px; border-top: 1px solid var(--neo-line-1); color: rgb(var(--ink-3)); font-size: 11.5px; background: var(--neo-card); }
+.neo-studio-notice { padding: 8px 12px; font-size: 12.5px; color: rgb(var(--ink-2)); border-bottom: 1px solid var(--neo-line-2); }
+.neo-studio-canvas { position: relative; height: 100%; min-height: 0; flex: 1; }
+.neo-studio-canvas .react-flow__handle { width: 8px; height: 8px; border: 1px solid var(--neo-line-4); background: var(--neo-card); }
+.neo-studio-canvas .react-flow__handle:hover, .neo-studio-canvas .react-flow__handle.connecting { background: rgb(var(--accent)); border-color: rgb(var(--accent)); }
+.neo-studio-canvas .react-flow__controls { border-radius: var(--r-control); overflow: hidden; }
+.neo-studio-canvas .react-flow__minimap, .neo-studio-flow .react-flow__minimap { display: none; }
+.neo-studio-canvas .react-flow__controls-button { background: var(--neo-raised); color: rgb(var(--ink-2)); border-color: var(--neo-line-2); }
+.neo-studio-canvas .react-flow__controls-button:hover { background: var(--neo-selected); }
+.neo-studio-canvas .react-flow__controls-button svg { fill: currentColor; }
+.neo-studio-canvas .react-flow__edge.selected .react-flow__edge-path { stroke: rgb(var(--accent)) !important; }
+.neo-studio-canvas .neo-studio-node { width: 224px; }
+.neo-studio-node[data-branches="4"], .neo-studio-node[data-branches="5"] { width: 300px; }
+.neo-studio-node[data-type="cls.output"] { width: 120px; }
+.neo-studio-node[data-type^="out."] { width: 180px; }
+.neo-studio-node .neo-node-title { font-size: 14px; }
+.neo-studio-node .neo-node-body { -webkit-line-clamp: 4; min-height: 52px; font-size: 13.5px; }
+.neo-studio-node .neo-node-body[data-mono="true"] { font-size: 12.5px; }
+.neo-studio-node .neo-node-branches { justify-content: space-around; gap: 6px; padding-left: 0; padding-right: 0; font-size: 11.5px; color: rgb(var(--ink-2)); }
+.neo-studio-node .neo-node-branches > span { flex: 1; text-align: center; }
+.neo-studio-node-extra { display: block; margin-top: 4px; font-size: 11.5px; font-family: var(--font-sans); color: rgb(var(--ink-3)); white-space: pre-line; overflow-wrap: anywhere; }
+.neo-studio-node-extra[data-mono="true"] { font-family: var(--font-mono); }
+.neo-studio-node[data-horizontal="true"] .neo-studio-node-extra { font-size: 12.5px; color: rgb(var(--ink-2)); line-height: 1.5; }
+.neo-studio-node[data-horizontal="true"] { width: 180px; }
+.neo-studio-node[data-horizontal="true"] .neo-node-body { min-height: 98px; -webkit-line-clamp: unset; display: block; }
+.neo-studio-node[data-horizontal="true"] .neo-node-head { padding-left: 10px; padding-right: 10px; }
+.neo-studio-node[data-horizontal="true"] .neo-node-body { padding-left: 10px; padding-right: 10px; }
+.neo-studio-canvas-empty { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; }
+.neo-studio-canvas .neo-studio-add { left: 14px; transform: none; }
+.neo-studio-canvas .neo-studio-problems { max-width: calc(100% - 260px); height: auto; min-height: 28px; padding-top: 5px; padding-bottom: 5px; text-align: left; }
+.neo-studio-palette { position: absolute; left: 14px; bottom: 52px; width: 340px; max-width: calc(100% - 28px); max-height: min(620px, calc(100% - 70px)); z-index: 30; display: flex; flex-direction: column; border: 1px solid var(--neo-line-3); border-radius: var(--r-card); background: var(--neo-raised); box-shadow: var(--neo-shadow-3); }
+.neo-studio-palette > header { display: flex; padding: 10px 12px; align-items: center; justify-content: space-between; font-size: 13.5px; }
+.neo-studio-palette > .neo-search { margin: 0 10px 8px; width: auto; }
+.neo-studio-palette-rows { min-height: 0; overflow-y: auto; padding: 0 6px 8px; }
+.neo-studio-palette h3 { font-size: 11.5px; font-weight: 500; color: rgb(var(--ink-3)); padding: 10px 8px 4px; }
+.neo-studio-palette-rows section > button { display: flex; align-items: center; gap: 10px; text-align: left; padding: 8px; width: 100%; border-radius: var(--r-control); }
+.neo-studio-palette-rows section > button:hover { background: var(--neo-hover); }
+.neo-studio-palette-rows section > button > span:nth-child(2) { flex: 1; min-width: 0; }
+.neo-studio-palette strong { font-size: 12.5px; font-weight: 500; }
+.neo-studio-palette small { display: block; font-size: 11.5px; line-height: 1.45; color: rgb(var(--ink-3)); margin-top: 2px; }
+.neo-studio-palette-rows section > button > svg { color: rgb(var(--ink-3)); }
+.neo-studio-inspector { display: flex; flex-direction: column; min-height: 0; height: 100%; }
+.neo-studio-inspector-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-height: 48px; padding: 12px 16px; border-bottom: 1px solid var(--neo-line-2); color: rgb(var(--ink-3)); }
+.neo-studio-inspector-head h2 { font-size: 13px; font-weight: 550; color: rgb(var(--ink)); margin-right: auto; }
+.neo-studio-inspector-body { flex: 1; min-height: 0; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 18px; align-items: stretch; }
+.neo-studio-inspector-body > .neo-badge { align-self: flex-start; }
+.neo-studio-inspector .neo-field { display: flex; flex-direction: column; gap: 7px; font-size: 12px; color: rgb(var(--ink-2)); }
+.neo-studio-inspector .neo-input { width: 100%; }
+.neo-studio-inspector textarea.neo-input { height: auto; min-height: 80px; resize: vertical; padding-top: 8px; line-height: 1.6; }
+.neo-studio-inspector .neo-picker-value { max-width: 230px; }
+.neo-studio-inspector .neo-picker-sheet { left: auto; right: 0; width: 300px; }
+.neo-studio-inspector footer { padding: 12px 16px; border-top: 1px solid var(--neo-line-1); }
+.neo-studio-danger { color: rgb(var(--danger)); }
+.neo-studio-help { font-size: 12px; line-height: 1.55; color: rgb(var(--ink-3)); }
+.neo-studio-field-unit { margin-left: 5px; color: rgb(var(--ink-3)); }
+.neo-studio-inspector-hint { display: flex; align-items: flex-start; gap: 10px; padding: 12px; border-radius: var(--r-control); background: var(--neo-raised); color: rgb(var(--ink-3)); font-size: 12px; line-height: 1.55; }
+.neo-studio-inspector-hint svg { flex: none; margin-top: 2px; }
+.neo-studio-facts { display: flex; flex-direction: column; gap: 8px; font-size: 12px; }
+.neo-studio-facts > div { display: flex; justify-content: space-between; gap: 12px; }
+.neo-studio-facts dt { color: rgb(var(--ink-3)); }
+.neo-studio-facts dd { font-family: var(--font-mono); color: rgb(var(--ink-2)); }
+.neo-studio-ports { display: flex; flex-direction: column; gap: 14px; border-top: 1px solid var(--neo-line-1); padding-top: 16px; }
+.neo-studio-ports h3 { font-size: 11.5px; font-weight: 500; color: rgb(var(--ink-3)); margin-bottom: 6px; }
+.neo-studio-port { display: flex; align-items: center; justify-content: space-between; padding: 5px 0; gap: 8px; font-size: 12px; color: rgb(var(--ink-2)); }
+.neo-studio-port > span { display: inline-flex; align-items: center; gap: 7px; }
+.neo-studio-port i { display: inline-block; width: 6px; height: 6px; border-radius: var(--r-pill); border: 1px solid var(--neo-line-4); }
+.neo-studio-port code { font-size: 11.5px; color: rgb(var(--ink-3)); }
+.neo-studio-source { flex: 1; border: 0; border-radius: 0; min-height: 0; }
+.neo-studio-source textarea { tab-size: 2; font-size: 12px; line-height: 1.75; }
+.neo-studio-spacer { flex: 1; }
+.neo-studio-runs { padding: 22px; overflow: auto; flex: 1; display: flex; flex-direction: column; gap: 20px; }
+.neo-studio-runs > .neo-empty { margin: auto; }
+.neo-studio-runs-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 16px; }
+.neo-studio-runs-head h2 { font-size: 14px; font-weight: 550; }
+.neo-studio-runs-head p { font-size: 12px; line-height: 1.5; color: rgb(var(--ink-3)); margin-top: 4px; max-width: 44ch; }
+.neo-studio-runs-head .neo-select { font-size: 11.5px; }
+.neo-studio-run-summary { display: flex; flex-direction: column; gap: 14px; }
+.neo-studio-run-summary > .neo-badge { align-self: flex-start; }
+.neo-studio-run-summary .neo-kv { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.neo-studio-run-note { border: 1px solid var(--neo-line-2); background: var(--neo-card); border-radius: var(--r-control); padding: 12px; font-size: 12.5px; color: rgb(var(--ink-2)); white-space: pre-wrap; }
+.neo-studio-legend { display: flex; align-items: center; gap: 9px; font-size: 12px; color: rgb(var(--ink-2)); }
+.neo-studio-legend i { width: 8px; height: 8px; border-radius: var(--r-pill); }
+.neo-studio-legend .neo-num { margin-left: auto; color: rgb(var(--ink-3)); }
+.neo-studio-flow { flex: 1; min-height: 0; flex-direction: column; padding: 10px; }
+.neo-studio-flow > div { max-width: none; }
+.neo-studio-flow .neo-tabs { margin-bottom: 8px; }
+.neo-studio-flow .neo-tab { font-size: 11.5px; padding-left: 10px; padding-right: 10px; }
+@media (max-width: 1250px) and (min-width: 901px) { .neo-studio-layout { --split-w: 220px !important; --side-w: 280px !important; } .neo-studio-enabled > span { display: none; } .neo-studio-toolbar { gap: 6px; } }
+@media (max-width: 900px) { .neo-studio { padding: 12px; } .neo-studio-layout { grid-template-rows: minmax(130px, 25%) minmax(0, 1fr); } .neo-studio-layout .neo-split-list { max-height: none; } .neo-studio-layout .neo-split-detail { min-height: 450px; } .neo-studio-layout { overflow-y: auto; } .neo-studio-toolbar { flex-wrap: wrap; } }

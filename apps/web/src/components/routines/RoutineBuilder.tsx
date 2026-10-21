@@ -1,5 +1,5 @@
 /** Canvas-first authoring with deliberate advanced controls and source access. */
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useImperativeHandle, useMemo, useRef, useState, type Ref } from "react";
 import { CircleAlert, Play, Save } from "lucide-react";
 
 import {
@@ -51,16 +51,32 @@ import {
 	stringifySpec,
 } from "./spec-yaml";
 
+/** Optional embedding hooks keep Studio's toolbar and settings on the same draft. */
+export interface RoutineBuilderHandle {
+	save(): Promise<void>;
+	updateSpec(spec: RoutineSpec): void;
+}
+export interface RoutineBuilderState {
+	name: string;
+	spec: RoutineSpec;
+	dirty: boolean;
+	canSave: boolean;
+}
+
 interface Props {
 	/** The routine being edited, or `undefined` if we're creating a new V1 routine. */
 	routine: Routine | undefined;
 	onSaved: (saved: Routine) => void;
 	onError: (message: string) => void;
+	embedded?: boolean;
+	view?: "canvas" | "source";
+	editorRef?: Ref<RoutineBuilderHandle>;
+	onStateChange?: (state: RoutineBuilderState) => void;
 }
 
 type Tab = "steps" | "canvas" | "triggers" | "settings" | "spec";
 
-export function RoutineBuilder({ routine, onSaved, onError }: Props) {
+export function RoutineBuilder({ routine, onSaved, onError, embedded, view, editorRef, onStateChange }: Props) {
 	const legacy = routine !== undefined && routine.specVersion !== 1;
 	const initialSpec = useMemo<RoutineSpec>(() => {
 		if (routine && routine.specVersion !== 1) {
@@ -137,6 +153,12 @@ export function RoutineBuilder({ routine, onSaved, onError }: Props) {
 		setLegacyCwd(routine?.actionCwd ?? "");
 		setLegacyKind(routine?.actionKind ?? "bash");
 	}, [routine, initialSpec]);
+	useEffect(() => {
+		if (routine) setEnabled(routine.enabled);
+	}, [routine?.enabled]);
+	useEffect(() => {
+		if (embedded && view) switchTab(view === "source" ? "spec" : "canvas");
+	}, [embedded, view]);
 
 	useEffect(() => {
 		if (!routine) return;
@@ -246,6 +268,7 @@ export function RoutineBuilder({ routine, onSaved, onError }: Props) {
 		// Source review is optional, never part of the normal create/save path.
 		const previewable =
 			tab === "spec" &&
+			!embedded &&
 			!legacy &&
 			!shouldSkipSavePreview() &&
 			specYaml !== (routine?.specYaml ?? "");
@@ -363,6 +386,10 @@ export function RoutineBuilder({ routine, onSaved, onError }: Props) {
 		compile.errors.length === 0 &&
 		!busy;
 	const dirty = yamlDirty || spec !== persistedSpec.current || (routine !== undefined && enabled !== routine.enabled);
+	useImperativeHandle(editorRef, () => ({ save, updateSpec }));
+	useEffect(() => {
+		onStateChange?.({ name: spec.name, spec, dirty, canSave });
+	}, [spec, dirty, canSave, onStateChange]);
 
 	// What stands between the author and Save, with somewhere to click.
 	const attention = useMemo(() => {
@@ -405,7 +432,7 @@ export function RoutineBuilder({ routine, onSaved, onError }: Props) {
 					: "mx-auto flex min-h-0 w-full max-w-4xl flex-1 flex-col overflow-hidden"
 			}
 		>
-			<div className="flex shrink-0 flex-wrap items-start gap-3 px-1 pb-3">
+			{!embedded ? <div className="flex shrink-0 flex-wrap items-start gap-3 px-1 pb-3">
 				<div className="min-w-0 flex-1">
 					<Field label="Name" error={nameError}>
 						<TextInput value={spec.name} onChange={(v) => updateSpec({ ...spec, name: v })} placeholder="morning-briefing" mono ariaLabel="Routine name" />
@@ -416,8 +443,8 @@ export function RoutineBuilder({ routine, onSaved, onError }: Props) {
 						{advanced ? "Hide advanced" : "Advanced"}
 					</button>
 				</div>
-			</div>
-			{advanced ? <TabBar tab={tab} onChange={switchTab} stepCount={spec.steps.length} triggerCount={spec.trigger.length} legacy={legacy} /> : null}
+			</div> : null}
+			{advanced || embedded ? <TabBar tab={tab} onChange={switchTab} stepCount={spec.steps.length} triggerCount={spec.trigger.length} legacy={legacy} /> : null}
 			<div
 				className={
 					tab === "canvas"
@@ -570,7 +597,7 @@ export function RoutineBuilder({ routine, onSaved, onError }: Props) {
 					</div>
 				) : null}
 			</div>
-			<Footer
+			{!embedded ? <Footer
 				routine={routine}
 				canSave={canSave}
 				busy={busy}
@@ -581,7 +608,7 @@ export function RoutineBuilder({ routine, onSaved, onError }: Props) {
 				onShowProblem={showFirstProblem}
 				onSave={() => void save()}
 				onRunNow={() => void runNow()}
-			/>
+			/> : null}
 			{pendingSave ? (
 				<SavePreviewDialog
 					currentYaml={routine?.specYaml ?? ""}
