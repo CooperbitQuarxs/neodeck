@@ -25,6 +25,7 @@ export type Domain =
 	| "knowledge"
 	| "knowledgeHistory"
 	| "skills"
+	| "skillsUsage"
 	| "github"
 	| "usage"
 	| "providers"
@@ -58,6 +59,7 @@ export const SOURCES: Readonly<Record<Domain, Source>> = {
 	knowledge: "live",
 	knowledgeHistory: "preview",
 	skills: "live",
+	skillsUsage: "preview",
 	github: "preview",
 	usage: "preview",
 	providers: "preview",
