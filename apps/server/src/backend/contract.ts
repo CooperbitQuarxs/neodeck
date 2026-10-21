@@ -251,7 +251,7 @@ await check("model-roles: RPC catalog lists built-in then custom roles; role fil
 	const chat = modelRoles.getRoleInfo("default", settings).accepts;
 	assert(modelRoles.getRoleInfo("review", settings).accepts === chat, "a custom role does not share the chat filter");
 	assert(cheapModel && chat(cheapModel) && !modelRoles.getRoleInfo("image", settings).accepts(cheapModel), "role filters do not split chat from image models");
-	const levels = modelRoles.CLI_THINKING_LEVELS;
+	const levels: readonly string[] = modelRoles.CLI_THINKING_LEVELS;
 	assert(levels.includes("high") && levels.includes("off"), `thinking levels ${levels.join(",")}`);
 	return `${roles.length} roles (${ids.filter(id => roles.find(r => r.id === id)!.source === "builtin").length} built-in); slow chain ${slow.patterns.length} patterns; ${levels.length} thinking levels`;
 });
@@ -331,19 +331,26 @@ await check(
 		assert(Number.isInteger(mixtureConfig.MAX_FILE_BYTES) && mixtureConfig.MAX_FILE_BYTES > 0, `MAX_FILE_BYTES = ${mixtureConfig.MAX_FILE_BYTES}`);
 		const member = (id: string) => ({ id, model: "openrouter/openai/gpt-4o-mini", systemPrompt: "Answer.", tools: false });
 		const chain = { name: "deck-chain", entry: "writer", members: [member("writer"), member("editor")], edges: [{ from: "writer", to: "editor", x: { output: true as const } }], limits: { maxHops: 4 } };
-		const gated = { ...chain, name: "deck-gated", limits: { maxHops: 4, budgetUsd: 1 } };
-		const text = mixtureConfig.serializeMixturesConfig({ mixtures: [chain, gated] });
+		// Budget limits serialize on both supported trees, but only newer NeoPi
+		// releases can run them. Keep that round-trip independent of validation.
+		const budgeted = { ...chain, name: "deck-budgeted", limits: { maxHops: 4, budgetUsd: 1 } };
+		const budgetText = mixtureConfig.serializeMixturesConfig({ mixtures: [budgeted] });
+		const budgetRoundTrip = mixtureConfig.parseMixturesDoc(Bun.TOML.parse(budgetText), "contract budget");
+		assert(!budgetRoundTrip.warnings?.length, `budget round-trip warnings: ${budgetRoundTrip.warnings?.join("; ")}`);
+		assert(budgetRoundTrip.mixtures[0]?.limits?.budgetUsd === 1, "serialize/parse dropped limits.budget_usd");
+		// An unresolved entry is invalid regardless of the backend's milestone.
+		const invalid = { ...chain, name: "deck-invalid", entry: "missing" };
+		const text = mixtureConfig.serializeMixturesConfig({ mixtures: [chain, invalid] });
 		const roundTrip = mixtureConfig.parseMixturesDoc(Bun.TOML.parse(text), "contract draft");
 		assert(!roundTrip.warnings?.length, `round-trip warnings: ${roundTrip.warnings?.join("; ")}`);
-		assert(roundTrip.mixtures[1]?.limits?.budgetUsd === 1, "serialize/parse dropped limits.budget_usd");
 		const settings = await core.Settings.loadIsolated({ cwd, agentDir });
 		const names = roundTrip.mixtures.map(mixture => mixture.name);
 		const [ok, refused] = roundTrip.mixtures.map(definition =>
 			mixtureConfig.validateMixture(mixtureConfig.resolveMixture(definition, { registry, settings }), { settings, names }),
 		);
 		assert(ok && ok.errors.length === 0, `linear chain refused: ${ok?.errors.map(issue => issue.code).join(",")}`);
-		const gate = refused?.errors.find(issue => issue.code === "unsupported.feature");
-		assert(gate?.path === "limits.budget_usd", `budget gate = ${JSON.stringify(refused?.errors)}`);
+		const entryError = refused?.errors.find(issue => issue.code === "entry.unresolved");
+		assert(entryError?.path === "entry", `unresolved entry accepted: ${JSON.stringify(refused?.errors)}`);
 		mkdirSync(path.dirname(file), { recursive: true });
 		// The lock is exclusive across holders: a second acquisition fails while the first holds it.
 		await mixtureConfig.withFileLock(file, async () => {
@@ -353,7 +360,7 @@ await check(
 		});
 		const registrable = await mixtureConfig.discoverRegistrableMixtures({ cwd, agentDir, registry, settings });
 		assert(registrable.map(mixture => mixture.definition.name).join(",") === "deck-chain", `registrable = ${registrable.map(mixture => mixture.definition.name)}`);
-		return `.omp/MIXTURES.toml is on the search path; ${gate.message}; lock excludes a second holder; discovery registers mixture/deck-chain only`;
+		return `.omp/MIXTURES.toml is on the search path; budget limit round-trips; ${entryError.message}; lock excludes a second holder; discovery registers mixture/deck-chain only`;
 	},
 );
 
