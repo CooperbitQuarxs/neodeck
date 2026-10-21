@@ -88,9 +88,9 @@ export interface Proposal {
 /** Deterministic proposal for any inbox item, keyed by title words. */
 export function proposalFor(item: { id: string; title: string; kind: string }): Proposal {
 	const t = item.title.toLowerCase();
+	if (/^why|investigat|find out|look into/.test(t)) return { itemId: item.id, kind: "investigation", destination: { kind: "thread", agent: "Worker" }, confidence: 0.69, reason: "Open question with no fix named; a worker thread can find the cause." };
 	if (/flaky|fail|broken|404|bug|error|slow/.test(t)) return { itemId: item.id, kind: "ticket", destination: { kind: "issue", repo: "atlas" }, confidence: 0.86, reason: "Reads as a defect in atlas; the repository has a matching open test failure." };
 	if (/decid|keep|choose|should we/.test(t)) return { itemId: item.id, kind: "decision", destination: { kind: "note", path: "decisions/" }, confidence: 0.74, reason: "A choice with a rationale belongs in the decisions log." };
-	if (/why|investigat|find out|look into/.test(t)) return { itemId: item.id, kind: "investigation", destination: { kind: "thread", agent: "Worker" }, confidence: 0.69, reason: "Open question with no fix named; a worker thread can find the cause." };
 	if (/idea|maybe|could|try/.test(t)) return { itemId: item.id, kind: "idea", destination: { kind: "card", project: "atlas", column: "backlog" }, confidence: 0.62, reason: "Proposal without a deadline; parks on the board until someone picks it." };
 	return { itemId: item.id, kind: "capture", destination: { kind: "card", project: "atlas", column: "backlog" }, confidence: 0.55, reason: "No stronger signal; the backlog is the safe default." };
 }
