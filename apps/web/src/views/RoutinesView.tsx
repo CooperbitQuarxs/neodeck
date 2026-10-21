@@ -4,6 +4,7 @@ import { Plus } from "lucide-react";
 import type { Routine } from "@npi-deck/protocol";
 
 import { Layout } from "@/components/Layout";
+import { Dot, NeoButton } from "@/components/neo";
 import { EditorInspector } from "@/components/routines/EditorInspector";
 import { RoutineEditorPage } from "@/components/routines/RoutineEditorPage";
 import { routinesApi } from "@/lib/routines-api";
@@ -46,27 +47,40 @@ export function RoutinesView() {
 	const selected = target === "new" ? "new" : routines.find((routine) => routine.id === target);
 	const sidebar = (
 		<div className="flex h-full flex-col overflow-y-auto">
-			<section className="border-b border-line p-3">
-				<h2 className="mb-2 text-sm font-semibold text-ink">Routines</h2>
-				<button type="button" onClick={() => open("new")} className="btn-primary h-8 w-full text-xs"><Plus className="h-3.5 w-3.5" />New routine</button>
+			<section className="px-3 pb-2 pt-4">
+				<NeoButton variant="primary" className="w-full" onClick={() => open("new")} data-active={target === "new" || undefined}>
+					<Plus size={14} />
+					New routine
+				</NeoButton>
 			</section>
-			<nav aria-label="Saved routines" className="space-y-1 p-3">
-				{loading ? <p className="text-xs text-ink-3">Loading routines...</p> : null}
+			<nav aria-label="Saved routines" className="px-2 py-2">
+				<div className="neo-nav-heading">Saved</div>
+				{loading ? <p className="px-2 py-1 text-[12.5px] text-ink-3">Loading routines…</p> : null}
+				{!loading && routines.length === 0 ? <p className="px-2 py-1 text-[12.5px] leading-relaxed text-ink-3">Nothing saved yet. The first one you create shows up here.</p> : null}
 				{routines.slice().sort((a, b) => a.name.localeCompare(b.name)).map((routine) => (
-					<button key={routine.id} type="button" onClick={() => open(routine.id)} aria-current={target === routine.id ? "page" : undefined} className={cn("w-full rounded px-2 py-2 text-left text-sm hover:bg-paper-3", target === routine.id ? "bg-paper-3 text-ink" : "text-ink-2")}>
-						<span className="block truncate">{routine.name}</span>
-						{routine.description ? <span className="mt-1 block line-clamp-2 text-xs text-ink-3">{routine.description}</span> : null}
+					<button
+						key={routine.id}
+						type="button"
+						onClick={() => open(routine.id)}
+						aria-current={target === routine.id ? "page" : undefined}
+						className={cn("neo-nav-row h-auto w-full items-start py-1.5 text-left", target === routine.id && "")}
+						data-active={target === routine.id}
+					>
+						<span className="mt-[5px]"><Dot tone={routine.enabled ? "ok" : undefined} /></span>
+						<span className="min-w-0 flex-1">
+							<span className="neo-nav-row-label block truncate">{routine.name}</span>
+							{routine.description ? <span className="block truncate text-[11.5px] text-ink-3">{routine.description}</span> : null}
+						</span>
 					</button>
 				))}
 			</nav>
-			<p className="px-3 text-xs leading-relaxed text-ink-3">Add actions to the canvas, then save and run. Select a saved routine to keep working on it.</p>
 		</div>
 	);
 	const main = (
 		<div className="flex h-full min-h-0 flex-col">
-			{error ? <div role="alert" className="border-b border-line bg-danger/10 px-3 py-2 text-xs text-danger">{error}</div> : null}
-			<div className="min-h-0 flex-1">
-				{selected ? <RoutineEditorPage key={target} routine={selected} onSaved={onSaved} onDeleted={onDeleted} /> : <div className="p-6 text-sm text-ink-3">{loading ? "Loading routine..." : "Routine not found. Select a saved routine or create a new one."}</div>}
+			{error ? <div role="alert" className="mx-6 mt-4 rounded-[var(--r-control)] border border-danger/30 bg-[var(--neo-bad-soft)] px-3 py-2 text-[12.5px] text-danger">{error}</div> : null}
+			<div className="min-h-0 flex-1 px-6 pb-4 pt-5">
+				{selected ? <RoutineEditorPage key={target} routine={selected} onSaved={onSaved} onDeleted={onDeleted} /> : <div className="text-[13.5px] text-ink-3">{loading ? "Loading routine…" : "Routine not found. Select a saved routine or create a new one."}</div>}
 			</div>
 		</div>
 	);

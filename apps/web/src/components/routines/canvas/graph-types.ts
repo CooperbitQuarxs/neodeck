@@ -29,6 +29,12 @@ export interface StepNodeData extends Record<string, unknown> {
 	 */
 	compileError?: string;
 	/**
+	 * Validation messages keyed by the step field they belong to, from the
+	 * parent's `fieldErrorsForSpec`. The node shows the first one in its
+	 * footer; the inspector shows each at its field.
+	 */
+	fieldErrors?: Readonly<Record<string, string>>;
+	/**
 	 * Canvas-only "if-flavored" marker. True when the node should render with
 	 * two labeled source handles (`true` / `false`) wired to compile branch
 	 * `when:` gates downstream. Derived from outgoing edges with
@@ -59,4 +65,4 @@ export type SequentialEdge = Edge<SequentialEdgeData, "sequential">;
 
 /** Layout grid constants — used by P1.3 graph-import and the canvas toolbar. */
 export const CANVAS_DEFAULT_X = 280;
-export const CANVAS_NODE_VERTICAL_GAP = 220;
+export const CANVAS_NODE_VERTICAL_GAP = 170;

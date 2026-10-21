@@ -1,26 +1,39 @@
+import { CircleAlert } from "lucide-react";
 import type { ReactNode } from "react";
 
-/** Field label wrapper. `tone="danger"` colors the hint red. */
+/**
+ * A labelled control. Sentence-case label, optional `optional` tag, help text
+ * under the control, and the validation message at the field itself: the
+ * control turns red through `data-invalid` and the message sits beneath it.
+ */
 export function Field({
 	label,
-	hint,
-	tone,
+	optional,
+	help,
+	error,
 	children,
 }: {
-	label: string;
-	hint?: string;
-	tone?: "danger" | "warn";
+	label: ReactNode;
+	optional?: boolean;
+	help?: ReactNode;
+	error?: string;
 	children: ReactNode;
 }) {
-	const toneClass =
-		tone === "danger" ? "text-danger" : tone === "warn" ? "text-warn" : "text-ink-4";
 	return (
-		<div>
-			<div className="meta mb-0.5 flex items-baseline gap-2">
+		<div className="neo-field" data-invalid={error ? "true" : undefined}>
+			<div className="neo-field-label">
 				<span>{label}</span>
-				{hint ? <span className={`font-mono text-2xs ${toneClass}`}>{hint}</span> : null}
+				{optional ? <small>optional</small> : null}
 			</div>
 			{children}
+			{error ? (
+				<div className="neo-field-error" role="alert">
+					<CircleAlert size={12} />
+					<span>{error}</span>
+				</div>
+			) : help !== undefined ? (
+				<div className="neo-field-help">{help}</div>
+			) : null}
 		</div>
 	);
 }
@@ -30,18 +43,22 @@ export function TextInput({
 	onChange,
 	placeholder,
 	mono,
+	ariaLabel,
 }: {
 	value: string;
 	onChange: (next: string) => void;
 	placeholder?: string;
 	mono?: boolean;
+	ariaLabel?: string;
 }) {
 	return (
 		<input
 			value={value}
 			onChange={(e) => onChange(e.target.value)}
 			placeholder={placeholder}
-			className={`field h-7 w-full px-2 text-2xs ${mono ? "font-mono" : ""}`}
+			aria-label={ariaLabel}
+			className="neo-input w-full"
+			data-mono={mono || undefined}
 		/>
 	);
 }
@@ -52,12 +69,14 @@ export function TextArea({
 	placeholder,
 	rows = 3,
 	mono = true,
+	ariaLabel,
 }: {
 	value: string;
 	onChange: (next: string) => void;
 	placeholder?: string;
 	rows?: number;
 	mono?: boolean;
+	ariaLabel?: string;
 }) {
 	return (
 		<textarea
@@ -65,7 +84,9 @@ export function TextArea({
 			onChange={(e) => onChange(e.target.value)}
 			rows={rows}
 			placeholder={placeholder}
-			className={`field w-full resize-y px-2 py-1.5 text-2xs leading-relaxed ${mono ? "font-mono" : ""}`}
+			aria-label={ariaLabel}
+			className="neo-input w-full"
+			data-mono={mono || undefined}
 		/>
 	);
 }
@@ -77,7 +98,7 @@ export function hasAdvancedContent(value: string): boolean {
 
 /** Never replace a stored expression with a basic-mode placeholder value. */
 export function ActionTextField({
-	label, value, onChange, advanced, placeholder, rows, mono,
+	label, value, onChange, advanced, placeholder, rows, mono, error, help, optional,
 }: {
 	label: string;
 	value: string;
@@ -86,19 +107,32 @@ export function ActionTextField({
 	placeholder?: string;
 	rows?: number;
 	mono?: boolean;
+	error?: string;
+	help?: ReactNode;
+	optional?: boolean;
 }) {
 	return (
-		<Field label={label}>
+		<Field label={label} error={error} help={help} optional={optional}>
 			{!advanced && hasAdvancedContent(value) ? (
-				<p className="text-2xs text-ink-3">
-					This field uses advanced content. Turn on Advanced to edit it.
-				</p>
+				<div className="space-y-1.5">
+					<pre className="neo-code-block max-h-40 !text-[12px]">{value}</pre>
+					<AdvancedNotice>This field uses templates. Turn on Advanced to edit it.</AdvancedNotice>
+				</div>
 			) : rows !== undefined ? (
-				<TextArea value={value} onChange={onChange} placeholder={placeholder} rows={rows} mono={mono} />
+				<TextArea value={value} onChange={onChange} placeholder={placeholder} rows={rows} mono={mono} ariaLabel={label} />
 			) : (
-				<TextInput value={value} onChange={onChange} placeholder={placeholder} mono={mono} />
+				<TextInput value={value} onChange={onChange} placeholder={placeholder} mono={mono} ariaLabel={label} />
 			)}
 		</Field>
+	);
+}
+
+/** Quiet notice used wherever basic mode hides an advanced value. */
+export function AdvancedNotice({ children }: { children: ReactNode }) {
+	return (
+		<p className="rounded-[var(--r-control)] border border-dashed border-[var(--neo-line-2)] px-2.5 py-2 text-[12px] leading-relaxed text-ink-3">
+			{children}
+		</p>
 	);
 }
 
@@ -106,10 +140,12 @@ export function NumInput({
 	value,
 	onChange,
 	placeholder,
+	ariaLabel,
 }: {
 	value: number | undefined;
 	onChange: (next: number | undefined) => void;
 	placeholder?: string;
+	ariaLabel?: string;
 }) {
 	return (
 		<input
@@ -124,7 +160,9 @@ export function NumInput({
 				}
 			}}
 			placeholder={placeholder}
-			className="field h-7 w-full px-2 font-mono text-2xs"
+			aria-label={ariaLabel}
+			className="neo-input w-full"
+			data-mono="true"
 		/>
 	);
 }
@@ -133,16 +171,19 @@ export function Select<T extends string>({
 	value,
 	onChange,
 	options,
+	ariaLabel,
 }: {
 	value: T;
 	onChange: (next: T) => void;
 	options: ReadonlyArray<{ value: T; label: string }>;
+	ariaLabel?: string;
 }) {
 	return (
 		<select
 			value={value}
 			onChange={(e) => onChange(e.target.value as T)}
-			className="field h-7 w-full px-2 font-mono text-2xs"
+			aria-label={ariaLabel}
+			className="neo-input w-full"
 		>
 			{options.map((o) => (
 				<option key={o.value} value={o.value}>
@@ -150,6 +191,15 @@ export function Select<T extends string>({
 				</option>
 			))}
 		</select>
+	);
+}
+
+export function Checkbox({ checked, onChange, children }: { checked: boolean; onChange: (next: boolean) => void; children: ReactNode }) {
+	return (
+		<label className="neo-check">
+			<input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
+			<span>{children}</span>
+		</label>
 	);
 }
 
@@ -174,42 +224,40 @@ export function TagInput({
 		onChange([...values, trimmed]);
 	}
 	return (
-		<div className="rounded border border-line bg-paper-2 px-1.5 py-1">
-			<div className="flex flex-wrap items-center gap-1">
-				{values.map((v, idx) => (
-					<span
-						key={`${v}-${idx}`}
-						className="inline-flex items-center gap-1 rounded bg-paper-3 px-1.5 py-0.5 font-mono text-2xs text-ink-2"
+		<div className="neo-input flex h-auto min-h-[30px] flex-wrap items-center gap-1 py-1 pl-1.5 pr-1.5">
+			{values.map((v, idx) => (
+				<span
+					key={`${v}-${idx}`}
+					className="inline-flex items-center gap-1 rounded-[var(--r-chip)] bg-[var(--neo-raised)] px-1.5 py-0.5 font-mono text-[11.5px] text-ink-2"
+				>
+					{v}
+					<button
+						type="button"
+						onClick={() => remove(idx)}
+						className="text-ink-3 hover:text-danger"
+						aria-label={`Remove ${v}`}
 					>
-						{v}
-						<button
-							type="button"
-							onClick={() => remove(idx)}
-							className="text-ink-4 hover:text-danger"
-							aria-label={`Remove ${v}`}
-						>
-							×
-						</button>
-					</span>
-				))}
-				<input
-					placeholder={placeholder ?? "add..."}
-					className="min-w-[6ch] flex-1 bg-transparent px-1 py-0 font-mono text-2xs text-ink outline-none placeholder:text-ink-4"
-					onKeyDown={(e) => {
-						if (e.key === "Enter" || e.key === ",") {
-							e.preventDefault();
-							add((e.target as HTMLInputElement).value);
-							(e.target as HTMLInputElement).value = "";
-						} else if (e.key === "Backspace" && (e.target as HTMLInputElement).value === "" && values.length > 0) {
-							remove(values.length - 1);
-						}
-					}}
-					onBlur={(e) => {
-						add(e.target.value);
-						e.target.value = "";
-					}}
-				/>
-			</div>
+						×
+					</button>
+				</span>
+			))}
+			<input
+				placeholder={placeholder ?? "add…"}
+				className="min-w-[8ch] flex-1 bg-transparent px-1 py-0 text-[12.5px] text-ink outline-none placeholder:text-ink-3"
+				onKeyDown={(e) => {
+					if (e.key === "Enter" || e.key === ",") {
+						e.preventDefault();
+						add((e.target as HTMLInputElement).value);
+						(e.target as HTMLInputElement).value = "";
+					} else if (e.key === "Backspace" && (e.target as HTMLInputElement).value === "" && values.length > 0) {
+						remove(values.length - 1);
+					}
+				}}
+				onBlur={(e) => {
+					add(e.target.value);
+					e.target.value = "";
+				}}
+			/>
 		</div>
 	);
 }
@@ -240,41 +288,40 @@ export function KeyValueEditor({
 		onChange(toObj(next));
 	}
 	return (
-		<div className="space-y-1">
-			{entries.length === 0 ? (
-				<div className="font-mono text-2xs text-ink-4">none</div>
-			) : (
-				entries.map(([k, v], idx) => (
-					<div key={idx} className="grid grid-cols-[1fr_1fr_auto] gap-1">
-						<input
-							value={k}
-							onChange={(e) => setEntry(idx, e.target.value, v)}
-							placeholder={keyPlaceholder ?? "key"}
-							className="field h-7 w-full px-1.5 font-mono text-2xs"
-						/>
-						<input
-							value={v}
-							onChange={(e) => setEntry(idx, k, e.target.value)}
-							placeholder={valuePlaceholder ?? "value"}
-							className="field h-7 w-full px-1.5 font-mono text-2xs"
-						/>
-						<button
-							type="button"
-							onClick={() => remove(idx)}
-							className="btn-ghost h-7 w-7 p-0 text-ink-4 hover:text-danger"
-							aria-label="Remove"
-						>
-							×
-						</button>
-					</div>
-				))
-			)}
-			<button
-				type="button"
-				onClick={add}
-				className="font-mono text-2xs text-ink-3 underline-offset-2 hover:text-ink hover:underline"
-			>
-				+ add row
+		<div className="space-y-1.5">
+			{entries.map(([k, v], idx) => (
+				<div key={idx} className="grid grid-cols-[1fr_1fr_auto] gap-1.5">
+					<input
+						value={k}
+						onChange={(e) => setEntry(idx, e.target.value, v)}
+						placeholder={keyPlaceholder ?? "key"}
+						className="neo-input w-full"
+						data-size="sm"
+						data-mono="true"
+					/>
+					<input
+						value={v}
+						onChange={(e) => setEntry(idx, k, e.target.value)}
+						placeholder={valuePlaceholder ?? "value"}
+						className="neo-input w-full"
+						data-size="sm"
+						data-mono="true"
+					/>
+					<button
+						type="button"
+						onClick={() => remove(idx)}
+						className="neo-btn"
+						data-variant="ghost"
+						data-size="sm"
+						data-icon="true"
+						aria-label="Remove"
+					>
+						×
+					</button>
+				</div>
+			))}
+			<button type="button" onClick={add} className="neo-chip-btn">
+				+ Add row
 			</button>
 		</div>
 	);

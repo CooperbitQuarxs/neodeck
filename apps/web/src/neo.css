@@ -1144,3 +1144,440 @@ textarea.neo-input {
 	color: rgb(var(--accent));
 	margin-top: 1px;
 }
+
+/* --------------------------------------------------------------------------
+   Form fields. Sentence-case 12 px labels, help and errors under the control.
+   Validation lives at the field: the control turns red and the message sits
+   beneath it; there is no summary band anywhere.
+   -------------------------------------------------------------------------- */
+.neo-field {
+	display: flex;
+	flex-direction: column;
+	gap: 5px;
+	min-width: 0;
+}
+
+.neo-field-label {
+	display: flex;
+	align-items: baseline;
+	gap: 6px;
+	font-size: 12px;
+	font-weight: 500;
+	color: rgb(var(--ink-2));
+}
+
+.neo-field-label > small {
+	font-size: 11.5px;
+	font-weight: 400;
+	color: rgb(var(--ink-3));
+}
+
+.neo-field-help {
+	font-size: 12px;
+	line-height: 1.45;
+	color: rgb(var(--ink-3));
+}
+
+.neo-field-error {
+	display: flex;
+	align-items: flex-start;
+	gap: 5px;
+	font-size: 12px;
+	line-height: 1.4;
+	color: rgb(var(--danger));
+}
+
+.neo-field-error > svg {
+	flex: none;
+	margin-top: 2px;
+}
+
+.neo-field[data-invalid="true"] .neo-input {
+	border-color: color-mix(in srgb, rgb(var(--danger)) 60%, transparent);
+}
+
+.neo-field[data-invalid="true"] .neo-input:focus {
+	border-color: rgb(var(--danger));
+	box-shadow: 0 0 0 3px color-mix(in srgb, rgb(var(--danger)) 18%, transparent);
+}
+
+.neo-input[data-mono="true"] {
+	font-family: var(--font-mono);
+	font-size: 12.5px;
+}
+
+select.neo-input {
+	appearance: none;
+	padding-right: 28px;
+	background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236c6c74' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+	background-repeat: no-repeat;
+	background-position: right 9px center;
+}
+
+.neo-input[data-size="sm"] {
+	height: 26px;
+	padding: 0 8px;
+	font-size: 12.5px;
+}
+
+.neo-check {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	font-size: 13px;
+	color: rgb(var(--ink-2));
+	cursor: pointer;
+}
+
+.neo-check input {
+	accent-color: rgb(var(--accent));
+	width: 14px;
+	height: 14px;
+}
+
+.neo-chip-btn {
+	height: 22px;
+	padding: 0 8px;
+	border-radius: var(--r-chip);
+	border: 1px solid var(--neo-line-2);
+	background: var(--neo-raised);
+	font-size: 11.5px;
+	color: rgb(var(--ink-2));
+	cursor: pointer;
+	white-space: nowrap;
+	transition:
+		background var(--dur-1) var(--ease),
+		color var(--dur-1) var(--ease);
+}
+
+.neo-chip-btn:hover {
+	color: rgb(var(--ink));
+	border-color: var(--neo-line-3);
+}
+
+.neo-chip-btn[data-on="true"] {
+	background: var(--neo-selected);
+	color: rgb(var(--ink));
+}
+
+/* --------------------------------------------------------------------------
+   Routine canvas nodes. A node is a card: icon, title, what it does, and a
+   footer that only appears when there is something to say (a problem, a run).
+   -------------------------------------------------------------------------- */
+.neo-node {
+	position: relative;
+	width: 248px;
+	border-radius: var(--r-card);
+	border: 1px solid transparent;
+	background:
+		linear-gradient(var(--neo-card), var(--neo-card)) padding-box,
+		linear-gradient(180deg, var(--neo-line-3), var(--neo-line-1) 40%) border-box;
+	box-shadow: var(--neo-shadow-1);
+	color: rgb(var(--ink));
+	font-size: 12.5px;
+	transition:
+		box-shadow var(--dur-1) var(--ease),
+		border-color var(--dur-1) var(--ease);
+}
+
+.neo-node[data-selected="true"] {
+	background:
+		linear-gradient(var(--neo-card), var(--neo-card)) padding-box,
+		linear-gradient(rgb(var(--accent)), rgb(var(--accent))) border-box;
+	box-shadow:
+		var(--neo-shadow-1),
+		0 0 0 3px color-mix(in srgb, rgb(var(--accent)) 18%, transparent);
+}
+
+.neo-node[data-problem="true"] {
+	background:
+		linear-gradient(var(--neo-card), var(--neo-card)) padding-box,
+		linear-gradient(color-mix(in srgb, rgb(var(--danger)) 70%, transparent), color-mix(in srgb, rgb(var(--danger)) 70%, transparent)) border-box;
+}
+
+.neo-node[data-selected="true"][data-problem="true"] {
+	box-shadow:
+		var(--neo-shadow-1),
+		0 0 0 3px color-mix(in srgb, rgb(var(--danger)) 18%, transparent);
+}
+
+.neo-node[data-run="running"] {
+	background:
+		linear-gradient(var(--neo-card), var(--neo-card)) padding-box,
+		var(--neo-accent-gradient) border-box;
+}
+
+.neo-node[data-run="success"] {
+	background:
+		linear-gradient(var(--neo-card), var(--neo-card)) padding-box,
+		linear-gradient(color-mix(in srgb, rgb(var(--success)) 55%, transparent), color-mix(in srgb, rgb(var(--success)) 55%, transparent)) border-box;
+}
+
+.neo-node[data-run="failed"] {
+	background:
+		linear-gradient(var(--neo-card), var(--neo-card)) padding-box,
+		linear-gradient(color-mix(in srgb, rgb(var(--danger)) 70%, transparent), color-mix(in srgb, rgb(var(--danger)) 70%, transparent)) border-box;
+}
+
+.neo-node[data-run="aborted"] {
+	background:
+		linear-gradient(var(--neo-card), var(--neo-card)) padding-box,
+		linear-gradient(color-mix(in srgb, rgb(var(--warn)) 60%, transparent), color-mix(in srgb, rgb(var(--warn)) 60%, transparent)) border-box;
+}
+
+.neo-node[data-run="skipped"] {
+	opacity: 0.7;
+}
+
+.neo-node-head {
+	display: flex;
+	align-items: center;
+	gap: 9px;
+	padding: 10px 12px 0;
+}
+
+.neo-node-icon {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 24px;
+	height: 24px;
+	flex: none;
+	border-radius: 7px;
+	background: var(--neo-raised);
+	border: 1px solid var(--neo-line-1);
+	color: rgb(var(--ink-2));
+}
+
+.neo-node-icon[data-tone="engine"] {
+	color: rgb(var(--thinking));
+}
+
+.neo-node-icon[data-tone="accent"] {
+	color: rgb(var(--accent));
+}
+
+.neo-node-titles {
+	min-width: 0;
+	flex: 1;
+}
+
+.neo-node-title {
+	font-size: 13.5px;
+	font-weight: 550;
+	letter-spacing: -0.01em;
+	line-height: 1.25;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.neo-node-kicker {
+	font-size: 11.5px;
+	color: rgb(var(--ink-3));
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.neo-node-body {
+	padding: 8px 12px 10px;
+	font-size: 12.5px;
+	line-height: 1.45;
+	color: rgb(var(--ink-2));
+	display: -webkit-box;
+	-webkit-line-clamp: 3;
+	-webkit-box-orient: vertical;
+	overflow: hidden;
+	overflow-wrap: anywhere;
+}
+
+.neo-node-body[data-mono="true"] {
+	font-family: var(--font-mono);
+	font-size: 12px;
+}
+
+.neo-node-body[data-empty="true"] {
+	color: rgb(var(--ink-3));
+	font-style: italic;
+}
+
+.neo-node-foot {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 7px 12px;
+	border-top: 1px solid var(--neo-line-1);
+	font-size: 11.5px;
+	color: rgb(var(--ink-3));
+	line-height: 1.35;
+}
+
+.neo-node-foot[data-tone="bad"] {
+	color: rgb(var(--danger));
+}
+
+.neo-node-foot > svg {
+	flex: none;
+}
+
+.neo-node-foot .neo-mono {
+	font-size: 11.5px;
+}
+
+.neo-node-branches {
+	display: flex;
+	justify-content: space-between;
+	padding: 6px 12px;
+	border-top: 1px solid var(--neo-line-1);
+	font-size: 11.5px;
+	color: rgb(var(--ink-3));
+}
+
+/* The trigger is the first thing on the canvas: a pill-shaped start node. */
+.neo-node[data-kind="trigger"] {
+	width: auto;
+	min-width: 200px;
+	max-width: 300px;
+	border-radius: var(--r-pill);
+}
+
+.neo-node[data-kind="trigger"] .neo-node-head {
+	padding: 8px 14px 8px 10px;
+}
+
+.neo-node[data-kind="trigger"] .neo-node-icon {
+	border-radius: 999px;
+	background: var(--neo-accent-gradient);
+	border-color: transparent;
+	color: #fff;
+}
+
+.neo-node[data-kind="trigger"] .neo-node-title {
+	font-size: 13px;
+}
+
+.routine-canvas .react-flow__handle {
+	width: 8px;
+	height: 8px;
+	border: 1px solid var(--neo-line-4);
+	background: var(--neo-card);
+}
+
+.routine-canvas .react-flow__handle[data-handleid="true"] {
+	border-color: rgb(var(--success));
+	background: rgb(var(--success));
+}
+
+.routine-canvas .react-flow__handle[data-handleid="false"] {
+	border-color: rgb(var(--danger));
+	background: rgb(var(--danger));
+}
+
+.routine-canvas .react-flow__node-trigger .react-flow__handle {
+	opacity: 0;
+}
+
+.routine-canvas .react-flow__controls,
+.routine-canvas .react-flow__minimap {
+	border-radius: var(--r-control);
+	overflow: hidden;
+}
+
+.routine-canvas .react-flow__minimap {
+	background: var(--neo-panel) !important;
+	border: 1px solid var(--neo-line-2) !important;
+}
+
+.routine-canvas .react-flow__minimap-node {
+	fill: var(--neo-line-4);
+	stroke: none;
+}
+
+.routine-canvas .react-flow__minimap-mask {
+	fill: color-mix(in srgb, var(--neo-bg) 55%, transparent);
+}
+
+/* Floating canvas chrome: the one place a problem count may sit. */
+.neo-canvas-pill {
+	position: absolute;
+	left: 50%;
+	bottom: 14px;
+	transform: translateX(-50%);
+	z-index: 20;
+	display: inline-flex;
+	align-items: center;
+	gap: 7px;
+	height: 28px;
+	padding: 0 12px;
+	border-radius: var(--r-pill);
+	border: 1px solid var(--neo-line-2);
+	background: color-mix(in srgb, var(--neo-raised) 90%, transparent);
+	backdrop-filter: blur(10px);
+	font-size: 12.5px;
+	color: rgb(var(--ink-2));
+	box-shadow: var(--neo-shadow-1);
+	cursor: pointer;
+}
+
+.neo-canvas-pill[data-tone="bad"] {
+	color: rgb(var(--danger));
+	border-color: color-mix(in srgb, rgb(var(--danger)) 30%, transparent);
+}
+
+/* The source view: a code block that fills the pane and can be typed into. */
+.neo-source {
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+	flex: 1;
+	border-radius: var(--r-card);
+	border: 1px solid var(--neo-line-2);
+	background: var(--neo-panel);
+	overflow: hidden;
+}
+
+.neo-source-bar {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 6px 8px 6px 12px;
+	border-bottom: 1px solid var(--neo-line-1);
+	font-size: 12px;
+	color: rgb(var(--ink-3));
+}
+
+.neo-source textarea {
+	flex: 1;
+	min-height: 320px;
+	width: 100%;
+	resize: none;
+	padding: 12px 14px;
+	background: transparent;
+	color: rgb(var(--ink));
+	font-family: var(--font-mono);
+	font-size: 12.5px;
+	line-height: 1.6;
+	tab-size: 2;
+	outline: none;
+}
+
+.neo-source textarea::placeholder {
+	color: rgb(var(--ink-4));
+}
+
+.neo-source-problems {
+	border-top: 1px solid var(--neo-line-1);
+	padding: 8px 12px;
+	font-size: 12px;
+	color: rgb(var(--danger));
+	display: flex;
+	flex-direction: column;
+	gap: 3px;
+}
+
+.neo-source-problems .neo-mono {
+	color: rgb(var(--ink-3));
+	font-size: 11.5px;
+	margin-right: 6px;
+}

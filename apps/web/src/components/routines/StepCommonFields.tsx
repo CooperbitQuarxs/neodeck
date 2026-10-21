@@ -1,20 +1,39 @@
 import type { RoutineOnFailure, RoutineRetryPolicy, RoutineStep } from "@npi-deck/protocol";
 
-import { Field, NumInput, TextInput } from "./form-primitives";
+import { Field, NumInput, Select, TextInput } from "./form-primitives";
 import { validateStepId } from "./routine-validation";
+import type { StepFieldErrors } from "./StepForms";
 
 interface Props {
 	step: RoutineStep;
 	onChange: (next: RoutineStep) => void;
 	existingIds: string[];
+	errors?: StepFieldErrors;
 }
 
 /**
- * Renders the `id`, `when`, `on_failure`, `timeout_secs`, and `retry` fields
- * shared by every step type. The per-type form mounts this above its own
- * type-specific fields.
+ * The step's id, shown on every step because the canvas reads it as the
+ * node's title (`fetch_tasks` → "Fetch tasks").
  */
-export function StepCommonFields({ step, onChange, existingIds }: Props) {
+export function StepIdField({ step, onChange, existingIds, errors }: Props) {
+	const idCollision = existingIds.includes(step.id);
+	const idError = idCollision ? "Another step already uses this name." : validateStepId(step.id);
+	return (
+		<Field
+			label="Name"
+			help="Lowercase, numbers and underscores. Other steps refer to this one by it."
+			error={errors?.id ?? idError}
+		>
+			<TextInput value={step.id} onChange={(v) => onChange({ ...step, id: v })} placeholder="fetch_tasks" mono ariaLabel="Step name" />
+		</Field>
+	);
+}
+
+/**
+ * Renders the `when`, `on_failure`, `timeout_secs`, and `retry` fields
+ * shared by every step type. Advanced only; the per-type form mounts above.
+ */
+export function StepCommonFields({ step, onChange, errors }: Omit<Props, "existingIds">) {
 	function set<K extends keyof RoutineStep>(key: K, value: RoutineStep[K]): void {
 		onChange({ ...step, [key]: value });
 	}
@@ -23,35 +42,11 @@ export function StepCommonFields({ step, onChange, existingIds }: Props) {
 		delete (next as Record<string, unknown>)[key];
 		onChange(next);
 	}
-	const idCollision = existingIds.includes(step.id);
-	const idError = validateStepId(step.id);
-	const idHint = idCollision ? "duplicate" : idError;
 	const retry = step.retry;
 
 	return (
-		<div className="space-y-2 rounded border border-line bg-paper-2/40 p-2">
-			<div className="grid grid-cols-2 gap-2">
-				<Field label="id" hint={idHint} tone={idHint ? "danger" : undefined}>
-					<TextInput value={step.id} onChange={(v) => set("id", v)} placeholder="fetch_tasks" mono />
-				</Field>
-				<Field label="on_failure">
-					<select
-						value={step.on_failure ?? ""}
-						onChange={(e) => {
-							const v = e.target.value as RoutineOnFailure | "";
-							if (v === "") clear("on_failure");
-							else set("on_failure", v);
-						}}
-						className="field h-7 w-full px-2 font-mono text-2xs"
-					>
-						<option value="">(default: abort)</option>
-						<option value="abort">abort</option>
-						<option value="continue">continue</option>
-						<option value="retry">retry</option>
-					</select>
-				</Field>
-			</div>
-			<Field label="when (JS, optional)">
+		<div className="space-y-3">
+			<Field label="Run only when" optional help="A JavaScript expression; the step is skipped when it is false." error={errors?.when}>
 				<TextInput
 					value={step.when ?? ""}
 					onChange={(v) => (v.trim() === "" ? clear("when") : set("when", v))}
@@ -59,16 +54,33 @@ export function StepCommonFields({ step, onChange, existingIds }: Props) {
 					mono
 				/>
 			</Field>
-			<div className="grid grid-cols-2 gap-2">
-				<Field label="timeout_secs">
+			<div className="grid grid-cols-2 gap-3">
+				<Field label="On failure" error={errors?.on_failure}>
+					<Select
+						value={step.on_failure ?? ""}
+						onChange={(v) => {
+							if (v === "") clear("on_failure");
+							else set("on_failure", v as RoutineOnFailure);
+						}}
+						options={[
+							{ value: "", label: "Stop the routine" },
+							{ value: "abort", label: "Stop the routine (explicit)" },
+							{ value: "continue", label: "Carry on" },
+							{ value: "retry", label: "Retry" },
+						]}
+					/>
+				</Field>
+				<Field label="Timeout" optional help="Seconds." error={errors?.timeout_secs}>
 					<NumInput
 						value={step.timeout_secs}
 						onChange={(v) => (v === undefined ? clear("timeout_secs") : set("timeout_secs", v))}
 						placeholder="120"
 					/>
 				</Field>
-				{step.on_failure === "retry" ? (
-					<Field label="retry.times">
+			</div>
+			{step.on_failure === "retry" ? (
+				<div className="grid grid-cols-3 gap-3">
+					<Field label="Retries" error={errors?.retry}>
 						<NumInput
 							value={retry?.times}
 							onChange={(v) => {
@@ -84,27 +96,22 @@ export function StepCommonFields({ step, onChange, existingIds }: Props) {
 							placeholder="3"
 						/>
 					</Field>
-				) : null}
-			</div>
-			{step.on_failure === "retry" ? (
-				<div className="grid grid-cols-2 gap-2">
-					<Field label="retry.backoff">
-						<select
+					<Field label="Backoff">
+						<Select
 							value={retry?.backoff ?? "linear"}
-							onChange={(e) => {
-								const backoff = e.target.value as "linear" | "exponential";
+							onChange={(backoff) => {
 								const next: RoutineRetryPolicy = retry
 									? { ...retry, backoff }
 									: { times: 3, backoff };
 								set("retry", next);
 							}}
-							className="field h-7 w-full px-2 font-mono text-2xs"
-						>
-							<option value="linear">linear</option>
-							<option value="exponential">exponential</option>
-						</select>
+							options={[
+								{ value: "linear", label: "Linear" },
+								{ value: "exponential", label: "Exponential" },
+							]}
+						/>
 					</Field>
-					<Field label="retry.max_delay_secs">
+					<Field label="Max delay" optional help="Seconds.">
 						<NumInput
 							value={retry?.max_delay_secs}
 							onChange={(v) => {

@@ -1,21 +1,16 @@
 /**
- * T-65: categorized add-step palette pinned to the top-left corner of the
- * canvas viewport. Replaces the horizontal-scroll toolbar from T-64 with a
- * single discoverable trigger button + a vertical popover that groups step
- * types into Compute / I/O / Deck Read / Deck Write / File / Control.
- *
- * Discoverability: one button, one click, scannable categories. The popover
- * closes on outside-click and Escape, and each row shows the step's help text
- * inline so the author doesn't have to hover for a tooltip.
+ * Categorized add-step palette pinned to the top-left corner of the canvas
+ * viewport: one button, one click, scannable groups. The popover closes on
+ * outside-click and Escape; in Advanced each row shows its help text inline.
  */
 
 import { useEffect, useRef, useState } from "react";
-import { ChevronDown, Plus } from "lucide-react";
+import { ChevronDown, GitBranch, Plus } from "lucide-react";
 
 import type { RoutineDeckAction, RoutineStep } from "@npi-deck/protocol";
 
 import { STEP_CATEGORIES } from "./step-categories";
-import { actionLabel } from "../step-form-render";
+import { actionLabel, STEP_ICON, stepIconTone } from "../step-form-render";
 
 interface AddStepPaletteProps {
 	onAdd: (
@@ -25,6 +20,15 @@ interface AddStepPaletteProps {
 	) => void;
 	advanced?: boolean;
 }
+
+const CATEGORY_WORDS: Record<string, string> = {
+	compute: "Commands and agents",
+	io: "Outside the deck",
+	"deck-read": "Read from the deck",
+	"deck-write": "Update the deck",
+	file: "Files",
+	control: "Control",
+};
 
 export function AddStepPalette({ onAdd, advanced = false }: AddStepPaletteProps): JSX.Element {
 	const [open, setOpen] = useState(false);
@@ -72,50 +76,48 @@ export function AddStepPalette({ onAdd, advanced = false }: AddStepPaletteProps)
 				aria-expanded={open}
 				aria-haspopup="menu"
 				aria-label="Add action"
-				className="flex h-8 items-center gap-1.5 rounded border border-line bg-paper px-2.5 text-xs text-ink-2 shadow-sm hover:text-ink"
+				className="neo-btn"
+				data-variant="primary"
 			>
-				<Plus className="h-3.5 w-3.5 text-accent" />
+				<Plus size={14} />
 				Add action
-				<ChevronDown
-					className={`h-3 w-3 text-ink-3 transition-transform ${open ? "rotate-180" : ""}`}
-				/>
+				<ChevronDown size={12} className={`opacity-70 transition-transform ${open ? "rotate-180" : ""}`} />
 			</button>
 			{open ? (
 				<div
 					role="menu"
 					aria-label="Choose an action"
-					className="mt-1 max-h-[70vh] w-[320px] overflow-y-auto rounded border border-line bg-paper shadow-xl"
+					className="neo-card mt-1.5 max-h-[70vh] w-[340px] overflow-y-auto !shadow-[var(--neo-shadow-3)]"
 				>
 					{STEP_CATEGORIES.filter((cat) => advanced || cat.key !== "io").map((cat, i) => (
-						<div
-							key={cat.key}
-							className={i === 0 ? "" : "border-t border-line"}
-						>
-							<div className="bg-paper-2/60 px-2.5 pb-1 pt-1.5">
-								<div className="font-mono text-2xs uppercase tracking-meta text-ink-3">
-									{cat.key === "compute" ? "Commands and agents" : cat.key === "deck-read" ? "Read from the deck" : cat.key === "deck-write" ? "Update the deck" : cat.label}
-								</div>
-								{advanced ? <div className="text-2xs text-ink-4">{cat.tagline}</div> : null}
+						<div key={cat.key} className={i === 0 ? "" : "border-t border-[var(--neo-line-1)]"}>
+							<div className="px-3 pb-1 pt-2.5 text-[11.5px] font-medium text-ink-3">
+								{CATEGORY_WORDS[cat.key] ?? cat.label}
 							</div>
-							<div className="py-1">
+							<div className="pb-1.5">
 								{cat.entries.filter((entry) => advanced || (
 									!["transform", "if", "set_state"].includes(entry.key) &&
 									!["move_task", "get_task", "get_inbox_item", "promote_inbox_item_to_task"].includes(entry.presetAction ?? "")
-								)).map((entry) => (
-									<button
-										key={entry.key}
-										type="button"
-										role="menuitem"
-										onClick={() => pick(entry.value, entry.presetAction, entry.presetKind)}
-										aria-label={`Add ${actionLabel({ type: entry.value, action: entry.presetAction })}`}
-										className="flex w-full items-start gap-2 px-2.5 py-1.5 text-left hover:bg-paper-3"
-									>
-										<span className="text-xs text-ink-2">
-											{entry.presetKind === "if" ? "Branch on a condition" : actionLabel({ type: entry.value, action: entry.presetAction })}
-										</span>
-										{advanced ? <span className="text-2xs leading-snug text-ink-3">{entry.help}</span> : null}
-									</button>
-								))}
+								)).map((entry) => {
+									const Icon = entry.presetKind === "if" ? GitBranch : STEP_ICON[entry.value];
+									const label = entry.presetKind === "if" ? "Branch on a condition" : actionLabel({ type: entry.value, action: entry.presetAction });
+									return (
+										<button
+											key={entry.key}
+											type="button"
+											role="menuitem"
+											onClick={() => pick(entry.value, entry.presetAction, entry.presetKind)}
+											aria-label={`Add ${actionLabel({ type: entry.value, action: entry.presetAction })}`}
+											className="flex w-full items-center gap-2.5 px-3 py-1.5 text-left hover:bg-[var(--neo-hover)]"
+										>
+											<span className="neo-node-icon !h-[22px] !w-[22px]" data-tone={stepIconTone({ type: entry.value })}><Icon size={12} /></span>
+											<span className="min-w-0 flex-1">
+												<span className="block truncate text-[13px] text-ink">{label}</span>
+												{advanced ? <span className="block text-[11.5px] leading-snug text-ink-3">{entry.help}</span> : null}
+											</span>
+										</button>
+									);
+								})}
 							</div>
 						</div>
 					))}

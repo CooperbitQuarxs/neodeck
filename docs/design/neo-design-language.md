@@ -189,3 +189,12 @@ below the fold. The before shots are kept here so the delta is reviewable:
 - `screenshots/deck-before-inbox.png`
 - `screenshots/deck-before-routines-canvas.png`
 - `screenshots/deck-before-routines-steps.png`
+
+The routines canvas and editor after the follow-up redesign (#236): nodes as
+cards with the trigger on the canvas, the inline field error, the trigger
+inspector and the source view:
+
+- `screenshots/deck-after-routines-canvas-nodes.png`
+- `screenshots/deck-after-routines-inline-error.png`
+- `screenshots/deck-after-routines-trigger.png`
+- `screenshots/deck-after-routines-source.png`
