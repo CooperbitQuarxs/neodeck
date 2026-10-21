@@ -6,6 +6,8 @@ import { cn } from "@/lib/utils";
 interface Props {
 	value: string;
 	onChange: (next: string) => void;
+	/** Observes the live draft, including image uploads and cancelled edits, before commit. */
+	onDraftChange?: (next: string) => void;
 	/** Fires when the user commits the edit (blur or ctrl/cmd+enter). */
 	onCommit?: (next: string) => void;
 	placeholder?: string;
@@ -28,6 +30,7 @@ interface Props {
 export function MarkdownEdit({
 	value,
 	onChange,
+	onDraftChange,
 	onCommit,
 	placeholder = "Click to add notes…",
 	className,
@@ -63,6 +66,12 @@ export function MarkdownEdit({
 		ta.setSelectionRange(ta.value.length, ta.value.length);
 	}, [editing]);
 
+	function updateDraft(next: string): void {
+		draftRef.current = next;
+		setDraft(next);
+		onDraftChange?.(next);
+	}
+
 	function commit(): void {
 		if (draft !== value) {
 			onChange(draft);
@@ -72,7 +81,7 @@ export function MarkdownEdit({
 	}
 
 	function cancel(): void {
-		setDraft(value);
+		updateDraft(value);
 		setEditing(false);
 	}
 
@@ -88,15 +97,13 @@ export function MarkdownEdit({
 		if (!ta) {
 			// No textarea (race after edit closed); append to current draft.
 			const next = current + inserted;
-			draftRef.current = next;
-			setDraft(next);
+			updateDraft(next);
 			return;
 		}
 		const start = ta.selectionStart ?? current.length;
 		const end = ta.selectionEnd ?? current.length;
 		const next = current.slice(0, start) + inserted + current.slice(end);
-		draftRef.current = next;
-		setDraft(next);
+		updateDraft(next);
 		// Restore caret synchronously after React re-renders the textarea.
 		const caret = start + inserted.length;
 		requestAnimationFrame(() => {
@@ -126,13 +133,11 @@ export function MarkdownEdit({
 			const alt = saved.name.replace(/[\[\]]/g, "");
 			const replacement = `![${alt}](${saved.url})`;
 			const next = draftRef.current.replace(placeholder, replacement);
-			draftRef.current = next;
-			setDraft(next);
+			updateDraft(next);
 		} catch (err) {
 			// Pull the placeholder so the user isn't left with a broken link.
 			const next = draftRef.current.replace(placeholder, "");
-			draftRef.current = next;
-			setDraft(next);
+			updateDraft(next);
 			setUploadError(String(err instanceof Error ? err.message : err));
 		} finally {
 			setUploadingCount((c) => Math.max(0, c - 1));
@@ -172,8 +177,7 @@ export function MarkdownEdit({
 					ref={taRef}
 					value={draft}
 					onChange={(e) => {
-						setDraft(e.target.value);
-						draftRef.current = e.target.value;
+						updateDraft(e.target.value);
 						const ta = e.currentTarget;
 						ta.style.height = "auto";
 						ta.style.height = `${Math.max(ta.scrollHeight, 240)}px`;
