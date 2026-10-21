@@ -43,5 +43,11 @@ the TypeScript shapes in `preview-data.ts` are authoritative.
 
 ## 7. Studio (`studio`)
 
-- `GET /api/graphs` → `{ graphs: GraphSummary[] }` for kinds `flow | pipeline | router | classifier | boardflow`. Flows are today's routines (`/api/routines`); the other kinds share the graph document shape in `@npi-deck/protocol` (`RoutineGraph`) with a per-kind node registry at `GET /api/graphs/node-types?kind=`.
-- `GET /api/graphs/:id/runs` → runs with step runs, same shape as routine runs.
+- `GET /api/graphs` → `GraphSummary[]`; `POST /api/graphs` `{ kind, name }` → `StudioGraph`.
+- `GET /api/graphs/:id` → `StudioGraph`; `PUT /api/graphs/:id` accepts that document and returns the saved document; `DELETE /api/graphs/:id` removes it.
+- `POST /api/graphs/:id/run` → `StudioRun`; `GET /api/graphs/:id/runs` → `StudioRun[]`, with per-node timing and output notes.
+- `GET /api/graphs/node-types?kind=` → `NodeType[]`. The plain-data registry is `neo/pages/studio/vocab.ts`; the graph and run interfaces are exported by `neo/client/studio.ts`.
+- Graph documents contain `id`, `kind`, `name`, `description`, `enabled`, `nodes`, `edges`, `settings`, `updatedAt` and optional `lastRun`. Each node has an id, vocabulary type, configuration and x/y position. An edge names its source and target node and port. Ports must have matching types, unless either is `any`.
+- Flows stay on `/api/routines`; the existing routine builder owns their YAML source. The map stays on `/api/kb/graph` and is read-only in Studio. Neither is rewritten into a preview graph.
+- Routers edit virtual models such as `neoproxy/heavy`. An entry leads to model stages, and stage-to-stage edges mean demotion. A stage defines model, accounts, draw strategy, per-account pool percentage, cap, whether the cap applies per user or to all users, window and optional effort. A terminal limits, queues or passes through.
+- Pipeline, router, classifier and board-flow previews save documents in this browser's local storage. Their run records remain in memory and never send inference requests or output actions.
