@@ -28,4 +28,6 @@
 .neo-settings-advanced-env-value-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .neo-settings-advanced-env-value-row > .neo-settings-advanced-value { flex: 1; min-width: 0; max-width: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; overflow-wrap: normal; }
 .neo-settings-advanced-env-value-row > .neo-btn { flex-shrink: 0; }
+.neo-settings-advanced-env-table > .neo-table { table-layout: fixed; width: 100%; }
+.neo-settings-advanced-env-paths > .neo-kv { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 @media (max-width: 1000px) { .neo-settings-advanced-setting { grid-template-columns: minmax(0, 1fr); gap: 12px; } .neo-settings-advanced-heading { flex-wrap: wrap; } }

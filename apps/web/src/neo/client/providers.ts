@@ -42,9 +42,14 @@ export const providers: ProvidersClient = {
  async list() { return publish(await adapter.list()); },
  async setHidden(id, hidden) { return publish(await adapter.setHidden(id, hidden)); },
 };
+let initialLoad: Promise<ProviderExposure[]> | null = null;
 /** Shared reactive snapshot, so exposure edits also update mounted model pickers. */
 export function useProviders(): readonly ProviderExposure[] {
  const value = useSyncExternalStore(fn => { listeners.add(fn); return () => { listeners.delete(fn); }; }, () => snapshot);
- useEffect(() => { void providers.list().catch(() => {}); }, []);
+ useEffect(() => {
+  if (SOURCES.providers === "preview") return;
+  initialLoad ??= providers.list();
+  void initialLoad.catch(() => {});
+ }, []);
  return value;
 }
