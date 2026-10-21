@@ -20,7 +20,15 @@ import { Shell, useDeckBootstrap } from "./neo/Shell";
 import { useAccount } from "./neo/client/auth";
 import { LoginPage } from "./neo/pages/LoginPage";
 import { InboxPage } from "./neo/pages/InboxPage";
-import { PlacePage } from "./neo/pages/PlacePage";
+import { BoardPage } from "./neo/pages/BoardPage";
+import { ThreadsPage } from "./neo/pages/ThreadsPage";
+import { AgentsPage } from "./neo/pages/AgentsPage";
+import { StudioPage } from "./neo/pages/StudioPage";
+import { KnowledgePage } from "./neo/pages/KnowledgePage";
+import { SkillsPage } from "./neo/pages/SkillsPage";
+import { GitHubPage } from "./neo/pages/GitHubPage";
+import { UsagePage } from "./neo/pages/UsagePage";
+import { SettingsPage } from "./neo/pages/SettingsPage";
 import { NAV_ITEMS } from "./neo/nav";
 
 /**
@@ -68,7 +76,19 @@ function Booted() {
 	return <Shell />;
 }
 
-const PLACE_PAGES: Record<string, JSX.Element> = { "/inbox": <InboxPage /> };
+/** One component per place; the route is `${to}/*` so a place owns its own sub-paths. */
+const PLACE_PAGES: Record<string, JSX.Element> = {
+	"/inbox": <InboxPage />,
+	"/board": <BoardPage />,
+	"/threads": <ThreadsPage />,
+	"/agents": <AgentsPage />,
+	"/studio": <StudioPage />,
+	"/knowledge": <KnowledgePage />,
+	"/skills": <SkillsPage />,
+	"/github": <GitHubPage />,
+	"/usage": <UsagePage />,
+	"/settings": <SettingsPage />,
+};
 
 const router = createBrowserRouter([
 	{ path: "/login", element: <LoginPage /> },
@@ -76,7 +96,7 @@ const router = createBrowserRouter([
 		element: <RequireAuth />,
 		children: [
 			{ path: "/", element: <Navigate to="/inbox" replace /> },
-			...NAV_ITEMS.map((item) => ({ path: `${item.to}/*`, element: PLACE_PAGES[item.to] ?? <PlacePage item={item} /> })),
+			...NAV_ITEMS.map((item) => ({ path: `${item.to}/*`, element: PLACE_PAGES[item.to] })),
 			{ path: "/chat", element: <Navigate to="/threads" replace /> },
 			{ path: "/tasks", element: <Navigate to="/board" replace /> },
 			{ path: "/kb", element: <Navigate to="/knowledge" replace /> },

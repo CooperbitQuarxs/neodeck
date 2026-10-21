@@ -2619,3 +2619,420 @@ button.neo-timeline-span {
 		max-height: 40%;
 	}
 }
+
+/* --------------------------------------------------------------------------
+   Shared by every place (src/neo): split layouts, the agent swatch, the
+   model picker and the fixed composer.
+   -------------------------------------------------------------------------- */
+
+/* Master–detail: a fixed list column and the detail beside it, both scrolling
+   inside one bordered card that fills the panel. */
+.neo-split {
+	display: grid;
+	grid-template-columns: var(--split-w, 300px) minmax(0, 1fr);
+	min-height: 0;
+	height: 100%;
+	border: 1px solid var(--neo-line-2);
+	border-radius: var(--r-card);
+	background: var(--neo-card);
+	overflow: hidden;
+}
+
+.neo-split[data-side="true"] {
+	grid-template-columns: var(--split-w, 300px) minmax(0, 1fr) var(--side-w, 360px);
+}
+
+.neo-split-list {
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+	border-right: 1px solid var(--neo-line-2);
+}
+
+.neo-split-list-head {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	padding: 10px;
+	border-bottom: 1px solid var(--neo-line-1);
+}
+
+.neo-split-list-head .neo-segmented {
+	align-self: flex-start;
+}
+
+.neo-split-rows {
+	flex: 1;
+	min-height: 0;
+	overflow-y: auto;
+	padding: 6px;
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.neo-split-group {
+	padding: 10px 10px 4px;
+	font-size: 11.5px;
+	font-weight: 500;
+	color: rgb(var(--ink-3));
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.neo-split-group .neo-num {
+	color: rgb(var(--ink-4));
+}
+
+.neo-split-detail {
+	min-height: 0;
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+}
+
+.neo-split-side {
+	min-height: 0;
+	border-left: 1px solid var(--neo-line-2);
+	display: flex;
+	flex-direction: column;
+}
+
+/* A row in a split list: dot, title, when, one sub line. */
+.neo-row {
+	display: grid;
+	grid-template-columns: 10px minmax(0, 1fr) auto;
+	grid-template-rows: auto auto;
+	column-gap: 10px;
+	row-gap: 2px;
+	align-items: center;
+	width: 100%;
+	padding: 8px 10px;
+	border-radius: var(--r-control);
+	text-align: left;
+	cursor: pointer;
+	transition: background var(--dur-1) var(--ease);
+}
+
+.neo-row:hover {
+	background: var(--neo-hover);
+}
+
+.neo-row[data-active="true"] {
+	background: var(--neo-selected);
+}
+
+.neo-row:focus-visible {
+	outline: none;
+	box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--neo-focus) 55%, transparent);
+}
+
+.neo-row-lead {
+	grid-row: 1 / span 2;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+}
+
+.neo-row-title {
+	font-size: 13.5px;
+	font-weight: 500;
+	color: rgb(var(--ink));
+	line-height: 1.3;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.neo-row[data-settled="true"] .neo-row-title {
+	color: rgb(var(--ink-3));
+	font-weight: 400;
+}
+
+.neo-row-when {
+	font-size: 11.5px;
+	color: rgb(var(--ink-3));
+	font-variant-numeric: tabular-nums;
+}
+
+.neo-row-sub {
+	grid-column: 2 / span 2;
+	font-size: 11.5px;
+	color: rgb(var(--ink-3));
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+
+/* A page that fills the panel with one region (the split or a canvas). */
+.neo-fill {
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+	min-height: 0;
+	padding: 16px 20px 20px;
+	gap: 14px;
+}
+
+.neo-fill > .neo-page-header {
+	margin: 0;
+}
+
+.neo-fill-body {
+	flex: 1;
+	min-height: 0;
+}
+
+/* Agent swatch */
+.neo-agent-swatch {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	font-size: 12.5px;
+	font-weight: 500;
+	color: rgb(var(--ink));
+}
+
+.neo-agent-swatch > i {
+	width: var(--swatch, 10px);
+	height: var(--swatch, 10px);
+	border-radius: 3px;
+	background: var(--agent);
+	flex: none;
+}
+
+/* Model picker */
+.neo-picker {
+	position: relative;
+	display: inline-flex;
+}
+
+.neo-picker > .neo-chip {
+	height: 26px;
+	gap: 5px;
+	padding: 0 7px 0 9px;
+	font-family: var(--font-mono);
+	font-size: 11.5px;
+	font-weight: 500;
+	cursor: pointer;
+	max-width: 260px;
+}
+
+.neo-picker > .neo-chip[data-size="sm"] {
+	height: 24px;
+}
+
+.neo-picker-value {
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.neo-picker-sheet {
+	position: absolute;
+	left: 0;
+	top: calc(100% + 6px);
+	z-index: 60;
+	width: 340px;
+	max-height: 440px;
+	overflow-y: auto;
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	padding: 10px;
+	border-radius: var(--r-card);
+	border: 1px solid var(--neo-line-3);
+	background: color-mix(in srgb, var(--neo-panel) 94%, transparent);
+	backdrop-filter: blur(14px);
+	box-shadow: var(--neo-shadow-2);
+	animation: neo-rise var(--dur-2) var(--ease-out) both;
+}
+
+.neo-picker-sheet[data-above] {
+	top: auto;
+	bottom: calc(100% + 6px);
+}
+
+.neo-picker-row {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.neo-picker-label {
+	display: flex;
+	align-items: baseline;
+	gap: 8px;
+	font-size: 11.5px;
+	font-weight: 500;
+	color: rgb(var(--ink-3));
+}
+
+.neo-picker-hint {
+	font-weight: 400;
+	color: rgb(var(--ink-4));
+}
+
+.neo-picker-chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 5px;
+}
+
+.neo-picker-chips .neo-chip-btn[data-mono] {
+	font-family: var(--font-mono);
+	font-size: 11px;
+}
+
+.neo-picker-group {
+	width: 100%;
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.neo-picker-group-head {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	width: 100%;
+	height: 26px;
+	padding: 0 6px;
+	border-radius: var(--r-chip);
+	font-size: 12.5px;
+	color: rgb(var(--ink-2));
+	text-align: left;
+	cursor: pointer;
+}
+
+.neo-picker-group-head:hover {
+	background: var(--neo-hover);
+	color: rgb(var(--ink));
+}
+
+.neo-picker-group[data-open="true"] .neo-picker-group-head {
+	color: rgb(var(--ink));
+}
+
+.neo-picker-group .neo-picker-chips {
+	padding: 0 0 4px 22px;
+}
+
+.neo-picker-count {
+	margin-left: auto;
+	font-family: var(--font-mono);
+	font-size: 11px;
+	color: rgb(var(--ink-4));
+}
+
+.neo-picker-note {
+	font-size: 12.5px;
+	color: rgb(var(--ink-3));
+}
+
+/* Composer: 116 px, always. */
+.neo-composer {
+	display: grid;
+	grid-template-rows: minmax(0, 1fr) 36px;
+	height: 116px;
+	flex: none;
+	border-top: 1px solid var(--neo-line-2);
+	background: var(--neo-panel);
+}
+
+.neo-composer-text {
+	width: 100%;
+	min-height: 0;
+	resize: none;
+	padding: 10px 16px 4px;
+	border: 0;
+	background: transparent;
+	font: inherit;
+	font-size: 13.5px;
+	line-height: 20px;
+	color: rgb(var(--ink));
+	outline: none;
+}
+
+.neo-composer-text::placeholder {
+	color: rgb(var(--ink-3));
+}
+
+.neo-composer-bar {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 0 10px 0 12px;
+}
+
+.neo-composer-spacer {
+	flex: 1;
+}
+
+.neo-composer-target {
+	height: 24px;
+	gap: 6px;
+	padding: 0 9px 0 8px;
+	cursor: pointer;
+	font-weight: 500;
+	color: rgb(var(--ink));
+}
+
+.neo-composer-arrow {
+	color: rgb(var(--ink-3));
+}
+
+.neo-composer-dot {
+	width: 9px;
+	height: 9px;
+	border-radius: 3px;
+	background: var(--agent);
+}
+
+.neo-composer-hint {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	font-size: 11.5px;
+	color: rgb(var(--ink-4));
+}
+
+.neo-composer-note {
+	font-size: 12px;
+	color: rgb(var(--warn));
+}
+
+.neo-composer-listening {
+	position: absolute;
+	top: 4px;
+	right: 4px;
+	width: 6px;
+	height: 6px;
+	border-radius: 999px;
+	background: rgb(var(--danger));
+	animation: neo-ping 1.2s ease-out infinite;
+}
+
+.neo-composer[data-disabled] {
+	opacity: 0.6;
+}
+
+@media (max-width: 900px) {
+	.neo-split,
+	.neo-split[data-side="true"] {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.neo-split-list {
+		border-right: 0;
+		border-bottom: 1px solid var(--neo-line-2);
+		max-height: 40%;
+	}
+
+	.neo-split-side {
+		display: none;
+	}
+}

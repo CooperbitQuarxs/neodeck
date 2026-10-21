@@ -7,23 +7,68 @@
  */
 export type Source = "live" | "preview";
 
-export type Domain = "auth" | "accounts" | "inbox" | "classifier" | "board" | "threads" | "agents" | "judge" | "studio" | "knowledge" | "skills" | "github" | "usage" | "providers";
+export type Domain =
+	| "auth"
+	| "accounts"
+	| "inbox"
+	| "classifier"
+	| "board"
+	| "boardEvidence"
+	| "threads"
+	| "threadAgents"
+	| "models"
+	| "dictation"
+	| "agents"
+	| "judge"
+	| "studio"
+	| "studioGraphs"
+	| "knowledge"
+	| "knowledgeHistory"
+	| "skills"
+	| "github"
+	| "usage"
+	| "providers"
+	| "settings"
+	| "env"
+	| "npiConfig"
+	| "integrations";
 
 export const SOURCES: Readonly<Record<Domain, Source>> = {
 	auth: "preview",
 	accounts: "preview",
 	inbox: "live",
 	classifier: "preview",
+	/** Cards, columns, moves, assignment: the deck's tasks API. */
 	board: "live",
+	/** The evidence timeline, origin and flow chip on a card. */
+	boardEvidence: "preview",
+	/** Sessions and transcripts: the deck's websocket store. */
 	threads: "live",
+	/** Several agents in one thread, their colours, the composer target. */
+	threadAgents: "preview",
+	/** The model catalogue behind the picker: `/api/models` plus role mapping. */
+	models: "live",
+	dictation: "preview",
 	agents: "preview",
 	judge: "preview",
+	/** Flows are routines: `/api/routines` and the native graph. */
 	studio: "live",
+	/** Pipelines, routers, classifiers, board flows. */
+	studioGraphs: "preview",
 	knowledge: "live",
+	knowledgeHistory: "preview",
 	skills: "live",
 	github: "preview",
 	usage: "preview",
 	providers: "preview",
+	/** Engine, workspaces, notifications, appearance: existing settings endpoints. */
+	settings: "live",
+	/** Managed environment: `/api/settings/env`. */
+	env: "live",
+	/** The raw NeoPi config: `/api/npi-config`. */
+	npiConfig: "live",
+	/** MCP servers and bridges: existing endpoints. GitHub app is preview. */
+	integrations: "live",
 };
 
 export function isPreview(...domains: Domain[]): boolean {
