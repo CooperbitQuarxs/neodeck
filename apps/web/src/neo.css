@@ -1967,6 +1967,10 @@ select.neo-input {
 	position: fixed;
 }
 
+.neo-drawer:focus {
+	outline: none;
+}
+
 .neo-drawer-titles {
 	flex: 1;
 	min-width: 0;
