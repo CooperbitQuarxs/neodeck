@@ -68,8 +68,8 @@ function PickerSheet({ catalog, value, above, onPick }: { catalog: PickerCatalog
 
 	const needle = q.trim().toLowerCase();
 	const match = (s: string) => needle === "" || s.toLowerCase().includes(needle);
-	const recent = useMemo(() => recentPicks().filter(match), [needle]);
 	const admin = account?.role === "admin";
+	const recent = useMemo(() => recentPicks().filter(match).filter(value => admin || !catalog?.providers.some(provider => provider.hidden && provider.models.some(model => model.value === value))), [needle, admin, catalog]);
 
 	const roles = catalog?.roles.filter((r) => match(r.name) || match(r.resolves ?? "")) ?? [];
 	const virtual = catalog?.virtual.filter((v) => match(v.name) || match(v.chain)) ?? [];

@@ -14,7 +14,7 @@ import { threads, useThreadsRevision, type ThreadMessage, type ThreadSummary, ty
 import { AgentSwatch } from "../components/AgentSwatch";
 import { ALL_TARGETS, Composer } from "../components/Composer";
 import { PreviewChip } from "../components/PreviewChip";
-import { ThreadSpawnAgentDrawer } from "../components/SpawnAgentDrawer";
+import { ThreadSpawnAgentDrawer } from "./threads/ThreadSpawnAgentDrawer";
 import { NAV_ITEMS } from "../nav";
 import { Transcript } from "./threads/Transcript";
 
