@@ -23,4 +23,9 @@
 .neo-settings-advanced-value { display: block; width: 100%; min-width: 160px; max-width: 360px; text-align: left; white-space: pre-wrap; overflow-wrap: anywhere; color: rgb(var(--ink-2)); font-family: var(--font-mono, ui-monospace, monospace); font-size: 12px; border-radius: 6px; padding: 4px; }
 .neo-settings-advanced-value:hover { background: var(--neo-hover); }
 .neo-settings-advanced-value:focus-visible { outline: 1px solid var(--neo-accent-a); }
+.neo-settings-advanced-env-label { gap: 4px; }
+.neo-settings-advanced-env-description { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11.5px; line-height: 16px; }
+.neo-settings-advanced-env-value-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.neo-settings-advanced-env-value-row > .neo-settings-advanced-value { flex: 1; min-width: 0; max-width: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; overflow-wrap: normal; }
+.neo-settings-advanced-env-value-row > .neo-btn { flex-shrink: 0; }
 @media (max-width: 1000px) { .neo-settings-advanced-setting { grid-template-columns: minmax(0, 1fr); gap: 12px; } .neo-settings-advanced-heading { flex-wrap: wrap; } }

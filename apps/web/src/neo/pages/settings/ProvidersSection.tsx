@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import type { EnvEntry, ProviderInfo } from "@npi-deck/protocol";
-import { Card, NeoBadge, NeoButton, Notice, SectionLabel, Table, type Column } from "@/components/neo";
+import { Card, Empty, NeoBadge, NeoButton, Notice, SectionLabel, Table, type Column } from "@/components/neo";
 import { settings } from "../../client/settings";
 import { ExposureTable } from "../UsagePage";
 import { OAuthFlow } from "./OAuthFlow";
@@ -32,5 +32,18 @@ export function ProvidersSection({admin}:{admin:boolean}){
   }catch(e){setNotice(String(e));}finally{setBusy(false);}
  }
  const columns:Column<ProviderRow>[]=[{key:"name",header:"Provider",render:p=>p.name},{key:"kind",header:"Auth",render:p=><NeoBadge>{p.oauth?.state==="oauth"?"OAuth":p.env?"API key":"OAuth"}</NeoBadge>},{key:"status",header:"Status",render:p=><span className="neo-settings-description">{p.oauth?.state==="oauth"?`Signed in${p.oauth.count>1?` · ${p.oauth.count} accounts`:""}`:p.env?.isSet||p.oauth?.state==="api-key"?"Key set":"Not configured"}</span>},{key:"actions",header:"",align:"right",render:p=>editing===p.id?<div className="neo-settings-actions"><input aria-label={`API key for ${p.name}`} className="neo-input" type="password" autoComplete="off" value={key} onChange={e=>setKey(e.target.value)}/><NeoButton size="sm" disabled={busy||!key.trim()} onClick={()=>void save(p)}>Save</NeoButton><NeoButton size="sm" variant="ghost" onClick={()=>{setEditing("");setKey("");}}>Cancel</NeoButton></div>:<div className="neo-settings-actions">{p.oauth&&<NeoButton size="sm" disabled={busy} onClick={()=>setOauth(p)}>Sign in</NeoButton>}{p.env&&<NeoButton size="sm" variant="ghost" disabled={busy} onClick={()=>{setEditing(p.id);setKey("");}}>Set key</NeoButton>}{(p.oauth?.state==="oauth"||p.env?.isSet)&&<NeoButton variant="ghost" size="sm" disabled={busy} onClick={()=>void signOut(p)}>Sign out</NeoButton>}</div>}];
- return <Card id="providers" title="Providers" description="Sign in to a provider or save an API key." flush><div className="neo-settings-stack">{notice&&<Notice>{notice}</Notice>}<Table columns={columns} rows={rows} rowKey={p=>p.id}/>{admin&&<div className="neo-settings-inset"><SectionLabel>Exposure</SectionLabel><ExposureTable/></div>}</div><OAuthFlow provider={oauth} onClose={()=>setOauth(null)} onComplete={()=>{setNotice("Saved. Provider signed in.");void refresh();}}/></Card>;
+ const configured = (provider:ProviderRow) => provider.oauth?.state==="oauth" || provider.oauth?.state==="api-key" || provider.env?.isSet===true;
+ const otherProviders = rows.filter(provider=>!configured(provider));
+ return <Card id="providers" title="Providers" description="Sign in to a provider or save an API key." flush>
+  <div className="neo-settings-stack">
+   {notice&&<Notice>{notice}</Notice>}
+   <Table columns={columns} rows={rows.filter(configured)} rowKey={provider=>provider.id} empty={<Empty title="No providers configured" hint="Open Other providers to sign in or set an API key."/>}/>
+   {otherProviders.length>0&&<details className="neo-settings-other-providers">
+    <summary>Other providers ({otherProviders.length})</summary>
+    <Table columns={columns} rows={otherProviders} rowKey={provider=>provider.id}/>
+   </details>}
+   {admin&&<div className="neo-settings-inset"><SectionLabel>Exposure</SectionLabel><ExposureTable/></div>}
+  </div>
+  <OAuthFlow provider={oauth} onClose={()=>setOauth(null)} onComplete={()=>{setNotice("Saved. Provider signed in.");void refresh();}}/>
+ </Card>;
 }
