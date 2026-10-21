@@ -7,6 +7,7 @@ All notable changes to NPI deck (a fork of bjb2/omp-deck; entries before the for
 
 ### Added
 
+- Knowledge now has a searchable note tree, a linked Markdown reader, and a map toggled with M. Follow backlinks, browse recent notes, or ask an agent to change a note in a prefilled thread.
 - Threads now groups conversations by attention, opens real session transcripts, and keeps each agent's colour and message target visible. Preview threads support several primary agents, removable spawn restrictions, folded tools and spawned-agent depth, and remain available when live sessions cannot load.
 - Usage shows each account's virtual-model budgets, demotion stages, spend history and searchable requests, with shared provider visibility controls.
 - Settings has a fixed section index, live engine/provider/model controls, account drawers and an admin-only Advanced editor for environment variables, NeoPi settings and diagnostics.
