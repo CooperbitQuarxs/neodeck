@@ -1,0 +1,86 @@
+.neo-agents { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 16px; min-height: 0; }
+.neo-agents-left { overflow-y: auto; min-width: 0; min-height: 0; padding-right: 2px; display: flex; flex-direction: column; gap: 16px; }
+.neo-agents-left > * { flex-shrink: 0; }
+.neo-agents .neo-stat-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.neo-agents .neo-stat { padding: 14px; }
+.neo-agents .neo-stat-foot { font-size: 11.5px; }
+.neo-agents-toolbar { margin: 0; gap: 8px; }
+.neo-agents-toolbar .neo-search { flex: 1; min-width: 140px; }
+.neo-agents-toolbar .neo-select { max-width: 150px; }
+.neo-agents-roster .neo-table { font-size: 12px; }
+.neo-agents-roster .neo-table th, .neo-agents-roster .neo-table td { padding-left: 10px; padding-right: 10px; }
+.neo-agents-identity { display: flex; flex-direction: column; gap: 3px; min-width: 110px; max-width: 180px; }
+.neo-agents-template-name { color: rgb(var(--ink-3)); font-size: 11.5px; padding-left: 17px; }
+.neo-agents-model { font-size: 11.5px; display: block; max-width: 155px; overflow: hidden; text-overflow: ellipsis; }
+.neo-agents-where { display: inline-flex; align-items: center; gap: 5px; color: rgb(var(--ink-2)); max-width: 140px; text-decoration: none; }
+.neo-agents-where > svg { flex: none; }
+.neo-agents-where > span { text-overflow: ellipsis; overflow: hidden; white-space: nowrap; }
+.neo-agents-where:hover, .neo-agents-studio:hover { color: rgb(var(--ink)); }
+.neo-agents-owner { display: inline-flex; align-items: center; gap: 5px; color: rgb(var(--ink-2)); }
+.neo-agents-chips { display: flex; flex-wrap: wrap; gap: 5px; }
+.neo-agents-chips .neo-chip-btn { display: inline-flex; align-items: center; white-space: normal; height: auto; min-height: 22px; padding: 3px 6px; gap: 5px; font-size: 11.5px; text-align: left; }
+.neo-agents-chips .neo-chip-btn > svg { flex: none; }
+.neo-agents-template-line { display: flex; align-items: center; gap: 5px; }
+.neo-agents-row-restrictions .neo-agents-chips { flex-wrap: nowrap; gap: 3px; }
+.neo-agents-row-restrictions .neo-chip-btn { font-size: 0; min-height: 16px; padding: 2px; gap: 0; white-space: nowrap; color: rgb(var(--ink-3)); }
+.neo-agents-templates > .neo-section-label { margin-bottom: 10px; }
+.neo-agents-templates .neo-grid-3 { display: grid; gap: 10px; }
+.neo-agents-template-card { display: flex; flex-direction: column; }
+.neo-agents-template-card > .neo-card-header { padding: 14px 14px 10px; }
+.neo-agents-template-card .neo-card-description { font-size: 12px; line-height: 1.5; min-height: 54px; }
+.neo-agents-template-card > .neo-card-body { padding: 0 14px 14px; flex: 1; display: flex; flex-direction: column; gap: 12px; }
+.neo-agents-template-card > .neo-card-footer { padding: 8px; justify-content: space-between; gap: 4px; }
+.neo-agents-template-card > .neo-card-footer .neo-btn { font-size: 11.5px; padding: 0 7px; }
+.neo-agents-template-model { color: rgb(var(--ink-3)); font-size: 11.5px; }
+.neo-agents-studio { display: inline-flex; align-items: center; gap: 6px; margin: 14px 0 4px; color: rgb(var(--ink-3)); font-size: 12px; text-decoration: none; }
+.neo-agents-judge { display: flex; flex-direction: column; min-height: 0; }
+.neo-agents-judge > .neo-card-header { align-items: flex-start; padding: 16px; }
+.neo-agents-judge .neo-card-description { max-width: 27ch; line-height: 1.5; }
+.neo-agents-judge > .neo-card-body { display: flex; flex-direction: column; min-height: 0; flex: 1; }
+.neo-agents-watching { display: inline-flex; gap: 5px; align-items: center; white-space: nowrap; font-size: 11px; color: rgb(var(--ink-3)); }
+.neo-agents-judge-toolbar { display: flex; flex-direction: column; align-items: stretch; gap: 10px; padding: 0 16px 14px; border-bottom: 1px solid var(--neo-line-1); }
+.neo-agents-judge-toolbar .neo-segmented { align-self: flex-start; }
+.neo-agents-judge-toolbar .neo-num { margin-left: 3px; color: rgb(var(--ink-3)); }
+.neo-judge-feed { min-height: 0; overflow-y: auto; flex: 1; }
+.neo-agents-event { display: grid; grid-template-columns: 15px 36px minmax(0, 1fr); column-gap: 8px; padding: 16px 14px; border-bottom: 1px solid var(--neo-line-1); }
+.neo-agents-event-glyph { margin-top: 2px; color: rgb(var(--ink-3)); }
+.neo-agents-event[data-tone="warn"] .neo-agents-event-glyph { color: rgb(var(--warn)); }
+.neo-agents-event[data-tone="bad"] .neo-agents-event-glyph { color: rgb(var(--danger)); }
+.neo-agents-event[data-tone="ok"] .neo-agents-event-glyph { color: rgb(var(--success)); }
+.neo-agents-event-time { text-align: right; font-size: 11px; color: rgb(var(--ink-3)); line-height: 20px; }
+.neo-agents-event-title { font-size: 12px; line-height: 1.5; color: rgb(var(--ink-3)); }
+.neo-agents-event-title strong { font-weight: 500; color: rgb(var(--ink-2)); }
+.neo-agents-event-text { color: rgb(var(--ink-2)); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; font-size: 12.5px; line-height: 1.6; margin-top: 5px; width: 100%; text-align: left; cursor: pointer; }
+.neo-agents-event-text[data-expanded="true"] { -webkit-line-clamp: unset; }
+.neo-agents-event-text:focus-visible { outline: 1px solid var(--neo-focus); outline-offset: 3px; border-radius: var(--r-chip); }
+.neo-agents-event-body > .neo-btn { margin-top: 8px; }
+.neo-agents-judge > .neo-card-footer { display: flex; justify-content: space-between; align-items: center; gap: 6px; padding: 12px 14px; font-size: 11.5px; color: rgb(var(--ink-3)); }
+.neo-agents-judge > .neo-card-footer .neo-agents-note { display: block; margin-top: 3px; }
+.neo-agents-stack { display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
+.neo-agents-drawer-stack { display: flex; flex-direction: column; gap: 26px; }
+.neo-agents-drawer-stack .neo-section-label { margin-bottom: 12px; }
+.neo-agents-note { font-size: 12px; color: rgb(var(--ink-3)); line-height: 1.6; }
+.neo-agents-drawer-stack section > .neo-agents-note { margin-top: 10px; }
+.neo-agents-field { display: flex; flex-direction: column; gap: 9px; font-size: 12px; color: rgb(var(--ink-3)); }
+.neo-agents-field .neo-input { width: 100%; color: rgb(var(--ink)); }
+.neo-agents-textarea { height: auto; padding: 10px; resize: vertical; }
+.neo-agents-state { display: flex; gap: 10px; align-items: flex-start; font-size: 12.5px; color: rgb(var(--ink-2)); line-height: 1.6; }
+.neo-agents-state > .neo-badge { flex-shrink: 0; }
+.neo-agents-open-thread { margin-top: 12px; }
+.neo-agents-restriction-form { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; }
+.neo-agents-restriction-form > input { flex: 1; min-width: 150px; }
+.neo-agents-template-options { display: flex; flex-direction: column; gap: 6px; }
+.neo-agents-template-option { border: 1px solid var(--neo-line-2); border-radius: var(--r-control); padding: 10px 12px; }
+.neo-agents-template-option[data-selected="true"] { background: var(--neo-selected); border-color: var(--neo-line-4); }
+.neo-agents-template-option > button { display: flex; text-align: left; align-items: flex-start; gap: 10px; width: 100%; }
+.neo-agents-template-option strong { display: block; font-size: 13px; font-weight: 500; color: rgb(var(--ink)); }
+.neo-agents-template-option .neo-agents-note { display: block; font-size: 11.5px; margin-top: 3px; }
+.neo-agents-template-option .neo-agents-chips { margin: 10px 0 0 24px; }
+.neo-agents-radio { width: 13px; height: 13px; flex-shrink: 0; border: 1px solid var(--neo-line-4); border-radius: var(--r-pill); margin-top: 3px; }
+.neo-agents-template-option[data-selected="true"] .neo-agents-radio { border: 4px solid rgb(var(--accent)); }
+.neo-agents-hues { display: flex; align-items: center; gap: 8px; }
+.neo-agents-hue { display: flex; align-items: center; justify-content: center; width: 30px; height: 30px; border: 1px solid transparent; border-radius: var(--r-control); }
+.neo-agents-hue[data-selected="true"] { border-color: var(--neo-line-4); background: var(--neo-selected); }
+.neo-agents-hues > .neo-agent-swatch { margin-left: 8px; }
+@media (max-width: 1200px) { .neo-agents { grid-template-columns: minmax(0, 1fr) 320px; } .neo-agents-templates .neo-grid-3 { grid-template-columns: repeat(2, minmax(0,1fr)); } .neo-agents .neo-stat { padding: 12px 10px; } .neo-agents .neo-stat-foot { min-height: 32px; } }
+@media (max-width: 900px) { .neo-agents { grid-template-columns: minmax(0,1fr); overflow-y: auto; } .neo-agents-left { overflow-y: visible; } .neo-agents-judge { min-height: 500px; } .neo-agents .neo-stat-grid { grid-template-columns: repeat(2,minmax(0,1fr)); } }
