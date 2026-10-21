@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { createBrowserRouter, Outlet, RouterProvider, useLocation, useNavigate } from "react-router-dom";
+import { createBrowserRouter, Navigate, Outlet, RouterProvider, useLocation, useNavigate } from "react-router-dom";
 import { ChatView } from "./views/ChatView";
 import { TasksView } from "./views/TasksView";
 import { RoutinesView } from "./views/RoutinesView";
@@ -16,6 +16,12 @@ import { MixturesView } from "./views/MixturesView";
 import { HomeView } from "./views/HomeView";
 import { FlowsView, GitHubView, NeoPiView, PeopleView, TelegramView } from "./views/PlannedViews";
 import { onboardingApi } from "./lib/onboarding-api";
+import { Shell, useDeckBootstrap } from "./neo/Shell";
+import { useAccount } from "./neo/client/auth";
+import { LoginPage } from "./neo/pages/LoginPage";
+import { InboxPage } from "./neo/pages/InboxPage";
+import { PlacePage } from "./neo/pages/PlacePage";
+import { NAV_ITEMS } from "./neo/nav";
 
 /**
  * First-paint redirect: if the server reports `needsOnboarding`, route
@@ -33,12 +39,12 @@ function OnboardingGate() {
 	useEffect(() => {
 		if (checked.current) return;
 		checked.current = true;
-		if (location.pathname !== "/") return; // user explicitly navigated; respect that
+		if (location.pathname !== "/legacy") return; // user explicitly navigated; respect that
 		void onboardingApi
 			.state()
 			.then((state) => {
-				if (currentPath.current !== "/") return;
-				if (state.needsOnboarding) navigate("/onboarding", { replace: true });
+				if (currentPath.current !== "/legacy") return;
+				if (state.needsOnboarding) navigate("/legacy/onboarding", { replace: true });
 			})
 			.catch(() => {
 				// State endpoint failed — don't block the app. Onboarding can be
@@ -48,30 +54,58 @@ function OnboardingGate() {
 	return <Outlet />;
 }
 
+/** The new deck sits behind the login gate; the store boots once inside it. */
+function RequireAuth() {
+	const account = useAccount();
+	const location = useLocation();
+	if (account === undefined) return null;
+	if (account === null) return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+	return <Booted />;
+}
+
+function Booted() {
+	useDeckBootstrap();
+	return <Shell />;
+}
+
+const PLACE_PAGES: Record<string, JSX.Element> = { "/inbox": <InboxPage /> };
+
 const router = createBrowserRouter([
+	{ path: "/login", element: <LoginPage /> },
+	{
+		element: <RequireAuth />,
+		children: [
+			{ path: "/", element: <Navigate to="/inbox" replace /> },
+			...NAV_ITEMS.map((item) => ({ path: `${item.to}/*`, element: PLACE_PAGES[item.to] ?? <PlacePage item={item} /> })),
+			{ path: "/chat", element: <Navigate to="/threads" replace /> },
+			{ path: "/tasks", element: <Navigate to="/board" replace /> },
+			{ path: "/kb", element: <Navigate to="/knowledge" replace /> },
+			{ path: "/routines", element: <Navigate to="/studio" replace /> },
+		],
+	},
 	{
 		element: <OnboardingGate />,
 		children: [
-			{ path: "/", element: <HomeView /> },
-			{ path: "/threads", element: <ChatView /> },
-			{ path: "/chat", element: <ChatView /> },
-			{ path: "/flows", element: <FlowsView /> },
-			{ path: "/github", element: <GitHubView /> },
-			{ path: "/telegram", element: <TelegramView /> },
-			{ path: "/neopi", element: <NeoPiView /> },
-			{ path: "/people", element: <PeopleView /> },
-			{ path: "/tasks", element: <TasksView /> },
-			{ path: "/routines", element: <RoutinesView /> },
-			{ path: "/routines/:id/runs/:runId", element: <RunDetailView /> },
-			{ path: "/inbox", element: <InboxView /> },
-			{ path: "/marketplace", element: <MarketplaceView /> },
-			{ path: "/skills", element: <SkillsView /> },
-			{ path: "/kb", element: <KbView /> },
-			{ path: "/integrations", element: <IntegrationsView /> },
-			{ path: "/advisors", element: <AdvisorsView /> },
-			{ path: "/mixtures", element: <MixturesView /> },
-			{ path: "/settings", element: <SettingsView /> },
-			{ path: "/onboarding", element: <OnboardingView /> },
+			{ path: "/legacy", element: <HomeView /> },
+			{ path: "/legacy/threads", element: <ChatView /> },
+			{ path: "/legacy/chat", element: <ChatView /> },
+			{ path: "/legacy/flows", element: <FlowsView /> },
+			{ path: "/legacy/github", element: <GitHubView /> },
+			{ path: "/legacy/telegram", element: <TelegramView /> },
+			{ path: "/legacy/neopi", element: <NeoPiView /> },
+			{ path: "/legacy/people", element: <PeopleView /> },
+			{ path: "/legacy/tasks", element: <TasksView /> },
+			{ path: "/legacy/routines", element: <RoutinesView /> },
+			{ path: "/legacy/routines/:id/runs/:runId", element: <RunDetailView /> },
+			{ path: "/legacy/inbox", element: <InboxView /> },
+			{ path: "/legacy/marketplace", element: <MarketplaceView /> },
+			{ path: "/legacy/skills", element: <SkillsView /> },
+			{ path: "/legacy/kb", element: <KbView /> },
+			{ path: "/legacy/integrations", element: <IntegrationsView /> },
+			{ path: "/legacy/advisors", element: <AdvisorsView /> },
+			{ path: "/legacy/mixtures", element: <MixturesView /> },
+			{ path: "/legacy/settings", element: <SettingsView /> },
+			{ path: "/legacy/onboarding", element: <OnboardingView /> },
 		],
 	},
 ]);
