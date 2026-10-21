@@ -1,7 +1,36 @@
+import "./skills.css";
+import { useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
+import { Plus, RefreshCw, Sparkles } from "lucide-react";
+import type { ListMarketplaceResponse, MarketplaceUpdatesResponse, SkillSummary } from "@npi-deck/protocol";
+import { AsyncView, Card, Check, Dot, Empty, ErrorState, formatShortRelative, LabelCell, NeoButton, NeoBadge, NeoSelect, Page, PageHeader, SearchInput, Table, Tabs, Toolbar } from "@/components/neo";
+import { useStore } from "@/lib/store";
+import { skills, skillUsage, type SkillUsage } from "../client/skills";
+import { PreviewChip } from "../components/PreviewChip";
 import { NAV_ITEMS } from "../nav";
-import { PlacePage } from "./PlacePage";
+import { Marketplace, Sources } from "./skills/Marketplace";
+import { NewSkillDrawer, SkillDrawer } from "./skills/SkillDrawers";
 
-/** Skills: designed in docs/design/neodeck-architecture.md §4; built in its own pull request. */
+type Tab = "installed" | "marketplace" | "sources";
+const nav = NAV_ITEMS.find((i) => i.to === "/skills")!;
 export function SkillsPage() {
-	return <PlacePage item={NAV_ITEMS.find((i) => i.to === "/skills")!} />;
+	const [items, setItems] = useState<SkillSummary[] | null>(null); const [market, setMarket] = useState<ListMarketplaceResponse | null>(null);
+	const [usage, setUsage] = useState<Record<string, SkillUsage>>({}); const [error, setError] = useState<string | null>(null);
+	const [tab, setTab] = useState<Tab>("installed"); const [q, setQ] = useState(""); const [provider, setProvider] = useState("all"); const [scope, setScope] = useState("all"); const [enabled, setEnabled] = useState(false);
+	const [creating, setCreating] = useState(false); const [updates, setUpdates] = useState<MarketplaceUpdatesResponse | null>(null); const [notice, setNotice] = useState<string | null>(null); const [busy, setBusy] = useState(false);
+	const [params, setParams] = useSearchParams(); const counter = useStore((s) => s.skillsChangeCounter);
+	const refresh = useCallback(async () => { try { const [result, catalog, cached] = await Promise.all([skills.list(), skills.marketplace(), skills.updates()]); setItems(result.skills); setMarket(catalog); setUpdates(cached); setUsage(await skillUsage(result.skills.map((s) => s.id))); setError(null); } catch (e) { setError(`Could not load skills. ${String(e)}`); } }, []);
+	useEffect(() => { void refresh(); }, [refresh, counter]);
+	async function act(fn: () => Promise<unknown>): Promise<boolean> { setBusy(true); setError(null); try { await fn(); await refresh(); return true; } catch (e) { setError(`The change was not saved. ${String(e)}`); return false; } finally { setBusy(false); } }
+	async function checkUpdates() { setBusy(true); setTab("marketplace"); setError(null); try { const result = await skills.updates(true); setUpdates(result); setNotice(result.updates.length ? `${result.updates.length} plugin update${result.updates.length === 1 ? " is" : "s are"} available. Choose Upgrade on a plugin to install it.` : "All installed plugins are up to date. Nothing was upgraded."); } catch (e) { setError(`Could not check for updates. ${String(e)}`); } finally { setBusy(false); } }
+	function select(name: string | null) { setParams((prev) => { const next = new URLSearchParams(prev); if (name) next.set("skill", name); else next.delete("skill"); return next; }); }
+	const open = items?.find((s) => s.name === params.get("skill"));
+	const visible = (items ?? []).filter((s) => (provider === "all" || s.provider === provider) && (scope === "all" || s.level === scope) && (!enabled || s.enabled) && `${s.name} ${s.dirName} ${s.frontmatter.description ?? ""} ${(s.frontmatter.tags ?? []).join(" ")}`.toLowerCase().includes(q.toLowerCase()));
+	return <div className="h-full overflow-y-auto"><Page className="neo-skills-page"><PageHeader title={nav.label} description={nav.blurb} badge={<PreviewChip domains={["skills", "skillsUsage"]} what="Last-used timestamps" />} actions={<><NeoButton variant="ghost" onClick={() => void checkUpdates()} disabled={busy}><RefreshCw size={14} />{busy ? "Working…" : "Check for updates"}</NeoButton><NeoButton variant="primary" onClick={() => setCreating(true)}><Plus size={14} />New skill</NeoButton></>} />
+		{error ? <ErrorState error={error} onRetry={() => void refresh()} /> : null}<Card flush><Tabs label="Skills" value={tab} onChange={setTab} options={[{ value: "installed", label: "Installed", count: items?.length ?? "–" }, { value: "marketplace", label: "Marketplace", count: market?.catalog.length ?? "–" }, { value: "sources", label: "Sources", count: market?.sources.length ?? "–" }]} />
+		{tab === "installed" ? <><Toolbar end={<Check checked={enabled} onChange={setEnabled}>Enabled only</Check>}><SearchInput value={q} onChange={setQ} placeholder="Search installed skills" /><NeoSelect aria-label="Provider" value={provider} onChange={(e) => setProvider(e.target.value)}><option value="all">All providers</option>{[...new Map((items ?? []).map((s) => [s.provider, s.providerLabel])).entries()].map(([id, label]) => <option key={id} value={id}>{label}</option>)}</NeoSelect><NeoSelect aria-label="Scope" value={scope} onChange={(e) => setScope(e.target.value)}><option value="all">All scopes</option><option value="user">User</option><option value="project">Project</option></NeoSelect></Toolbar><AsyncView data={items}>{() => <Table rows={visible} rowKey={(s) => s.id} onRowClick={(s) => select(s.name)} selectedKey={open?.id} empty={<Empty icon={Sparkles} title={items?.length ? "No skills match" : "No installed skills yet"} hint={items?.length ? "Clear the search or choose another provider or scope." : "Create a skill or find one in the marketplace."} />} columns={[
+			{ key: "name", header: "Skill", sort: (s: SkillSummary) => s.name, render: (s: SkillSummary) => <LabelCell primary={s.name} secondary={<span className="neo-mono">{s.dirName}</span>} /> }, { key: "provider", header: "Provider", render: (s: SkillSummary) => <NeoBadge>{s.providerLabel}</NeoBadge> }, { key: "scope", header: "Scope", render: (s: SkillSummary) => s.level }, { key: "enabled", header: "Enabled", render: (s: SkillSummary) => <span className="neo-skills-enabled" title="Enabled state is managed by the owning provider"><Dot tone={s.enabled ? "ok" : undefined} /><span>{s.enabled ? "Yes" : "No"}</span></span> }, { key: "used", header: <span className="neo-skills-used">Last used <PreviewChip domains={["skillsUsage"]} what="Skill usage" /></span>, render: (s: SkillSummary) => <span className="neo-dim neo-mono" title={`${usage[s.id]?.uses7d ?? 0} uses this week`}>{usage[s.id]?.lastUsedAt ? formatShortRelative(usage[s.id]!.lastUsedAt!) : "Never"}</span> }, { key: "description", header: "Description", render: (s: SkillSummary) => <span className="neo-skills-description">{s.frontmatter.description ?? "No description"}</span> },
+		]} />}</AsyncView><p className="neo-skills-foot">Enabled state is managed by each skill’s provider.</p></> : <AsyncView data={market}>{(data) => tab === "marketplace" ? <Marketplace data={data} updates={updates} notice={notice} onSources={() => setTab("sources")} act={act} /> : <Sources data={data} act={act} />}</AsyncView>}
+		</Card>{open ? <SkillDrawer key={open.id} skill={open} onClose={() => select(null)} onChanged={refresh} /> : null}{creating ? <NewSkillDrawer onClose={() => setCreating(false)} onCreated={async (s) => { setCreating(false); setQ(""); setProvider("all"); setScope("all"); setEnabled(false); setTab("installed"); await refresh(); select(s.name); }} /> : null}
+	</Page></div>;
 }

@@ -7,6 +7,8 @@ All notable changes to NPI deck (a fork of bjb2/omp-deck; entries before the for
 
 ### Added
 
+- Skills brings installed skills, marketplace plugins and sources into one page, with SKILL.md drawers, editing, authoring and plugin update checks. Last-used timestamps are marked as preview data.
+- GitHub adds a preview implementation wheel, repository issues and pull requests, review comments, worker assignment and issue filing with an optional live board card.
 - Agents now has a searchable roster, editable restriction templates, spawn and detail drawers, and a judge log with reversible stops. Preview agents sit beside live sessions and their workers.
 - A new deck, designed from scratch: sign in at `/login`, land in the Inbox with the Today strip, and jump between nine places with `G` + a letter; the old deck stays reachable at `/legacy`.
 - **Inbox redesigned as the office's front door** ([#237](https://github.com/PsychedelicShayna/neodeck/issues/237)). One page in the Neo language: Capture opens a slip at the top of the list (title, optional notes, a label), the captured slip lands in the list with its label and opens on the right, and only slips that still need you are shown ("Show settled" brings the rest back). A slip's ways out are explicit: Make a card, Open in a thread, Done. A Private / Shared switch shows the shared office inbox as planned, and the empty reader explains how a slip moves and where slips come from (this deck, Telegram with live bridge status, GitHub issues and dictation as planned). `/inbox?capture=1` from Home opens the slip directly.
