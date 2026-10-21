@@ -140,12 +140,12 @@ export interface LiveAgent {
 const minutesAgo = (m: number) => new Date(Date.now() - m * 60_000).toISOString();
 
 export const PREVIEW_AGENTS: readonly LiveAgent[] = [
-	{ id: "ag_main_anchors", name: "Main", template: "blank", model: "neoproxy/default", where: { kind: "thread", id: "anchors", label: "Fix the broken anchor links in getting-started" }, state: "needs-you", owner: "admin", tokens: 184_000, costUsd: 0.14, since: minutesAgo(192), hue: 190 },
-	{ id: "ag_rev_anchors", name: "Reviewer", template: "advisor", model: "neoproxy/default", where: { kind: "thread", id: "anchors", label: "Fix the broken anchor links in getting-started" }, state: "idle", owner: "admin", tokens: 41_000, costUsd: 0.03, since: minutesAgo(190), hue: 300 },
+	{ id: "ag_main_anchors", name: "Main", template: "blank", model: "neoproxy/default", where: { kind: "thread", id: "preview:anchors", label: "Fix the broken anchor links in getting-started" }, state: "needs-you", owner: "admin", tokens: 184_000, costUsd: 0.14, since: minutesAgo(192), hue: 190 },
+	{ id: "ag_rev_anchors", name: "Reviewer", template: "advisor", model: "neoproxy/default", where: { kind: "thread", id: "preview:anchors", label: "Fix the broken anchor links in getting-started" }, state: "idle", owner: "admin", tokens: 41_000, costUsd: 0.03, since: minutesAgo(190), hue: 300 },
 	{ id: "ag_worker_T5", name: "Worker", template: "worker", model: "neoproxy/heavy", where: { kind: "card", id: "T-5", label: "T-5 Fix anchor links after heading rename" }, state: "working", owner: "lin", tokens: 92_000, costUsd: 0.31, since: minutesAgo(23), hue: 40 },
 	{ id: "ag_worker_T6", name: "Worker", template: "worker", model: "neoproxy/heavy", where: { kind: "card", id: "T-6", label: "T-6 Dark theme toggle" }, state: "working", owner: "ada", tokens: 310_000, costUsd: 1.02, since: minutesAgo(58), hue: 40 },
 	{ id: "ag_judge", name: "Judge", template: "judge", model: "neoproxy/heavy", where: { kind: "routine", id: "judge", label: "every session" }, state: "working", owner: "admin", tokens: 1_240_000, costUsd: 3.9, since: minutesAgo(1440), hue: 150 },
-	{ id: "ag_chron", name: "Chronicler", template: "chronicler", model: "neoproxy/small", where: { kind: "thread", id: "release", label: "Draft 0.5 release notes" }, state: "parked", owner: "admin", tokens: 22_000, costUsd: 0.01, since: minutesAgo(2900), hue: 260 },
+	{ id: "ag_chron", name: "Chronicler", template: "chronicler", model: "neoproxy/small", where: { kind: "thread", id: "preview:release", label: "Draft 0.5 release notes" }, state: "parked", owner: "admin", tokens: 22_000, costUsd: 0.01, since: minutesAgo(2900), hue: 260 },
 	{ id: "ag_warden", name: "Warden", template: "warden", model: "neoproxy/default", where: { kind: "routine", id: "nightly-docs-build", label: "nightly-docs-build" }, state: "parked", owner: "admin", tokens: 8_000, costUsd: 0.01, since: minutesAgo(600), hue: 20 },
 ];
 
