@@ -147,20 +147,34 @@ log**: the watcher's event feed across every session, newest first, with
 
 ### Studio
 
-The promoted canvas. Left list of graphs grouped by kind: **Flows**
-(scheduled routines), **Pipelines** (request → inference → route → output),
-**Routers** (virtual-model chains and fallbacks), **Classifiers**, **Board
-flows** (kanban templates), and **Map** (the knowledge graph, read-only
-here, edited in Knowledge). One canvas, one inspector, one run timeline
-drawer. The node vocabulary changes with the kind; the editor does not.
-Source (TOML/YAML) is a tab, not a different page.
+The promoted canvas. Left list of graphs grouped by kind; one toolbar
+(name, kind, enabled, Canvas / Source / Runs, Run now, Save); one canvas;
+one inspector (320 px, the graph's settings when nothing is selected, the
+node's fields when one is). The node vocabulary changes with the kind; the
+editor does not.
+
+| Kind | What it is | Nodes |
+| --- | --- | --- |
+| Flow | scheduled routines (today's `/api/routines`; the existing builder, embedded) | the builder's steps |
+| Pipeline | request pipelines: event → inference → transform → route → output | `event.*`, `infer.request`, `infer.tidy`, `agent.spawn`, `transform.*`, `route.classify` / `route.if` / `route.fanout`, `out.*` |
+| Router | a NeoProxy virtual model's chain, drawn left to right | `router.entry`, `router.stage` (model, accounts, draw, per-account share, cap per user/window), edges mean demote, `router.terminal` (limit / queue / passthrough) |
+| Classifier | one question to a small model; one output per label | `cls.input`, `cls.ask`, `cls.rule`, `cls.output` |
+| Board flow | a kanban template cards flow through | `bf.column`, `bf.assign`, `bf.gate`, `bf.notify`, `bf.done` |
+| Map | the knowledge map, read-only here | — |
+
+Source is TOML for the new kinds (the owner wants TOML), YAML for flows
+until routines migrate; it is a view, not a different page. Runs render as
+the `/stats` swimlane: lanes are nodes, spans are node runs.
 
 ### Knowledge
 
 Notes on the left (tree with search), the note in the middle, and the map
 toggled with `M` into the right third: the Obsidian-style graph focused on
-the open note, backlinks as a list under it. Agents' edits appear as a
-history line per note.
+the open note (1 hop · 2 hops · whole), backlinks and links out under it,
+and the note's history (who wrote it, from which thread). Humans read;
+agents write: the server refuses human writes by design, so the page's verb
+is **Ask an agent**, which opens a thread with the note path in the draft.
+An unresolved wikilink offers the same.
 
 ### Skills
 
@@ -179,10 +193,13 @@ GitHub app exists.
 
 ### Usage
 
-Your account: quota ring per pool (`neoproxy/default`, `small`, `heavy`),
-what demotion chain applies, spend over time, requests table. Admins see
-every user and can open NeoProxy. Preview data until NeoProxy accounts
-exist.
+Your share of the pools, and what you spent. One card per virtual model
+(`neoproxy/default`, `small`, `heavy`, `live`): a ring of the chain's
+stages (used over allowed) and the chain itself drawn left to right (stage →
+demote → stage → terminal), spend as 14 bars, a requests table. Admins pick
+any account and see the providers table with the "hidden from pickers"
+switch. Vocabulary is NeoProxy's: virtual models, stages, terminal,
+allotment. Preview data until NeoProxy accounts exist.
 
 ### Settings
 
@@ -196,20 +213,25 @@ with inline edit and a restart marker. Advanced is demoted, not exiled.
 
 ## 5. Model selection
 
-No model list. The picker is a 320 px popover with three rows of chips:
-**Roles** (`default`, `small`, `heavy`, …: what the admin mapped for you),
+No model list. The picker is a 340 px sheet anchored to a mono chip, with
+rows of chips: **Recent**, **Roles** (what the admin mapped for you),
 **Virtual models** you may use, and **Providers** as collapsible groups,
-each group listing only the models exposed to you, with a search box that
-filters across all three. Recent picks float to the top row. Everything is
-named `neoproxy/<provider>/<model>` or `neoproxy/<name>`; the current pick
-is printed in the composer bar in mono.
+each group listing only the models exposed to you, with one search that
+filters across all of them. Everything is named `neoproxy/<provider>/<model>`
+or `neoproxy/<name>`; the current pick is printed in the composer bar in
+mono. Hidden providers (admin's choice) stay served and leave the picker for
+members.
+
+The composer is a fixed 116 px region: three lines that scroll, then one
+bar with the target agent (`ctrl+]` / `ctrl+[` cycle, "All" broadcasts),
+the model chip, dictation and send. It never grows.
 
 ## 6. Data: live, preview, and the contract
 
 Every page talks to a typed client in `apps/web/src/neo/client/<domain>.ts`.
 Each client has a **live** adapter (existing deck endpoints) and a
 **preview** adapter (in-memory fixtures). The registry in
-`neo/client/index.ts` chooses per domain; a page whose data comes from a
+`neo/client/source.ts` chooses per domain; a page whose data comes from a
 preview adapter shows the `preview data` chip in its header. Nothing is
 faked into the real backend. The endpoints the preview adapters stand in
 for are specified in `docs/design/backend-contracts.md`.
@@ -218,14 +240,17 @@ for are specified in `docs/design/backend-contracts.md`.
 | --- | --- | --- |
 | auth, accounts | – | users, login, me |
 | inbox | list/create/update/promote | classifier proposal, history |
-| board | tasks, states, runs | flow chip, evidence timeline |
-| threads | sessions, transcript, ws | agents per thread, cycle target |
-| agents | subagents per session | roster across deck, templates, judge log |
-| studio | routines + runs + canvas | pipelines, routers, classifiers, board flows |
-| knowledge | files, graph | history |
-| skills | skills, marketplace | last used |
-| github | – | repos, issues, PRs, wheel |
-| usage | – | pools, rings, chains, spend |
+| board | tasks, states, moves, runs | evidence timeline, origin, holder, links |
+| threads | sessions, transcript, ws, send, abort | agents per thread, colours, cycle target, spawn |
+| models | `/api/models`, model roles | virtual models |
+| dictation | – | transcription (`POST /api/dictation/transcribe`) |
+| agents | live sessions, spawned agents, advisors | roster across deck, templates, judge log |
+| studio | routines + runs + the builder, kb graph | pipelines, routers, classifiers, board flows, runs |
+| knowledge | tree, file, graph, backlinks, search | history |
+| skills | skills, marketplace, sources | last used |
+| github | – | repos, issues, PRs, wheel, file issue |
+| usage | – | virtual models, rings, chains, spend, requests |
+| settings | env, npi config, models, MCP, bridges, workspaces, notifications, engine | accounts, dictation, GitHub app, exposure |
 
 ## 7. Decisions she can reject
 
@@ -239,3 +264,14 @@ for are specified in `docs/design/backend-contracts.md`.
 6. Legacy deck stays mounted at `/legacy` until parity.
 7. Environment variables and raw NeoPi config live under Settings ›
    Advanced, admin only, as key/value tables rather than forms.
+8. Knowledge has no human editor: "Ask an agent" is the write path, because
+   the server already refuses human writes and the vision has agents author
+   notes.
+9. Studio embeds the existing routine builder for Flows instead of
+   re-implementing it; the new canvas serves the other kinds.
+10. Routers in Studio and virtual models in NeoProxy are the same object
+    drawn two ways; NeoDeck's Usage uses NeoProxy's vocabulary (stages,
+    terminal, allotment) so the two pages never disagree.
+11. Agents spawned from a thread live only in the preview adapter until the
+    threads contract (§4) exists; the live deck still has one agent per
+    session.
