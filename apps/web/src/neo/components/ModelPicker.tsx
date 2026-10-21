@@ -23,7 +23,7 @@ export interface ModelPickerProps {
 
 export function ModelPicker({ value, onChange, above, size, className, disabled }: ModelPickerProps) {
 	const [open, setOpen] = useState(false);
-	const catalog = useCatalog();
+	const { catalog, error } = useCatalog();
 	const rootRef = useRef<HTMLDivElement>(null);
 
 	useEffect(() => {
@@ -54,12 +54,12 @@ export function ModelPicker({ value, onChange, above, size, className, disabled 
 				<span className="neo-picker-value">{value}</span>
 				<ChevronDown size={12} />
 			</button>
-			{open ? <PickerSheet catalog={catalog} value={value} above={above} onPick={pick} /> : null}
+			{open ? <PickerSheet catalog={catalog} error={error} value={value} above={above} onPick={pick} /> : null}
 		</div>
 	);
 }
 
-function PickerSheet({ catalog, value, above, onPick }: { catalog: PickerCatalog | undefined; value: string; above?: boolean; onPick: (v: string) => void }) {
+function PickerSheet({ catalog, error, value, above, onPick }: { catalog: PickerCatalog | undefined; error: string | null; value: string; above?: boolean; onPick: (v: string) => void }) {
 	const [q, setQ] = useState("");
 	const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
 	const account = useAccount();
@@ -91,7 +91,9 @@ function PickerSheet({ catalog, value, above, onPick }: { catalog: PickerCatalog
 	return (
 		<div className="neo-picker-sheet" data-above={above || undefined} role="dialog" aria-label="Choose a model" onKeyDown={onKey}>
 			<SearchInput ref={inputRef} value={q} onChange={setQ} placeholder="Role, model or provider" size="sm" />
-			{catalog === undefined ? (
+			{error ? (
+				<div className="neo-picker-note" role="alert">The model catalogue could not load. {error} Reload the page to try again.</div>
+			) : catalog === undefined ? (
 				<div className="neo-picker-note">Loading the catalogue…</div>
 			) : (
 				<>
