@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, spyOn, test, type Mock } from "bun:test";
+import { afterEach, describe, expect, mock, spyOn, test, type Mock } from "bun:test";
 import type { InboxItem } from "@npi-deck/protocol";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { inboxApi } from "../../lib/inbox-api";
@@ -40,6 +40,40 @@ async function capture() {
 }
 
 describe("inbox capture draft", () => {
+	test("opens with title autofocus without focusing the notes textarea", () => {
+		const focusNotes = mock(() => {});
+		act(() => {
+			renderer = create(<ComposePane onClose={() => {}} onCreated={() => {}} />, {
+				createNodeMock: (element) => element.type === "textarea" ? {
+					focus: focusNotes, style: {}, scrollHeight: 240, value: "",
+					setSelectionRange() {},
+				} : null,
+			});
+		});
+		expect(renderer!.root.findByType("input").props.autoFocus).toBe(true);
+		expect(focusNotes).not.toHaveBeenCalled();
+		expect(renderer!.root.findAllByType("textarea")).toHaveLength(1);
+		typeBody("Committed notes");
+		act(() => renderer!.root.findByType("textarea").props.onBlur());
+		act(() => renderer!.root.findAllByType("button").find((button) => button.props.title === "Click to edit")!.props.onClick());
+		expect(focusNotes).toHaveBeenCalledTimes(1);
+	});
+
+	test("keeps empty notes editable after blur and keyboard commit", async () => {
+		const saved = compose();
+		act(() => renderer!.root.findByType("textarea").props.onBlur());
+		expect(renderer!.root.findAllByType("textarea")).toHaveLength(1);
+		typeBody("Temporary notes");
+		typeBody("");
+		act(() => renderer!.root.findByType("textarea").props.onKeyDown({
+			key: "Enter", ctrlKey: true, preventDefault() {},
+		}));
+		expect(renderer!.root.findAllByType("textarea")).toHaveLength(1);
+		typeBody("Notes after returning from the title");
+		await capture();
+		expect(saved[0]?.body).toBe("Notes after returning from the title");
+	});
+
 	test("captures the current markdown without requiring a blur event", async () => {
 		const saved = compose();
 		const body = "## Notes\n\nKeep these details and [this link](https://example.com).";
