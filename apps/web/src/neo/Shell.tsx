@@ -1,27 +1,65 @@
-/**
- * The deck's chassis: glass topbar with the `NeoPi / deck / Page` lockup and
- * the presence row, the naked grouped sidebar, one inset panel. Pages render
- * inside the panel and own their columns; there are no shell-level toggles.
- * See docs/design/neodeck-architecture.md §3.
- */
+/** Shared chrome. Pages own the layout inside the inset panel. */
 import { LogOut, Menu, Mic, Moon, Sun, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { BrandLockup } from "@/components/BrandLockup";
 import { EngineChip } from "@/components/EngineChip";
-import { Kbd, NeoButton } from "@/components/neo";
+import { Kbd, NeoButton, NeoMenu } from "@/components/neo";
 import { useStore } from "@/lib/store";
 import { useTheme } from "@/lib/theme";
-import { cn } from "@/lib/utils";
 import { auth, useAccount } from "./client/auth";
-import { usePresence } from "./client/presence";
 import { Avatar } from "./components/Avatar";
 import { NAV, NAV_ITEMS, navItemForPath } from "./nav";
+import "./shell.css";
+
+const SIDEBAR_KEY = "neodeck.sidebar-collapsed";
 
 export function Shell() {
 	const location = useLocation();
 	const page = navItemForPath(location.pathname)?.label;
 	const [navOpen, setNavOpen] = useState(false);
+	const [collapsed, setCollapsed] = useState(() => {
+		try { return localStorage.getItem(SIDEBAR_KEY) === "true"; } catch { return false; }
+	});
+	const [mobile, setMobile] = useState(() => window.matchMedia("(max-width: 899px)").matches);
+	const toggleRef = useRef<HTMLButtonElement>(null);
+	const navRef = useRef<HTMLElement>(null);
+	const mainRef = useRef<HTMLElement>(null);
+	const dockRef = useRef<HTMLElement>(null);
+	useEffect(() => {
+		const media = window.matchMedia("(max-width: 899px)");
+		const update = () => { setMobile(media.matches); setNavOpen(false); };
+		media.addEventListener("change", update);
+		return () => media.removeEventListener("change", update);
+	}, []);
+	useEffect(() => {
+		try { localStorage.setItem(SIDEBAR_KEY, String(collapsed)); } catch { /* Storage may be unavailable. */ }
+	}, [collapsed]);
+	useEffect(() => {
+		if (!mobile || !navOpen) return;
+		const previousOverflow = document.body.style.overflow;
+		document.body.style.overflow = "hidden";
+		mainRef.current?.setAttribute("inert", "");
+		dockRef.current?.setAttribute("inert", "");
+		navRef.current?.querySelector<HTMLElement>("button, a")?.focus();
+		const trap = (event: KeyboardEvent) => {
+			if (event.key !== "Tab") return;
+			const items = navRef.current?.querySelectorAll<HTMLElement>("a[href], button:not([disabled])");
+			if (!items?.length) return;
+			const first = items[0];
+			const last = items[items.length - 1];
+			if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+			else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+		};
+		document.addEventListener("keydown", trap);
+		return () => {
+			document.body.style.overflow = previousOverflow;
+			mainRef.current?.removeAttribute("inert");
+			dockRef.current?.removeAttribute("inert");
+			document.removeEventListener("keydown", trap);
+			toggleRef.current?.focus();
+		};
+	}, [mobile, navOpen]);
 	useJumpShortcuts();
 	useEffect(() => setNavOpen(false), [location.pathname]);
 	useEffect(() => {
@@ -33,10 +71,10 @@ export function Shell() {
 	}, []);
 
 	return (
-		<div className="relative flex h-full w-full flex-col bg-paper text-ink">
+		<div className="neo-shell relative flex h-full w-full flex-col bg-paper text-ink" data-collapsed={collapsed} data-nav-open={navOpen}>
 			<div className="neo-ambient" />
 			<header className="neo-topbar">
-				<NeoButton variant="ghost" icon className="lg:hidden" onClick={() => setNavOpen(true)} aria-label="Open navigation">
+				<NeoButton ref={toggleRef} variant="ghost" icon onClick={() => mobile ? setNavOpen((open) => !open) : setCollapsed((hidden) => !hidden)} aria-label={mobile ? (navOpen ? "Close navigation" : "Open navigation") : (collapsed ? "Show sidebar" : "Hide sidebar")} aria-expanded={mobile ? navOpen : !collapsed} aria-controls="deck-navigation">
 					<Menu size={16} />
 				</NeoButton>
 				<BrandLockup page={page} />
@@ -50,16 +88,16 @@ export function Shell() {
 				</div>
 			</header>
 
-			<div className="relative flex min-h-0 flex-1">
-				{navOpen ? <button type="button" className="neo-scrim lg:hidden" aria-label="Close navigation" onClick={() => setNavOpen(false)} /> : null}
+			<div className="neo-workspace relative flex min-h-0 flex-1">
+				{mobile && navOpen ? <button type="button" className="neo-scrim" aria-label="Close navigation" tabIndex={-1} onClick={() => setNavOpen(false)} /> : null}
 				<nav
-					className={cn(
-						"neo-sidebar absolute inset-y-0 left-0 z-[70] w-[260px] bg-paper transition-transform duration-200 ease-out lg:static lg:z-30 lg:w-[var(--sidebar-w)] lg:translate-x-0 lg:bg-transparent",
-						navOpen ? "translate-x-0 shadow-[var(--neo-shadow-3)]" : "-translate-x-[102%]",
-					)}
+					id="deck-navigation"
+					ref={navRef}
+					className="neo-sidebar"
+					hidden={mobile ? !navOpen : collapsed}
 					aria-label="Pages"
 				>
-					<div className="flex items-center justify-between px-2 pb-1 lg:hidden">
+					<div className="neo-mobile-nav-heading">
 						<span className="neo-nav-heading pb-0">Pages</span>
 						<NeoButton variant="ghost" icon size="sm" onClick={() => setNavOpen(false)} aria-label="Close navigation">
 							<X size={14} />
@@ -68,11 +106,12 @@ export function Shell() {
 					<SideNav />
 				</nav>
 
-				<main className="neo-panel ml-2 lg:ml-0">
+				<main ref={mainRef} id="deck-content" className="neo-panel">
 					<div className="relative flex min-w-0 flex-1 flex-col">
 						<Outlet />
 					</div>
 				</main>
+				<aside ref={dockRef} id="neo-dock" className="neo-panel neo-dock" aria-label="Inspector" />
 			</div>
 		</div>
 	);
@@ -95,65 +134,46 @@ function SideNav() {
 					))}
 				</div>
 			))}
-			<PresenceFoot />
+			<ShortcutFoot />
 		</>
 	);
 }
 
-/** Footer card: the office at a glance from every page. */
-function PresenceFoot() {
-	const presence = usePresence();
+/** Teach the route chords without duplicating page presence counts. */
+function ShortcutFoot() {
 	return (
-		<div className="neo-sidebar-foot">
-			<Link to="/threads?filter=needs-you" className="flex items-center gap-2 text-ink-2 no-underline hover:text-ink">
-				<span className="neo-dot" data-tone={presence.needsYou > 0 ? "accent" : undefined} data-pulse={presence.needsYou > 0 ? "true" : undefined} />
-				<span className="truncate">
-					{presence.needsYou === 0 ? "Nothing needs you" : `${presence.needsYou} need${presence.needsYou === 1 ? "s" : ""} you`}
-				</span>
-			</Link>
-			<Link to="/agents" className="flex items-center gap-2 text-ink-2 no-underline hover:text-ink">
-				<span className="neo-dot" data-tone={presence.working > 0 ? "live" : undefined} data-pulse={presence.working > 0 ? "true" : undefined} />
-				<span className="truncate">{presence.working === 0 ? "No agents working" : `${presence.working} agent${presence.working === 1 ? "" : "s"} working`}</span>
-			</Link>
+		<div className="neo-sidebar-foot" aria-label="Navigation shortcuts">
 			<div className="flex items-center gap-1">
 				<Kbd>G</Kbd>
 				<span>then a letter to jump</span>
 			</div>
+			<div className="flex items-center justify-between"><span>Inbox</span><Kbd>G I</Kbd></div>
+			<div className="flex items-center justify-between"><span>Threads</span><Kbd>G T</Kbd></div>
+			<div className="flex items-center justify-between"><span>Models</span><Kbd>G M</Kbd></div>
 		</div>
 	);
 }
 
-/** Who is signed in. Opens Usage; the menu holds sign out. */
+/** Signed-in identity and account actions. */
 function AccountChip() {
 	const account = useAccount();
 	const navigate = useNavigate();
-	const [open, setOpen] = useState(false);
 	if (!account) return null;
 	return (
-		<div className="relative">
-			<button type="button" className="neo-chip" onClick={() => setOpen((v) => !v)} aria-haspopup="menu" aria-expanded={open} title={`${account.name} (@${account.handle}) · ${account.role}`}>
-				<Avatar account={account} size={18} />
-				<span>{account.name}</span>
-				{account.role === "admin" ? <span className="neo-chip-detail">admin</span> : null}
-			</button>
-			{open ? (
-				<>
-					<button type="button" className="fixed inset-0 z-[80] cursor-default" aria-label="Close menu" onClick={() => setOpen(false)} />
-					<div className="neo-menu" role="menu">
-						<button type="button" role="menuitem" className="neo-menu-item" onClick={() => { setOpen(false); navigate("/usage"); }}>
-							Your usage
-						</button>
-						<button type="button" role="menuitem" className="neo-menu-item" onClick={() => { setOpen(false); navigate("/settings#accounts"); }}>
-							Account
-						</button>
-						<div className="neo-menu-sep" />
-						<button type="button" role="menuitem" className="neo-menu-item" onClick={() => { setOpen(false); void auth.logout().then(() => navigate("/login")); }}>
-							<LogOut size={13} /> Sign out
-						</button>
-					</div>
-				</>
-			) : null}
-		</div>
+		<NeoMenu
+			label="Account menu"
+			trigger={
+				<button type="button" className="neo-account-button" aria-label={`Account: ${account.name}`} title={`${account.name} (@${account.handle}) · ${account.role}`}>
+					<Avatar account={account} size={20} />
+					<span className="neo-account-name">{account.name}</span>
+				</button>
+			}
+			items={[
+				{ label: "Your usage", onSelect: () => navigate("/usage") },
+				{ label: "Account", onSelect: () => navigate("/settings#accounts") },
+				{ label: "Sign out", icon: <LogOut size={13} />, danger: true, onSelect: () => { void auth.logout().then(() => navigate("/login")); } },
+			]}
+		/>
 	);
 }
 
@@ -184,8 +204,13 @@ function useJumpShortcuts(): void {
 		let armed = 0;
 		function onKey(e: KeyboardEvent): void {
 			const target = e.target as HTMLElement | null;
-			if (e.ctrlKey || e.metaKey || e.altKey) return;
-			if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT" || target.isContentEditable)) return;
+			const editing = target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT" || target.isContentEditable);
+			const overlay = [...document.querySelectorAll('[role="dialog"], [role="menu"], [role="listbox"], .neo-shell[data-nav-open="true"]')]
+				.some((element) => element.getClientRects().length > 0);
+			if (e.defaultPrevented || e.isComposing || e.ctrlKey || e.metaKey || e.altKey || editing || overlay) {
+				armed = 0;
+				return;
+			}
 			const now = Date.now();
 			if (e.key === "g" || e.key === "G") {
 				armed = now;
