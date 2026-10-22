@@ -42,10 +42,10 @@ export const tasksApi = {
 			body: JSON.stringify(body),
 		});
 	},
-	assign(id: string): Promise<CardRun> {
+	assign(id: string, model?: string): Promise<CardRun> {
 		return req<CardRun>(`/tasks/${encodeURIComponent(id)}/assign`, {
 			method: "POST",
-			body: JSON.stringify({}),
+			body: JSON.stringify(model ? { model } : {}),
 		});
 	},
 	cancel(id: string): Promise<CardRun> {

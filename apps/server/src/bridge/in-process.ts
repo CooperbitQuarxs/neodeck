@@ -631,6 +631,31 @@ export class InProcessAgentBridge implements AgentBridge {
 		await tree.abort(id);
 	}
 
+	agentInstances(): import("@npi-deck/protocol").AgentInstance[] {
+		const rows: import("@npi-deck/protocol").AgentInstance[] = [];
+		for (const [sessionId, { handle, session, subagents, turnInFlight }] of this.active) {
+			const rootId = session.getAgentId();
+			const model = session.model;
+			rows.push({
+				id: rootId, templateId: null, sessionId, threadId: sessionId, sessionFile: handle.sessionFile,
+				parentInstanceId: null, label: session.sessionName || "Main",
+				status: turnInFlight || session.isStreaming ? "running" : "idle",
+				model: model ? `${model.provider}/${model.id}` : undefined,
+				thinking: session.thinkingLevel,
+				actions: { steer: handle.isStreamingNow(), cancel: true, setThinking: false, setFast: false, enter: true },
+			});
+			rows.push(...subagents?.instances(sessionId) ?? []);
+		}
+		return rows;
+	}
+
+	async steerSubagent(sessionId: string, id: string, text: string): Promise<void> {
+		const tree = this.active.get(sessionId)?.subagents;
+		if (!tree) throw new Error("Forbidden subagent");
+		await tree.steer(id, text);
+		this.bumpActivity(sessionId);
+	}
+
 	private ensureModelRegistry(): Promise<ModelRegistry> {
 		if (this.modelRegistry) return Promise.resolve(this.modelRegistry);
 		if (this.modelRegistryPromise) return this.modelRegistryPromise;

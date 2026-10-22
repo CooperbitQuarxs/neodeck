@@ -65,6 +65,9 @@ import { TRIGGER_NODE_ID, TriggerNodeView, type TriggerNode } from "./nodes/Trig
 import { StepInspector } from "./StepInspector";
 import { TriggerInspector } from "./TriggerInspector";
 
+/** Delete and Backspace both remove the selection; React Flow ignores them while a text field has focus. */
+const DELETE_KEYS = ["Delete", "Backspace"];
+
 /** A request from the parent to select something on the canvas; `seq` makes repeats distinct. */
 export interface CanvasSelectRequest {
 	target: string | "trigger";
@@ -306,21 +309,25 @@ function RoutineCanvasInner({
 		[onChange],
 	);
 
-	const handleEdgesChange = useCallback(
-		(changes: EdgeChange<SequentialEdgeType>[]) => {
-			onEdgesChange(changes);
-			const removals = changes.filter((c) => c.type === "remove");
-			if (removals.length === 0) return;
+	// Removals (Delete or Backspace on a selected step or edge) arrive here once,
+	// with every node and edge React Flow removed together, so the spec is
+	// rewritten in a single pass instead of two handlers racing on a stale ref.
+	const handleDelete = useCallback(
+		({ nodes: goneNodes, edges: goneEdges }: { nodes: CanvasNode[]; edges: SequentialEdgeType[] }) => {
+			const removed = new Set(goneNodes.filter((n) => n.id !== TRIGGER_NODE_ID).map((n) => n.id));
 			let nextSpec = specRef.current;
-			for (const change of removals) {
-				const edge = edges.find((e) => e.id === change.id);
-				if (!edge || edge.source === TRIGGER_NODE_ID) continue;
-				const kind = edge.data?.kind ?? "success";
-				nextSpec = applyEdgeRemoval(nextSpec, edge.source, edge.target, kind);
+			for (const edge of goneEdges) {
+				if (edge.source === TRIGGER_NODE_ID || removed.has(edge.source) || removed.has(edge.target)) continue;
+				nextSpec = applyEdgeRemoval(nextSpec, edge.source, edge.target, edge.data?.kind ?? "success");
 			}
+			for (const id of removed) {
+				const idx = nextSpec.steps.findIndex((s) => s.id === id);
+				if (idx >= 0) nextSpec = removeStep(nextSpec, idx);
+			}
+			if (removed.has(selectedStepIdRef.current ?? "")) setSelectedStepId(null);
 			if (nextSpec !== specRef.current) onChange(nextSpec);
 		},
-		[onEdgesChange, edges, onChange],
+		[onChange],
 	);
 
 	// Keep canvas-local selection in lockstep with React Flow's view of
@@ -484,7 +491,9 @@ function RoutineCanvasInner({
 					nodes={nodes}
 					edges={edges}
 					onNodesChange={handleNodesChange}
-					onEdgesChange={handleEdgesChange}
+					onEdgesChange={onEdgesChange}
+					onDelete={handleDelete}
+					deleteKeyCode={DELETE_KEYS}
 					onSelectionChange={handleSelectionChange}
 					onConnect={handleConnect}
 					nodeTypes={NODE_TYPES}

@@ -6,8 +6,47 @@ import { advisorsApi, type LiveAdvisorStatus, type SessionAdvisorRoster } from "
 import { useStore } from "@/lib/store";
 import { tasksApi } from "@/lib/tasks-api";
 import { auth } from "./auth";
-import { PREVIEW_AGENTS, PREVIEW_JUDGE, PREVIEW_TEMPLATES, type AgentTemplate, type AgentState, type JudgeEvent, type LiveAgent, type Restriction } from "./preview-data";
+import { PREVIEW_AGENTS, PREVIEW_JUDGE, PREVIEW_TEMPLATES, type AgentTemplate as PreviewTemplate, type AgentState, type JudgeEvent, type LiveAgent, type Restriction } from "./preview-data";
 import { SOURCES } from "./source";
+export type { AgentTemplate, AgentTemplateInput, AgentInstance, AgentCapabilities } from "@npi-deck/protocol";
+import type { AgentTemplate as PersistedTemplate, AgentTemplateInput, AgentInstance, AgentCapabilities } from "@npi-deck/protocol";
+
+async function request<T>(route: string, method = "GET", body?: unknown): Promise<T> {
+ const response = await fetch(`/api${route}`, { method, ...(body === undefined ? {} : { headers: { "content-type": "application/json" }, body: JSON.stringify(body) }) });
+ if (!response.ok) {
+  const details = await response.json().catch(() => ({})) as { error?: string };
+  throw new Error(details.error ?? `HTTP ${response.status}`);
+ }
+ return await response.json() as T;
+}
+
+/** Native instances only. An unavailable action is never simulated locally. */
+export const agentInstances = {
+ list: async () => (await request<{ instances: AgentInstance[] }>("/agents/instances")).instances,
+ forThread: async (id: string) => (await request<{ agents: AgentInstance[] }>(`/threads/${encodeURIComponent(id)}/agents`)).agents,
+ steer: async (id: string, text: string): Promise<void> => { await request(`/agents/instances/${encodeURIComponent(id)}/steer`, "POST", { text }); },
+ cancel: async (id: string): Promise<void> => { await request(`/agents/instances/${encodeURIComponent(id)}/cancel`, "POST"); },
+ setModel: async (id: string, model: string): Promise<void> => { await request(`/agents/instances/${encodeURIComponent(id)}`, "PATCH", { model }); },
+ capabilities: () => request<AgentCapabilities>("/agents/capabilities"),
+};
+/** Deck-authored definitions persist in SQLite. This is not native discovery. */
+export const agentTemplates = {
+ list: async () => (await request<{ templates: PersistedTemplate[] }>("/agents/templates")).templates,
+ save: (template: AgentTemplateInput) => request<PersistedTemplate>(`/agents/templates/${encodeURIComponent(template.id)}`, "PUT", template),
+ remove: async (id: string): Promise<void> => { await request(`/agents/templates/${encodeURIComponent(id)}`, "DELETE"); },
+};
+/** Thread transport exposes only actions backed by the attached native runtime. */
+export const threadAgents = {
+ list: agentInstances.forThread,
+ send: async (id: string, to: string, text: string): Promise<void> => { await request(`/threads/${encodeURIComponent(id)}/send`, "POST", { to, text }); },
+ remove: async (id: string, agentId: string): Promise<void> => { await request(`/threads/${encodeURIComponent(id)}/agents/${encodeURIComponent(agentId)}`, "DELETE"); },
+ setModel: async (id: string, agentId: string, model: string): Promise<void> => { await request(`/threads/${encodeURIComponent(id)}/agents/${encodeURIComponent(agentId)}`, "PATCH", { model }); },
+};
+export const judgeClient = {
+ status: () => request<{ available: false; reason: string }>("/judge"),
+ events: async (limit = 50) => (await request<{ events: JudgeEvent[]; available: boolean; reason: string }>(`/judge/events?limit=${encodeURIComponent(limit)}`)).events,
+ undoStop: async (id: string): Promise<void> => { await request(`/judge/events/${encodeURIComponent(id)}/undo`, "POST"); },
+};
 
 /** A destination offered by the spawn form. Empty thread id creates a preview thread. */
 export interface WhereOption { kind: LiveAgent["where"]["kind"]; id: string; label: string }
@@ -17,7 +56,7 @@ export interface SpawnAgentInput { template: string; name: string; hue: number; 
 export interface AgentRecord extends LiveAgent { restrictions: readonly Restriction[]; turns?: number; activity?: string; sessionId?: string; runtimeId?: string; runtimeKind?: "main" | "worker" | "advisor" }
 export interface AgentsClient {
  roster(): Promise<AgentRecord[]>;
- templates(): Promise<AgentTemplate[]>; saveTemplate(template: AgentTemplate): Promise<AgentTemplate>; removeTemplate(id: string): Promise<void>;
+ templates(): Promise<PreviewTemplate[]>; saveTemplate(template: PreviewTemplate): Promise<PreviewTemplate>; removeTemplate(id: string): Promise<void>;
  spawn(input: SpawnAgentInput): Promise<AgentRecord>; stop(id: string): Promise<void>; setModel(id: string, model: string): Promise<void>; setRestrictions(id: string, restrictions: Restriction[]): Promise<void>;
  judge(opts?: { limit?: number }): Promise<JudgeEvent[]>; judgeUndoStop(eventId: string): Promise<void>; judgePaused(): boolean; setJudgePaused(value: boolean): void;
  destinations(): Promise<WhereOption[]>;

@@ -105,7 +105,7 @@ export class CardAgentRunner {
 		}
 		queueMicrotask(() => this.drain());
 	}
-	assign(taskId: string): CardRun {
+	assign(taskId: string, selector?: string): CardRun {
 		if (this.closing) throw new Error("Card runner is shutting down");
 		const current = this.assignments.get(taskId);
 		if (current) return { ...current.run };
@@ -113,6 +113,11 @@ export class CardAgentRunner {
 		if (!task) throw new Error("Task not found");
 		if (task.archivedAt) throw new Error("Cannot assign an archived card");
 		const properties = cardExecutionProperties(task.body);
+		// A per-run selection never rewrites the card or global model policy.
+		if (selector !== undefined) {
+			if (selector.startsWith("@")) { properties.role = selector.slice(1); properties.model = undefined; }
+			else { properties.model = selector; properties.role = undefined; }
+		}
 		this.checkColumns();
 		const run: CardRun = {
 			id: `card-${crypto.randomUUID()}`, taskId, status: "queued", assignedAt: new Date().toISOString(), ownedWorktree: !properties.worktree,
@@ -242,7 +247,8 @@ export class CardAgentRunner {
 				const result = stream.result();
 				if (assignment.completedByMove) { status = "completed"; outcome = result.answer ?? "Card moved to the configured completion column"; }
 				else if (signal.aborted) { status = "cancelled"; outcome = "Cancelled"; }
-				else if (exit !== 0 || result.error || result.answer === undefined) throw new Error(result.error ?? `NeoPi worker exit ${exit}: ${stderr}`);
+				else if (exit !== 0) throw new Error(`NeoPi worker exit ${exit}: ${stderr.trim() || result.error || "no diagnostic output"}`);
+				else if (result.error || result.answer === undefined) throw new Error(result.error ?? "NeoPi worker returned no answer");
 				else { status = "completed"; outcome = result.answer; }
 			} finally {
 				signal.removeEventListener("abort", abort);
