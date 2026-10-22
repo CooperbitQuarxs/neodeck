@@ -19,6 +19,9 @@
  * scripts/check-sdk-imports.ts enforces it.
  */
 
+import type { ModelSelectorResult } from "@npi-deck/protocol";
+import type { AgentSession } from "@oh-my-pi/pi-coding-agent";
+
 export type ModuleTypes = {
 	"@oh-my-pi/pi-utils": typeof import("@oh-my-pi/pi-utils");
 	"@oh-my-pi/pi-ai": typeof import("@oh-my-pi/pi-ai");
@@ -30,6 +33,15 @@ export type ModuleTypes = {
 	"@oh-my-pi/pi-coding-agent/capability/skill": typeof import("@oh-my-pi/pi-coding-agent/capability/skill");
 	"@oh-my-pi/pi-coding-agent/config/model-settings": typeof import("@oh-my-pi/pi-coding-agent/config/model-settings");
 	"@oh-my-pi/pi-coding-agent/config/model-roles": typeof import("@oh-my-pi/pi-coding-agent/config/model-roles");
+	"@oh-my-pi/pi-coding-agent/config/model-resolver": typeof import("@oh-my-pi/pi-coding-agent/config/model-resolver");
+	// Optional newer SDK contract. Keep the older pin compilable without copying native policy.
+	"@oh-my-pi/pi-coding-agent/modes/rpc/rpc-model-selector": {
+		getRpcModelSelector(session: AgentSession, query: string): Promise<ModelSelectorResult>;
+		queryModelSelector(source: unknown, registry: unknown, scopedModels: readonly unknown[], query: string): ModelSelectorResult;
+	};
+	"@oh-my-pi/pi-coding-agent/modes/model-browser-source": {
+		createModelBrowserSource(settings: unknown): unknown;
+	};
 	"@oh-my-pi/pi-coding-agent/modes/rpc/rpc-roles": typeof import("@oh-my-pi/pi-coding-agent/modes/rpc/rpc-roles");
 	"@oh-my-pi/pi-tui/thinking": typeof import("@oh-my-pi/pi-tui/thinking");
 	"@oh-my-pi/pi-coding-agent/config/models-config": typeof import("@oh-my-pi/pi-coding-agent/config/models-config");
@@ -283,6 +295,22 @@ export const MANIFEST = {
 			RpcRoles: op("@oh-my-pi/pi-coding-agent/modes/rpc/rpc-roles", "RpcRoles"),
 			getRoleInfo: op("@oh-my-pi/pi-coding-agent/config/model-roles", "getRoleInfo"),
 			CLI_THINKING_LEVELS: op("@oh-my-pi/pi-tui/thinking", "CLI_THINKING_LEVELS"),
+		},
+	},
+	"model-selection": {
+		tier: "optional-feature",
+		consumers: ["bridge/in-process.ts"],
+		exports: {
+			resolveCliModel: op("@oh-my-pi/pi-coding-agent/config/model-resolver", "resolveCliModel"),
+		},
+	},
+	"model-selector": {
+		tier: "optional-feature",
+		consumers: ["bridge/in-process.ts"],
+		exports: {
+			getRpcModelSelector: op("@oh-my-pi/pi-coding-agent/modes/rpc/rpc-model-selector", "getRpcModelSelector"),
+			queryModelSelector: op("@oh-my-pi/pi-coding-agent/modes/rpc/rpc-model-selector", "queryModelSelector"),
+			createModelBrowserSource: op("@oh-my-pi/pi-coding-agent/modes/model-browser-source", "createModelBrowserSource"),
 		},
 	},
 	/** #90: list, edit and toggle MCP server definitions in the user and project mcp.json files. */

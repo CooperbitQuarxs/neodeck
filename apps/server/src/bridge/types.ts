@@ -7,6 +7,7 @@ import type {
 	ImageAttachment,
 	ModelInfo,
 	ModelRef,
+	ModelSelectorResult,
 	PendingPlanApprovalWire,
 	PlanModeContextWire,
 	ServerFrame,
@@ -85,6 +86,8 @@ export interface AgentBridge {
 	 * Mixtures are those the session's workspace (else `cwd`, else the server's cwd) defines and can run.
 	 */
 	listModels(opts?: { sessionId?: string; cwd?: string }): Promise<ModelInfo[]>;
+	/** Native query engine only. Unsupported backends report a capability error. */
+	queryModels?(query: string, opts?: { sessionId?: string; cwd?: string }): Promise<ModelSelectorResult>;
 	/**
 	 * How `retry.fallbackChains` covers a live chat's active model, resolved by
 	 * NeoPi over the chat's own settings. Undefined when the chat is not live or
@@ -258,6 +261,8 @@ export interface SessionHandle {
 	compact(focus?: string): Promise<void>;
 	/** Swap the live agent session to a different model. Throws on unknown ref or missing auth. */
 	setModel(ref: ModelRef): Promise<void>;
+	/** Resolve an opaque native selector without losing its role or effort. */
+	setModelSelector?(selector: string): Promise<void>;
 	/**
 	 * Try to dispatch a leading slash command via the omp SDK's text-mode
 	 * dispatcher. Returns `"fallthrough"` when nothing matched — caller should

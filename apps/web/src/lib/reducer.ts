@@ -51,6 +51,7 @@ export function initSession(snapshot: SessionSnapshot, priorUsage: readonly unkn
 		sessionFile: snapshot.sessionFile,
 		sessionName: snapshot.sessionName,
 		model: snapshot.model,
+		modelSelector: snapshot.modelSelector,
 		thinkingLevel: snapshot.thinkingLevel,
 		configWarnings: snapshot.configWarnings,
 		messages: [],
