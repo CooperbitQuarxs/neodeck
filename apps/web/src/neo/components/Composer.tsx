@@ -44,6 +44,9 @@ export interface ComposerProps {
 	placeholder?: string;
 	/** Prefilled text, e.g. from `Open in thread`. */
 	draft?: string;
+	/** Native scope for the model picker: the live session (only when active) and the project path. */
+	sessionId?: string;
+	cwd?: string;
 	/** The session's numbers, rendered as a row under the bar. */
 	facts?: ReactNode;
 	className?: string;
@@ -59,7 +62,7 @@ export function mentionTarget(text: string, targets: readonly ComposerTarget[]):
 	return hit ? { id: hit.id, rest: text.slice(match[0].length) } : null;
 }
 
-export function Composer({ targets, targetId, onTargetChange, model, onModelChange, onSend, busy, onStop, disabled, placeholder, draft, facts, className }: ComposerProps) {
+export function Composer({ targets, targetId, onTargetChange, model, onModelChange, onSend, busy, onStop, disabled, placeholder, draft, facts, sessionId, cwd, className }: ComposerProps) {
 	const [text, setText] = useState(draft ?? "");
 	const [note, setNote] = useState<string | null>(null);
 	const [addressing, setAddressing] = useState(false);
@@ -168,7 +171,7 @@ export function Composer({ targets, targetId, onTargetChange, model, onModelChan
 						</NeoPopover>
 					</>
 				) : null}
-				<ModelPicker value={model} onChange={onModelChange} above size="sm" disabled={disabled} />
+				<ModelPicker value={model} onChange={onModelChange} above size="sm" disabled={disabled} sessionId={sessionId} cwd={cwd} />
 				<span className="neo-composer-spacer" />
 				{note ? (
 					<span className="neo-composer-note" role="status">

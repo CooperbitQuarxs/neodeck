@@ -111,8 +111,10 @@ function liveAgents(id: string): ThreadAgent[] {
 	const store = useStore.getState();
 	const session = store.sessionsById[id];
 	const main = agent("main", "Main", "blank", session && session.status !== "idle" ? "working" : "idle");
-	main.model = session?.model ? `${session.model.provider}/${session.model.id}` : "No model selected";
-	return [main, ...(extraAgents.get(id) ?? []), ...(store.subagentsBySession[id] ?? []).map((node) => ({ ...agent(node.id, node.name, "worker", /running|working|streaming/.test(node.status) ? "working" : "idle", node.parentId), model: "Model not reported" }))];
+	// Keep the selected policy (`@role`) rather than its resolved model, with the reported effort.
+	const selector = session?.modelSelector ?? (session?.model ? `${session.model.provider}/${session.model.id}` : undefined);
+	main.model = selector ? (session?.thinkingLevel && !/:[a-z]+$/.test(selector) ? `${selector}:${session.thinkingLevel}` : selector) : "No model selected";
+	return [main, ...(extraAgents.get(id) ?? []), ...(store.subagentsBySession[id] ?? []).map((node) => ({ ...agent(node.id, node.name, "worker", /running|working|streaming/.test(node.status) ? "working" : "idle", node.parentId), model: "Unknown" }))];
 }
 const preview: ThreadsClient = {
 	previewMembers() { return [...extraAgents].flatMap(([threadId, list]) => list.map((agent) => ({ threadId, agent }))); },

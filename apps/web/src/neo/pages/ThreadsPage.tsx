@@ -291,6 +291,8 @@ export function ThreadsPage() {
 								onStop={stop}
 								disabled={loading}
 								draft={params.get("draft") ?? undefined}
+								sessionId={session?.sessionId}
+								cwd={selected.project}
 								facts={<SessionFacts session={session} transcript={transcript} />}
 							/>
 						</>
