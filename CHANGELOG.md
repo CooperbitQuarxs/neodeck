@@ -11,6 +11,7 @@ All notable changes to NPI deck (a fork of bjb2/omp-deck; entries before the for
 - Settings uses shared styled fields and portal selectors, clearer inference-provider credential rows, and browser-persistent Deck-only picker visibility. Models has a dedicated workspace for the live catalogue, global role assignments and custom definitions. Role and non-secret setting saves reject stale read snapshots. Project scope and effort-rule editing explicitly require the newer native API. GPT-6.1 Sol on behalf of PsychedelicShayna.
 
 ### Added
+- The shell follows NeoProxy's compact chrome, with quieter status controls and a sidebar that can be hidden from the hamburger. Desktop visibility persists in this browser; mobile navigation supports Escape and returns keyboard focus. By GPT-6.1 Sol.
 
 - Knowledge now separates a wide note reader from a full-size searchable map, with collection filters, keyboard-accessible map results and live Git history. Project agents remain the only note authors. Implemented by GPT-6 Astra for PsychedelicShayna.
 - Shared layer tokens keep page chrome, menus, modal drawers and nested pickers on one stacking scale. The design guide documents portal and nested-overlay rules. GPT-6.1 Sol.
