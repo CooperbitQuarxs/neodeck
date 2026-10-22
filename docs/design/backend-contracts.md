@@ -66,15 +66,20 @@ Cards and columns are live (`/api/tasks`, `/api/task-states`). The contract adds
 
 ## 7. Studio graphs (`studioGraphs`)
 
-Flows are today's routines (`/api/routines`). The other kinds share one document:
+Flows remain routines under `/api/routines`; the knowledge map is virtual. The
+graph backend persists pipelines, classifiers and board flows as canonical TOML
+in the deck database. The Studio client combines those lists without seeding the
+server with example graphs. Existing browser-authored documents import once,
+preserving their ids and leaving the browser copy intact.
 
-- `GET /api/graphs` → `{ graphs: GraphSummary[] }` for kinds `pipeline | router | classifier | boardflow` (+ `flow` mirrored from routines, `map` virtual).
-- `GET/PUT/DELETE /api/graphs/:id` → `StudioGraph { id, kind, name, description, enabled, nodes: { id, type, config, position }[], edges: { id, from: { node, port }, to: { node, port } }[], settings, lastRun?, updatedAt }`; `POST /api/graphs` `{ kind, name }`.
-- `GET /api/graphs/node-types?kind=` → the node vocabulary (`apps/web/src/neo/pages/studio/vocab.ts` is the reference data: types, ports with types, fields with controls).
-- `POST /api/graphs/:id/run` → `StudioRun`; `GET /api/graphs/:id/runs` → `{ runs: StudioRun[] }`; `StudioRun { id, graphId, startedAt, endedAt?, ok, trigger, costUsd?, nodes: { nodeId, startedAt, endedAt?, status, note? }[] }`.
-- A router graph is the visual form of a NeoProxy virtual model's chain; saving one writes the virtual model (`PUT /neoproxy/api/virtual-models/:name`).
-- Pipeline, router, classifier and board-flow previews save documents in the browser's local storage; preview runs stay in memory and never send inference requests or output actions.
-- Source is TOML (`text/toml`) on `GET /api/graphs/:id?format=toml` and `PUT` with the same type; flows stay YAML until routines migrate.
+- `GET /api/graphs` → `{ graphs: GraphSummary[] }` for persisted `pipeline | classifier | boardflow` documents, mirrored `flow` summaries and the virtual knowledge `map`. Router previews are combined by the browser adapter.
+- `GET/PUT/DELETE /api/graphs/:id` → `StudioGraph { id, kind, name, description, enabled, nodes: { id, type, config, position }[], edges: { id, from: { node, port }, to: { node, port } }[], settings, lastRun?, updatedAt }`; `POST /api/graphs` accepts `{ kind, name }` or a complete browser-authored document. An existing id is never overwritten by POST. Drafts may be empty; connections must have compatible ports and cannot form cycles.
+- `GET /api/graphs/node-types?kind=` → `{ nodeTypes: NodeType[] }`. The server and canvas share `packages/protocol/src/studio-vocab.ts`, exposed to the canvas by `apps/web/src/neo/pages/studio/vocab.ts`. Entries include typed ports, editable fields and `execution: "local" | "action" | "preview"`.
+- `POST /api/graphs/:id/run` accepts `{ mode?: "preview" | "execute", input?: JSON }`. Missing mode always means preview. `GET /api/graphs/:id/runs` returns `{ runs: StudioRun[] }`, newest first, up to 100. `StudioRun { id, graphId, startedAt, endedAt?, ok, trigger, mode, costUsd?, nodes: { nodeId, startedAt, endedAt?, status, note?, output? }[] }`. Definition snapshots and node results survive edits and server restarts.
+- Preview runs evaluate local text/JSON transforms and deterministic branches, then skip inference and output actions. Skipped work does not activate downstream branches. Timings are measured, not simulated; absent cost stays absent. Explicit execution supports local nodes, card creation/movement, inbox completion, notifications and GitHub issue filing through the existing action adapters. A graph containing any unsupported node is rejected before any action is sent.
+- Agent lifecycle, inference, approvals, retry plans and the remaining output adapters are visibly planned nodes, not fake executions. Enabling a document stores its intent but never subscribes it to events or starts automatic work. Automatic triggers remain the routine runner's responsibility. Conditions use the bounded routine sandbox and must return a literal boolean using `context.input`; board gates require literal boolean evidence on the supplied card.
+- Routers use the separate `studioRouters: preview` adapter and stay browser-local. They are editors of NeoProxy-owned virtual models, never a second routing-policy store. NeoProxy's save API is not available in this pin. Its eventual adapter must preserve opaque ids, expected-value writes and layout metadata, and convert percentages to fractions once. Passthrough terminals name their target model.
+- Source is TOML with `text/toml` on `GET /api/graphs/:id?format=toml` and `PUT` with the same type. Server source writes accept full TOML syntax; the browser editor reads the canonical subset it writes. Null is not a TOML value and is rejected rather than silently discarded. Legacy flows stay YAML and cannot be previewed safely; native V2 routines use `?dryRun=true`. Running a legacy flow requires explicit execution.
 
 ## 8. Dictation (`dictation`)
 
