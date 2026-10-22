@@ -37,13 +37,13 @@ test("snapshot pins queries to configured fork, preserves counts and isolates fa
  const app = buildGithubRouter({ home: join(root, "snapshot"), gh: async args => { calls.push(args); if (args.includes("name=private")) throw new Error("access denied"); return JSON.stringify({ data: { repository } }); } });
  await save(app, ["office/fork", "office/private"]);
  const response = await app.request("/github/snapshot"); expect(response.status).toBe(200);
- const result = await response.json();
- expect(result.repos[0].openIssues).toBe(150);
- expect(result.issues[0].repo).toBe("office/fork");
+ const result = (await response.json()) as { repos: { openIssues: number }[]; issues: { repo: string }[]; wheel: { stage: string }[]; errors: unknown[] };
+ expect(result.repos[0]?.openIssues).toBe(150);
+ expect(result.issues[0]?.repo).toBe("office/fork");
  expect(result.wheel.map((w: { stage: string }) => w.stage)).toEqual(["ready", "merged"]);
  expect(result.errors).toEqual([{ repo: "office/private", error: "Error: access denied" }]);
  expect(calls[0]?.slice(0, 2)).toEqual(["api", "graphql"]);
  expect(calls[0]).toContain("owner=office"); expect(calls[0]).toContain("name=fork");
  await app.request("/github/snapshot"); expect(calls.length).toBe(2);
- await save(app, []); expect((await (await app.request("/github/snapshot")).json()).repos).toEqual([]);
+ await save(app, []); expect(((await (await app.request("/github/snapshot")).json()) as { repos: unknown[] }).repos).toEqual([]);
 });

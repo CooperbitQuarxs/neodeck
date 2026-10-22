@@ -158,7 +158,7 @@ export async function runStudioGraph(graph: StudioGraph, options: StudioRunOptio
 			for (const effect of node.effects ?? []) output.push({ effect: effect.status, receipt: effect.receipt, destination: effect.destination });
 			return {
 				nodeId: node.nodeId, startedAt: node.startedAt ?? node.endedAt, endedAt: node.endedAt,
-				status: skipped.has(node.nodeId) || node.status === "skipped" ? "skipped" : node.status === "success" ? "ok" : "failed",
+				status: skipped.has(node.nodeId) || node.status === "skipped" ? "skipped" as const : node.status === "success" ? "ok" as const : "failed" as const,
 				note: skipped.get(node.nodeId) ?? node.error ?? (node.status === "skipped" ? "No active upstream branch reached this node." : original.type === "cls.output" ? `Classification: ${String(original.config.label ?? "")}` : undefined),
 				...(output.length ? { output } : {}),
 			};
