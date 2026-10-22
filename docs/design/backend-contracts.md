@@ -124,3 +124,10 @@ Preview provider visibility is persisted under the browser key
 `neodeck.provider-picker-visibility` and published through `useProviders()`.
 It hides matching inference providers in Deck pickers, including for admins,
 without changing served-model exposure or credentials.
+
+## 14. Native model selection
+
+- `GET /api/models?sessionId=&cwd=` reads the live catalogue within the session or workspace.
+- `GET /api/models/selector?q=&sessionId=&cwd=` delegates search and ranking to NeoPi's native `query_model_selector` implementation. Returns `{ items, roles, error }`, preserving each opaque `selector`, `resolvedSelector` and nullable facts. A backend without the optional native selector feature returns `501`; the GUI can browse its live catalogue but does not emulate search.
+- `PATCH /api/sessions/:id` accepts `{ selector: string }`. Native resolution retains `@role` policy and effort suffixes, and snapshots expose `modelSelector` separately from the resolved concrete `model`. Existing `{ model: { provider, id } }` clients remain supported.
+- Provider visibility is Deck-local picker state, not NeoProxy exposure or an inference permission. Hidden providers are omitted for every account, including admins, and cannot return through search results or old recent selections.

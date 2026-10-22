@@ -1,143 +1,126 @@
-/**
- * The catalogue behind the model picker. No flat list: roles the admin mapped
- * for you, virtual models you may use, and providers as groups that list only
- * what is exposed to you. Live reads `/api/models` and
- * `/api/npi-config/model-roles`; preview is the office fixture
- * (backend-contracts.md §6). Picks are strings: `neoproxy/<role>`,
- * `neoproxy/<virtual>`, or `<provider>/<model>`.
- */
-import { useEffect, useState } from "react";
-import { api } from "@/lib/api";
-import { npiConfigApi } from "@/lib/npi-config-api";
-import { useAccount } from "./auth";
-import { PREVIEW_POOLS, PREVIEW_PROVIDERS } from "./preview-data";
-import { SOURCES } from "./source";
+import { useEffect, useMemo, useState } from "react";
+import type { ListModelsResponse, ModelSelectorFacts, ModelSelectorItem, ModelSelectorResult, NpiModelRolesResponse } from "@npi-deck/protocol";
 import { useProviders } from "./providers";
 
-export interface PickRole {
-	/** `neoproxy/<name>`. */
-	value: string;
-	name: string;
-	/** What it resolves to right now, e.g. `codex/gpt-6-astra`. */
-	resolves: string | null;
-}
-
-export interface PickVirtual {
-	value: string;
-	name: string;
-	/** Chain as text: `astra 15% → sol 20% → limit`. */
-	chain: string;
-}
-
-export interface PickProvider {
-	id: string;
-	label: string;
-	hidden: boolean;
-	models: readonly { value: string; label: string }[];
-}
-
+export interface ModelTarget { sessionId?: string; cwd?: string }
+export interface PickRole { value: string; name: string; resolves: string | null }
+export interface PickProvider { id: string; label: string; hidden: boolean; models: readonly PickerModel[] }
+export interface PickerModel extends ModelSelectorItem { available: boolean; role: boolean }
 export interface PickerCatalog {
 	roles: readonly PickRole[];
-	virtual: readonly PickVirtual[];
 	providers: readonly PickProvider[];
+	items: readonly PickerModel[];
+	efforts: readonly string[];
+	roleError: string | null;
 }
-
-export interface ModelsClient {
-	catalog(): Promise<PickerCatalog>;
+const PROVIDER_LABELS: Readonly<Record<string, string>> = {
+	anthropic: "Anthropic", "openai-codex": "OpenAI Codex", openai: "OpenAI", xai: "xAI", zai: "Z.ai",
+	cerebras: "Cerebras", github: "GitHub Models", google: "Google", mixture: "Mixtures", neoproxy: "NeoProxy",
+};
+export function providerLabel(id: string): string { return PROVIDER_LABELS[id] ?? id; }
+const unknownFacts: ModelSelectorFacts = {
+	intelligence: null, ttftMs: null, tokensPerSecond: null, contextWindow: null, effectiveContextWindow: null,
+	inputCostPerMillion: null, outputCostPerMillion: null, performanceSource: null, serviceTier: null,
+};
+function params(target: ModelTarget): URLSearchParams {
+	const query = new URLSearchParams();
+	if (target.sessionId) query.set("sessionId", target.sessionId);
+	if (target.cwd) query.set("cwd", target.cwd);
+	return query;
 }
-
-const previewModels: ModelsClient = {
-	async catalog() {
+async function request<T>(url: string, signal?: AbortSignal): Promise<T> {
+	const response = await fetch(url, { signal });
+	const body = await response.json();
+	if (!response.ok) throw new Error(body.error ?? `Model request failed (${response.status}).`);
+	return body as T;
+}
+export const models = {
+	async catalog(target: ModelTarget = {}, signal?: AbortSignal): Promise<PickerCatalog> {
+		let roleError: string | null = null;
+		const [list, roleConfig] = await Promise.all([
+			request<ListModelsResponse>(`/api/models?${params(target)}`, signal),
+			request<NpiModelRolesResponse>(`/api/npi-config/model-roles?${params(target)}`, signal).catch((error: unknown) => {
+				roleError = error instanceof Error ? error.message : String(error); return null;
+			}),
+		]);
+		const chatRole = roleConfig?.roles.find(role => role.id === "default" && role.section === "chat");
+		const chatPool = chatRole ? roleConfig?.pools?.[chatRole.pool] : undefined;
+		const chatModels = chatPool ? new Set(chatPool.models) : null;
+		const items: PickerModel[] = list.models.map(model => ({
+			selector: `${model.provider}/${model.id}`, provider: model.provider, id: model.id, name: model.label || model.id,
+			resolvedSelector: `${model.provider}/${model.id}`, facts: { ...unknownFacts, contextWindow: model.contextWindow ?? null },
+			available: model.isAvailable && (!chatModels || chatModels.has(`${model.provider}/${model.id}`) || (model.isMixture === true && chatPool?.mixtures === true)), role: false,
+		}));
+		const roleItems: PickerModel[] = (roleConfig?.roles ?? []).filter(role => role.section === "chat" && !role.hidden).map(role => ({
+			selector: `@${role.id}`, provider: role.resolved?.provider ?? "", id: role.id, name: role.name,
+			description: role.effectiveValue ?? "Built-in model policy", resolvedSelector: role.resolved ? `${role.resolved.provider}/${role.resolved.modelId}` : null,
+			facts: { ...unknownFacts }, available: !!role.resolved, role: true,
+		}));
+		const groups = new Map<string, PickerModel[]>();
+		for (const item of items) { const group = groups.get(item.provider) ?? []; group.push(item); groups.set(item.provider, group); }
 		return {
-			roles: PREVIEW_POOLS.map((p) => ({ value: `neoproxy/${p.role}`, name: p.role, resolves: `${p.chain[0]!.provider}/${p.chain[0]!.model}` })),
-			virtual: [
-				{ value: "neoproxy/good", name: "good", chain: "fable → opus → sol" },
-				{ value: "neoproxy/cheap", name: "cheap", chain: "luna 30% → glm-5.1-air" },
-			],
-			providers: PREVIEW_PROVIDERS.map((p) => ({ id: p.id, label: p.label, hidden: p.hidden, models: p.models.map((m) => ({ value: `neoproxy/${p.id}/${m}`, label: m })) })),
+			items: [...roleItems, ...items], roles: roleItems.map(role => ({ value: role.selector, name: role.name, resolves: role.resolvedSelector })),
+			providers: [...groups].map(([id, group]) => ({ id, label: providerLabel(id), hidden: false, models: group })),
+			efforts: roleConfig?.thinkingLevels ?? [], roleError,
 		};
 	},
 };
 
-const PROVIDER_LABELS: Readonly<Record<string, string>> = {
-	anthropic: "Anthropic",
-	"openai-codex": "OpenAI Codex",
-	openai: "OpenAI",
-	xai: "xAI",
-	zai: "Z.ai",
-	cerebras: "Cerebras",
-	github: "GitHub Models",
-	google: "Google",
-	mixture: "Mixtures",
-	neoproxy: "NeoProxy",
-};
-
-const liveModels: ModelsClient = {
-	async catalog() {
-		const [models, rolesRes] = await Promise.all([api.listModels(), npiConfigApi.modelRoles().catch(() => null)]);
-		const byProvider = new Map<string, { value: string; label: string }[]>();
-		for (const m of models.models) {
-			if (!m.isAvailable) continue;
-			const list = byProvider.get(m.provider) ?? [];
-			list.push({ value: `${m.provider}/${m.id}`, label: m.label || m.id });
-			byProvider.set(m.provider, list);
-		}
-		const providers: PickProvider[] = [...byProvider.entries()].map(([id, list]) => ({ id, label: PROVIDER_LABELS[id] ?? id, hidden: false, models: list }));
-		const roles: PickRole[] =
-			rolesRes?.roles.filter((r) => r.section === "chat" && !r.hidden).map((r) => ({ value: `neoproxy/${r.id}`, name: r.name.toLowerCase(), resolves: r.resolved ? `${r.resolved.provider}/${r.resolved.modelId}` : null })) ?? [];
-		return { roles, virtual: [], providers };
-	},
-};
-
-export const models: ModelsClient = SOURCES.models === "live" ? liveModels : previewModels;
-
-let cache: Promise<PickerCatalog> | null = null;
-
-/** The catalogue and a surfaced load error, shared by the model selectors. */
-export function useCatalog(): { catalog: PickerCatalog | undefined; error: string | null } {
-	const [catalog, setCatalog] = useState<PickerCatalog>();
-	const [error, setError] = useState<string | null>(null);
-	const account = useAccount();
+export function hiddenProviderIds(exposure: readonly { id: string; hidden: boolean }[]): ReadonlySet<string> {
+	return new Set(exposure.filter(provider => provider.hidden).flatMap(provider => provider.id === "codex" ? ["codex", "openai-codex"] : [provider.id]));
+}
+export function visibleModels<T extends { provider: string }>(items: readonly T[], hidden: ReadonlySet<string>): T[] {
+	return items.filter(item => !hidden.has(item.provider));
+}
+export function useHiddenProviders(): ReadonlySet<string> {
 	const exposure = useProviders();
+	return useMemo(() => hiddenProviderIds(exposure), [exposure]);
+}
+/** No permanent cache: opening a picker re-reads configuration and authentication. */
+export function useCatalog(target: ModelTarget = {}, enabled = true) {
+	const [snapshot, setSnapshot] = useState<{ key: string; catalog?: PickerCatalog; error: string | null }>();
+	const key = JSON.stringify([target.sessionId, target.cwd]);
 	useEffect(() => {
-		cache ??= models.catalog();
-		let active = true;
-		void cache.then((c) => {
-			if (!active) return;
-			const filtered = filterForAccount(c, account?.roles);
-			setCatalog({ ...filtered, providers: filtered.providers.map(p => ({ ...p, hidden: exposure.find(e => e.id === p.id || e.id === (p.id === "openai-codex" ? "codex" : p.id))?.hidden ?? p.hidden })) });
-			setError(null);
-		}, (failure: unknown) => {
-			if (active) setError(failure instanceof Error ? failure.message : String(failure));
+		if (!enabled) return;
+		const controller = new AbortController();
+		setSnapshot(undefined);
+		void models.catalog(target, controller.signal).then(catalog => setSnapshot({ key, catalog, error: null }), error => {
+			if (!controller.signal.aborted) setSnapshot({ key, error: error instanceof Error ? error.message : String(error) });
 		});
-		return () => { active = false; };
-	}, [account?.roles, exposure]);
-	return { catalog, error };
+		return () => controller.abort();
+	}, [key, enabled]);
+	const hidden = useHiddenProviders();
+	const catalog = snapshot?.key === key ? snapshot.catalog : undefined;
+	return {
+		catalog: useMemo(() => catalog ? {
+			...catalog, items: visibleModels(catalog.items, hidden),
+			roles: catalog.roles.filter(role => !hidden.has(role.resolves?.split("/")[0] ?? "")),
+			providers: catalog.providers.filter(provider => !hidden.has(provider.id)),
+		} : undefined, [catalog, hidden]),
+		error: snapshot?.key === key ? snapshot.error : null,
+	};
 }
-
-/** Members see only the roles the admin mapped for them; admins see everything, hidden providers included. */
-function filterForAccount(catalog: PickerCatalog, roles: readonly string[] | undefined): PickerCatalog {
-	if (!roles || SOURCES.models === "live") return catalog;
-	return { ...catalog, roles: catalog.roles.filter((r) => roles.includes(r.name)) };
+export function useModelQuery(target: ModelTarget, query: string) {
+	const key = JSON.stringify([target.sessionId, target.cwd, query]);
+	const [snapshot, setSnapshot] = useState<{ key: string; result?: ModelSelectorResult; unavailable?: boolean; error?: string }>();
+	useEffect(() => {
+		const controller = new AbortController();
+		const search = params(target); search.set("q", query);
+		void fetch(`/api/models/selector?${search}`, { signal: controller.signal }).then(async response => {
+			const result = await response.json();
+			if (controller.signal.aborted) return;
+			if (response.status === 501) setSnapshot({ key, unavailable: true, error: result.error });
+			else if (!response.ok || result.error) setSnapshot({ key, error: result.error ?? "Native model search failed." });
+			else setSnapshot({ key, result });
+		}).catch(error => { if (!controller.signal.aborted) setSnapshot({ key, error: String(error) }); });
+		return () => controller.abort();
+	}, [key]);
+	return snapshot?.key === key ? { ...snapshot, pending: false } : { pending: true };
 }
-
-const RECENT_KEY = "neodeck.models.recent";
-
-export function recentPicks(): string[] {
-	try {
-		return JSON.parse(localStorage.getItem(RECENT_KEY) ?? "[]") as string[];
-	} catch {
-		return [];
-	}
+/** Only native effort suffixes are separated; provider IDs and model IDs stay intact. */
+export function splitPick(value: string, efforts: readonly string[]): { selector: string; effort: string } {
+	const colon = value.lastIndexOf(":");
+	return colon >= 0 && efforts.includes(value.slice(colon + 1))
+		? { selector: value.slice(0, colon), effort: value.slice(colon + 1) } : { selector: value, effort: "" };
 }
-
-export function rememberPick(value: string): void {
-	const next = [value, ...recentPicks().filter((v) => v !== value)].slice(0, 4);
-	localStorage.setItem(RECENT_KEY, JSON.stringify(next));
-}
-
-/** `neoproxy/codex/gpt-6.1-sol` → `gpt-6.1-sol`; `neoproxy/heavy` → `heavy`. */
-export function shortPick(value: string): string {
-	const i = value.lastIndexOf("/");
-	return i === -1 ? value : value.slice(i + 1);
-}
+export function shortPick(value: string): string { return value.slice(value.lastIndexOf("/") + 1); }

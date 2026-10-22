@@ -66,7 +66,7 @@ export function OnboardingView() {
 			if (skipped) {
 				localStorage.setItem("npi-deck:onboarding-skip-toast-pending", "1");
 			}
-			navigate("/chat");
+			navigate("/legacy/chat");
 		} catch (err) {
 			setError(err instanceof Error ? err.message : String(err));
 		}
@@ -422,7 +422,7 @@ function Step3Provider({
 
 				<p className="text-2xs text-ink-3">
 					For other providers (OpenAI direct, Anthropic API, Google, Groq, xAI,
-					etc.), see <a href="/settings" className="underline">Settings → Providers</a> after onboarding.
+					etc.), see <a href="/legacy/settings" className="underline">Settings → Providers</a> after onboarding.
 				</p>
 
 				{error ? (
@@ -525,7 +525,7 @@ function Step4Done({ onFinish }: { onFinish: () => void }) {
 					<li>Send a prompt in chat to test your provider connection.</li>
 					<li>Tab to <strong>Tasks</strong> and read <strong>T-1</strong> for a deeper tour.</li>
 					<li>
-						Visit <a href="/marketplace" className="underline">Marketplace</a>{" "}
+						Visit <a href="/legacy/marketplace" className="underline">Marketplace</a>{" "}
 						to install plugins / skills (recommended: claude-plugins-official).
 					</li>
 				</ul>
