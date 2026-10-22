@@ -8,7 +8,6 @@ import { Kbd, NeoButton, NeoMenu } from "@/components/neo";
 import { useStore } from "@/lib/store";
 import { useTheme } from "@/lib/theme";
 import { auth, useAccount } from "./client/auth";
-import { usePresence } from "./client/presence";
 import { Avatar } from "./components/Avatar";
 import { NAV, NAV_ITEMS, navItemForPath } from "./nav";
 import "./shell.css";
@@ -131,30 +130,22 @@ function SideNav() {
 					))}
 				</div>
 			))}
-			<PresenceFoot />
+			<ShortcutFoot />
 		</>
 	);
 }
 
-/** Footer card: the office at a glance from every page. */
-function PresenceFoot() {
-	const presence = usePresence();
+/** Teach the route chords without duplicating page presence counts. */
+function ShortcutFoot() {
 	return (
-		<div className="neo-sidebar-foot">
-			<Link to="/threads?filter=needs-you" className="flex items-center gap-2 text-ink-2 no-underline hover:text-ink">
-				<span className="neo-dot" data-tone={presence.needsYou > 0 ? "accent" : undefined} data-pulse={presence.needsYou > 0 ? "true" : undefined} />
-				<span className="truncate">
-					{presence.needsYou === 0 ? "Nothing needs you" : `${presence.needsYou} need${presence.needsYou === 1 ? "s" : ""} you`}
-				</span>
-			</Link>
-			<Link to="/agents" className="flex items-center gap-2 text-ink-2 no-underline hover:text-ink">
-				<span className="neo-dot" data-tone={presence.working > 0 ? "live" : undefined} data-pulse={presence.working > 0 ? "true" : undefined} />
-				<span className="truncate">{presence.working === 0 ? "No agents working" : `${presence.working} agent${presence.working === 1 ? "" : "s"} working`}</span>
-			</Link>
+		<div className="neo-sidebar-foot" aria-label="Navigation shortcuts">
 			<div className="flex items-center gap-1">
 				<Kbd>G</Kbd>
 				<span>then a letter to jump</span>
 			</div>
+			<div className="flex items-center justify-between"><span>Inbox</span><Kbd>G I</Kbd></div>
+			<div className="flex items-center justify-between"><span>Threads</span><Kbd>G T</Kbd></div>
+			<div className="flex items-center justify-between"><span>Models</span><Kbd>G M</Kbd></div>
 		</div>
 	);
 }

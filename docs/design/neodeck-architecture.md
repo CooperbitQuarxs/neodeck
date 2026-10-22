@@ -61,9 +61,9 @@ Opening the mobile menu does not change the saved desktop choice.
 - The topbar's right side holds engine status, dictation, theme and the
   signed-in account menu. Status and identity are quiet inline controls,
   not a row of pills. View-local controls stay inside each page.
-- The sidebar foot shows **who is live**: the number of agents working and
-  the number of threads that need you, as two small dots, so the state of the
-  office is visible from every page.
+- The sidebar footer teaches navigation with `G` then a letter and a few
+  examples. Presence counts belong to the pages that explain them, rather
+  than repeating preview counts throughout the shell.
 
 Pages are one of three shapes, never a fourth:
 
