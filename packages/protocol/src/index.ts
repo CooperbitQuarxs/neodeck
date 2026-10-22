@@ -21,6 +21,9 @@ export { isGraphValue, validateRoutineGraph } from "./graph-validation";
 import type { RoutineGraph } from "./graph";
 // MIXTURES.toml document, validation report and mixture trace projections (#80).
 export * from "./mixtures";
+export * from "./studio";
+export * from "./studio-vocab";
+export * from "./studio-toml";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // REST shapes

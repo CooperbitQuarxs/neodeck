@@ -8,12 +8,14 @@ All notable changes to NPI deck (a fork of bjb2/omp-deck; entries before the for
 ### Changed
 
 - Board is now an evidence-first view of agent-managed work, with Inbox capture, attention filtering, related cards, persisted activity notes, all assignment attempts and real linked evidence. Per-assignment model/role choices reach NeoPi without rewriting a card's configuration ([#270](https://github.com/PsychedelicShayna/neodeck/pull/270), GPT-6.1 Sol).
+- Studio is a list page and a full-width canvas. `/studio` lists every graph by kind with a sentence on what each kind models; opening one goes to `/studio/<id>`, where the canvas takes the whole panel and the inspector docks to the right only while a node, the graph's settings or its runs are open. Delete and Backspace remove the selected node or connection on Studio and flow canvases. Picking a run paints each node's outcome on the canvas. The New graph menu that rendered under the map's search field is gone; old `/studio?graph=` links redirect. Claude Opus 5.5.
 
 - Skills & tools separates live skills, slash commands, extension discovery, marketplace plugins and sources. Shared `.agent` directories are no longer mislabeled as subagents; usage examples are opt-in rather than mixed into the installed inventory. GPT-6.1 Sol on behalf of PsychedelicShayna.
 
 - The Neo themes now use NeoProxy's chassis: purple-tinted black surfaces (`#0b0810` page, `#100c16` panel, `#16111d` card) and NeoProxy's ink ramp, so NeoDeck and NeoProxy read as one family. Neo light moves to the matching lilac-grey page. Claude Opus 5.5.
 
 ### Added
+- Studio graph documents now persist on the server as TOML, with durable run history and a shared 72-node catalog. Preview runs evaluate local transforms and branches without inference or output actions; explicit execution supports board, inbox, notification and issue actions, and rejects unsupported nodes before dispatch. Routers remain browser-local NeoProxy previews. Existing browser-authored graphs import without discarding their local copy. ([#271](https://github.com/PsychedelicShayna/neodeck/pull/271), GPT-6.1 Sol)
 - The shell follows NeoProxy's compact chrome, with quieter status controls and a sidebar that can be hidden from the hamburger. Desktop visibility persists in this browser; mobile navigation supports Escape and returns keyboard focus. By GPT-6.1 Sol.
 
 - Knowledge now separates a wide note reader from a full-size searchable map, with collection filters, keyboard-accessible map results and live Git history. Project agents remain the only note authors. Implemented by GPT-6 Astra for PsychedelicShayna.
