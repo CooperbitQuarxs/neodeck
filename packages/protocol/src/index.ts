@@ -579,6 +579,8 @@ export interface BridgeLogsResponse {
 	lines: BridgeLogLine[];
 }
 
+export type { TelegramConversation, TelegramPairing, TelegramSetup } from "./telegram.ts";
+
 export interface ModelInfo {
 	provider: string;
 	id: string;

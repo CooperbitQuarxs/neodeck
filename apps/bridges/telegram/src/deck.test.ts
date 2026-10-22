@@ -81,7 +81,7 @@ describe("DeckClient.promptSession", () => {
 		expect(await deck.promptSession({ sessionId: SESSION, text: "hi", onText: () => {} })).toBe("hello");
 	});
 
-	test("rejects an unreviewable proposal instead of hanging the Telegram turn", async () => {
+	test("hands plan review to the web without rejecting it or changing plan mode", async () => {
 		const sent: Array<{ type: string; approved?: boolean; feedback?: string }> = [];
 		const deck = fakeDeck(() => [{
 			type: "plan_proposed", sessionId: SESSION, proposalId: "p-1", planFilePath: "local://greeting-plan.md",
@@ -90,9 +90,9 @@ describe("DeckClient.promptSession", () => {
 			sent.push(frame);
 			return frame.type === "plan_response" ? [assistant("Open the plan in the web UI."), event({ type: "agent_end" })] : [];
 		});
-		expect(await deck.promptSession({ sessionId: SESSION, text: "plan", onText: () => {} })).toBe("Open the plan in the web UI.");
-		expect(sent.some(frame => frame.type === "plan_response" && frame.approved === false && frame.feedback?.includes("web UI"))).toBe(true);
-		expect(sent.some(frame => frame.type === "set_plan_mode")).toBe(true);
+		expect(await deck.promptSession({ sessionId: SESSION, text: "plan", onText: () => {} })).toContain("Needs you:");
+		expect(sent.some(frame => frame.type === "plan_response")).toBe(false);
+		expect(sent.some(frame => frame.type === "set_plan_mode")).toBe(false);
 	});
 
 	test("a prompt that never completes fails after the idle timeout", async () => {

@@ -178,7 +178,7 @@ export const ENV_SCHEMA: EnvSchemaEntry[] = [
 		restartRequired: true,
 		restartTarget: "telegram-bridge",
 		hotApply: false,
-		description: "Required comma-separated numeric sender IDs allowed in DMs and allowed groups. All authorized senders share deck capabilities; usernames are not accepted.",
+		description: "Optional comma-separated numeric sender IDs allowed in DMs and allowed groups. Paired users also have access. All authorized senders share deck capabilities; usernames are not accepted.",
 	},
 	{
 		key: "TELEGRAM_BRIDGE_DB_PATH",

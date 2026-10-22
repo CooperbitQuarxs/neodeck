@@ -2,23 +2,43 @@
 
 The standalone supervised Bun bridge connects a separate Telegram bot to the always-on npi-deck inbox and its persistent NeoPi sessions. Hermes remains independent. See the [source-based Hermes parity matrix](telegram-parity.md) for implemented capabilities and justified exclusions.
 
-## Setup in Settings → Messaging
+## Setup in Settings → Integrations
 
-1. Create a **separate** bot with BotFather. Do not share its token with Hermes or another long-poll receiver. This bridge never pairs accounts, clears another receiver's webhook, or changes Hermes configuration.
-2. Save **Bot token** and **Allowed users** (comma-separated numeric sender IDs, not usernames). Tokens are masked. Never copy credentials into logs or troubleshooting output.
-3. For groups/supergroups, save **Allowed group chats** (`TELEGRAM_GROUP_ALLOWED_CHATS`), a comma-separated list of negative numeric chat IDs. A group needs **both** an allowed chat and an allowed sender. Blank disables groups. Bot messages, anonymous/channel senders and unauthorized traffic are silently ignored before downloads, session access or card creation.
-4. **Require group mention** (`TELEGRAM_REQUIRE_MENTION`) defaults to true. Commands, `@botname` mentions and replies to this bot invoke it. **Wake patterns** (`TELEGRAM_MENTION_PATTERNS`) add case-insensitive JavaScript regex triggers in text/captions: enter a JSON string array (for example `["\\bdeck\\b"]`) or one regex per line. The wake text is preserved. Invalid expressions refuse bridge startup. **Free-response chats** (`TELEGRAM_FREE_RESPONSE_CHATS`, negative chat IDs) and **Free-response topics** (`TELEGRAM_FREE_RESPONSE_TOPICS`, `-100123:42` pairs) bypass mention gating only in those lanes. Setting require-mention false accepts every authorized message in allowed, non-excluded group topics. All allowed senders share configured deck capabilities: this is a trusted-owner bridge, not a guest sandbox.
-5. Click **Start**. Saving a token alone does not start anything. After configuration changes, click **Restart** for the bridge only. It does not restart NeoPi or replace the deck service.
+1. Create a separate bot with BotFather. Do not share its token with Hermes or another long-poll receiver. The bridge never clears another receiver's webhook or changes Hermes configuration.
+2. Save the bot token in the Telegram panel, then use **Verify token** to read its identity without sending a message. The saved token never appears in the setup response. Values supplied by the server's launching environment are read-only here.
+3. Start the bridge, then create a pairing invitation. Open the invitation in Telegram and press Start, or send the displayed `/start pair_<code>` command in a private chat. Invitations grant this deck's capabilities, expire in ten minutes, are single-use, and are stored as SHA-256 hashes. Creating another invitation or cancelling invalidates the previous one. Unpair removes that grant immediately; a separately configured manual allowlist entry still grants access until removed and the bridge restarted.
+4. Manual allowlisting remains available under **Manual allowlist and group access**. Allowed users are comma-separated numeric sender IDs, not usernames. An empty list permits pairing but no ordinary messages until an account is paired. Groups need both an allowed group ID and an allowed or paired sender. Blank group access disables groups. Unauthorized traffic is silently ignored before downloads, session access or inbox capture.
+5. **Require group mention** defaults to true. Commands, `@botname` mentions and replies to this bot invoke it. Advanced settings retain **Wake patterns**, `TELEGRAM_MENTION_PATTERNS`, as case-insensitive JavaScript regex triggers in text/captions. Enter a JSON string array or one expression per line; invalid expressions refuse startup. **Free-response chats**, `TELEGRAM_FREE_RESPONSE_CHATS`, takes negative chat IDs. **Free-response topics**, `TELEGRAM_FREE_RESPONSE_TOPICS`, takes `-100123:42` pairs. These bypass mention gating only in their configured lanes. Disabling require-mention accepts every authorized message in allowed, non-excluded group topics. No invocation option bypasses sender and group authorization.
+6. Saving does not start anything. Restart the bridge after changing connection or manual allowlist settings. Pairing, chat destinations, default actions and notification preferences apply without restarting NeoPi or the bridge.
 
-Long polling requires outbound HTTPS, not a public inbound port. Telegram failure remains isolated in the bridge process. Settings provides running/crashed status and logs. The bot identity is fetched from Telegram at bridge startup; command suffixes for another bot are ignored. Commands are registered in the bot's menu.
+Long polling requires outbound HTTPS, not a public inbound port. The panel distinguishes process status from successful polling, shows the bot identity and reports polling errors. Telegram failures remain isolated in the bridge process. Commands are registered in the bot menu.
 
 Bot mentions are admission signals, not content edits. Accepted task text and captions retain bot usernames, including quoted identifiers and values inside card front matter.
 
 **Allowed topics** (`TELEGRAM_ALLOWED_TOPICS`) and **Ignored topics** (`TELEGRAM_IGNORED_THREADS`) accept comma-separated positive topic IDs or scoped `negative-chat-ID:topic-ID` pairs. A bare ID applies across allowed groups. Nonempty allowed-topics restricts groups to those topics; ignored-topics always wins for routable topics, even over commands, wake patterns and free response. Forum General is `1`. Allowed-topics also treats an absent thread in a plain group as `1`, but ignored-topics does not filter plain groups' absent/reply-anchor threads. These filters do not apply to DMs. No invocation option bypasses sender AND group authorization. Non-invoking conversation is dropped, not stored as context.
 
+## Chat destinations and needs-you notifications
+
+Every accepted private chat or group topic appears in **Chat destinations**. Select an existing NeoPi thread to talk to its agent, or detach it to create a fresh thread on the next chat. Choosing a retained thread stores its binding without starting or restarting an agent. Each lane can interpret ordinary messages as task cards, inbox captures or chat prompts. Explicit `/task`, `/capture` and `/chat` override that setting. Accepted durable intake keeps its original mode across restart, even if preferences change later.
+
+Enable **Needs you** for a bound thread to receive plan-review and extension-question notifications in that Telegram lane. A read-only WebSocket observer subscribes to opted-in sessions without resuming stopped sessions. Notifications respect sender, group and topic access, retain topic routing and record successful delivery IDs to suppress replay duplicates for seven days. Failed sends appear on the conversation row. No delivery is claimed before Telegram accepts it. A network interruption after Telegram accepted a send can still leave delivery uncertain.
+
+Telegram does not approve or reject plans on your behalf. A new proposal reports that review is needed in the web UI; the native plan-review lifecycle still applies. Individual child-agent targeting and spawning templates are not fabricated as new root sessions.
+
+### Live management API
+
+- `GET /api/telegram` returns masked configuration, supervisor and poll status, paired users, and conversations.
+- `PUT /api/telegram/config` accepts `botToken?`, `allowedUsers?`, `allowedGroups?` and `requireMention?`. Launch-environment values cannot be overridden.
+- `POST /api/telegram/verify` calls Telegram `getMe`, not `sendMessage`.
+- `POST /api/telegram/pairing` creates `{code, expiresAt, url?}`; `DELETE` cancels it.
+- `DELETE /api/telegram/users/:id` revokes a paired user's grant.
+- `PATCH /api/telegram/conversations/:id` accepts `mode?: "task" | "capture" | "chat"`, `sessionId?: string | null`, and `notify?: boolean`.
+
+These use the deck's existing local API trust boundary. Pairing is not a guest sandbox or a separate multi-user permission system.
+
 ## Inbox and kanban
 
-DM text and invoked group text are **tasks by default**. They create `ticket` inbox items, then promote through the existing inbox API to kanban cards. This does not execute an agent or run a card (#101 owns execution). Plain prose produces one card. An explicit list with two or more top-level bullets, checklist items or numbered entries produces one card per item, retaining the introductory context and each item's continuation lines. This is deterministic first-pass decomposition, not an extra agent run.
+DM text and invoked group text initially default to tasks. The per-chat preference can instead select capture or chat. Task mode creates `ticket` inbox items, then promotes through the existing inbox API to kanban cards. This does not execute an agent or run a card. Plain prose produces one card. An explicit list with two or more top-level bullets, checklist items or numbered entries produces one card per item, retaining introductory context and continuation lines.
 
 Every resulting card retains leading YAML front matter:
 
@@ -68,7 +88,7 @@ All commands work in DMs and allowed groups, with optional `/command@botname` su
 
 Session bindings/history and card defaults live in `TELEGRAM_BRIDGE_DB_PATH` (default: the deck data directory's `telegram-bridge.db`). Existing chat-only DM mappings are preserved. Group/forum topics and DM topics have separate lanes; forum General consistently uses topic 1. Native direct-message topics are distinguished from message-thread topics. Every outbound chunk stays in its originating topic, including command replies.
 
-`/chat` lazily creates a session if unbound. An inactive binding resumes its exact stored transcript through the deck; an active persistent NeoPi is reused. Resume failure is reported, **never silently replaced by an empty session**. `/new` is the explicit fresh-start choice. No command restarts NeoPi. Only deck-supported native commands are forwarded: this is not an equivalence claim for Hermes transcript branch/undo/save. An already pending plan review blocks a Telegram prompt until resolved in the web UI. A new plan proposal during a Telegram turn is **rejected and plan mode disabled**, not queued for later approval; request/review a new proposal in the web UI.
+`/chat` lazily creates a session if unbound. An inactive binding resumes its exact stored transcript through the deck; an active persistent NeoPi is reused. Resume failure is reported, never silently replaced by an empty session. `/new` is the explicit fresh-start choice. No command restarts NeoPi. Only deck-supported native commands are forwarded. An already pending plan review blocks a Telegram prompt until resolved in the web UI; new proposals remain under NeoPi's review lifecycle rather than being automatically rejected.
 
 ## Photos and unsupported media
 
@@ -77,6 +97,8 @@ Caption a photo with `/chat` and optional text. The largest size is downloaded a
 Audio transcription, video/document extraction, TTS and outbound files are excluded Hermes provider/tool pipelines. Sticker/animation rendering is also excluded: these require their own download/format conversion and media-intake lifecycle, not just the existing Telegram photo path. An image-capable protocol alone does not make sticker vision impossible; this bridge does not implement that additional pipeline or imply it processed the content.
 
 Explicit `/chat` sends a topic-routed typing indicator and refreshes it while downloads/session work run, stopping on success, failure or cancellation. Text replies stream through throttled edits (`TELEGRAM_EDIT_INTERVAL_MS`, default 700, 250–5000 allowed), with safe long-message chunking. `TELEGRAM_POLL_TIMEOUT_SECONDS` defaults to 30 (1–50 allowed); transport requests are bounded. Diagnostics remove the configured token and transport exceptions never expose credential-bearing URLs.
+
+For offline verification, `TELEGRAM_API_ORIGIN` can point to a local fake Bot API. It accepts HTTPS or loopback HTTP and defaults to `https://api.telegram.org`. `apps/bridges/telegram/src/integration.test.ts` exercises setup, pairing, revocation, session binding, streamed edits, long replies, capture and attention notifications against local HTTP/WebSocket fixtures. No real Telegram account is used.
 
 ## Troubleshooting
 

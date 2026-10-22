@@ -2,6 +2,8 @@ import { Database } from "bun:sqlite";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import type { TelegramUpdate } from "./telegram.ts";
+import { createHash, randomBytes } from "node:crypto";
+import type { TelegramConversation, TelegramPairing } from "@npi-deck/protocol";
 
 export interface ChatSessionMapping {
 	chatId: string;
@@ -48,6 +50,11 @@ export class TelegramBridgeStore {
 			INSERT OR IGNORE INTO telegram_session_history SELECT * FROM telegram_chat_sessions;
 			CREATE TABLE IF NOT EXISTS telegram_card_defaults (chat_id TEXT PRIMARY KEY, properties TEXT NOT NULL);
 			CREATE TABLE IF NOT EXISTS telegram_pending_intake (update_id INTEGER PRIMARY KEY, payload TEXT NOT NULL);
+			CREATE TABLE IF NOT EXISTS telegram_pairing (hash TEXT PRIMARY KEY, expires_at TEXT NOT NULL);
+			CREATE TABLE IF NOT EXISTS telegram_paired_users (id TEXT PRIMARY KEY, label TEXT NOT NULL, paired_at TEXT NOT NULL);
+			CREATE TABLE IF NOT EXISTS telegram_conversations (id TEXT PRIMARY KEY, value TEXT NOT NULL);
+			CREATE TABLE IF NOT EXISTS telegram_runtime (id INTEGER PRIMARY KEY CHECK (id = 1), value TEXT NOT NULL);
+			CREATE TABLE IF NOT EXISTS telegram_notifications (id TEXT PRIMARY KEY, sent_at TEXT NOT NULL);
 		`);
 	}
 
@@ -117,9 +124,77 @@ export class TelegramBridgeStore {
 			.run(chatId, JSON.stringify(properties));
 	}
 
+	createPairing(username?: string): TelegramPairing {
+		const code = randomBytes(24).toString("base64url");
+		const expiresAt = new Date(Date.now() + 10 * 60_000).toISOString();
+		this.db.transaction(() => {
+			this.db.query("DELETE FROM telegram_pairing").run();
+			this.db.query("INSERT INTO telegram_pairing VALUES (?, ?)").run(pairingHash(code), expiresAt);
+		})();
+		return { code, expiresAt, ...(username ? { url: `https://t.me/${username}?start=pair_${code}` } : {}) };
+	}
+
+	cancelPairing(): void { this.db.query("DELETE FROM telegram_pairing").run(); }
+
+	consumePairing(code: string, userId: string, label: string): boolean {
+		return this.db.transaction(() => {
+			const found = this.db.query<{ hash: string }, [string, string]>("DELETE FROM telegram_pairing WHERE hash = ? AND expires_at > ? RETURNING hash")
+				.get(pairingHash(code), nowIso());
+			if (!found) return false;
+			this.db.query("INSERT INTO telegram_paired_users VALUES (?, ?, ?) ON CONFLICT(id) DO UPDATE SET label = excluded.label, paired_at = excluded.paired_at")
+				.run(userId, label, nowIso());
+			return true;
+		})();
+	}
+
+	pairedUsers(): Array<{ id: string; label: string; pairedAt: string }> {
+		return this.db.query<{ id: string; label: string; pairedAt: string }, []>("SELECT id, label, paired_at AS pairedAt FROM telegram_paired_users ORDER BY paired_at").all();
+	}
+
+	isPaired(id: string): boolean {
+		return !!this.db.query("SELECT 1 FROM telegram_paired_users WHERE id = ?").get(id);
+	}
+
+	unpair(id: string): void { this.db.query("DELETE FROM telegram_paired_users WHERE id = ?").run(id); }
+
+	conversation(id: string): TelegramConversation | undefined {
+		const row = this.db.query<{ value: string }, [string]>("SELECT value FROM telegram_conversations WHERE id = ?").get(id);
+		return row ? JSON.parse(row.value) : undefined;
+	}
+
+	conversations(): TelegramConversation[] {
+		return this.db.query<{ value: string }, []>("SELECT value FROM telegram_conversations").all()
+			.map(row => JSON.parse(row.value) as TelegramConversation)
+			.map(row => ({ ...row, sessionId: this.get(row.id)?.sessionId }))
+			.sort((a, b) => b.lastSeenAt.localeCompare(a.lastSeenAt));
+	}
+
+	saveConversation(value: TelegramConversation): void {
+		this.db.query("INSERT INTO telegram_conversations VALUES (?, ?) ON CONFLICT(id) DO UPDATE SET value = excluded.value").run(value.id, JSON.stringify(value));
+	}
+
+	runtime(): { username?: string; polledAt?: string; error?: string; configFingerprint?: string } {
+		const row = this.db.query<{ value: string }, []>("SELECT value FROM telegram_runtime WHERE id = 1").get();
+		return row ? JSON.parse(row.value) : {};
+	}
+
+	setRuntime(value: ReturnType<TelegramBridgeStore["runtime"]>): void {
+		this.db.query("INSERT INTO telegram_runtime VALUES (1, ?) ON CONFLICT(id) DO UPDATE SET value = excluded.value").run(JSON.stringify(value));
+	}
+
+	notificationSent(id: string): boolean {
+		return !!this.db.query("SELECT 1 FROM telegram_notifications WHERE id = ?").get(id);
+	}
+
+	markNotificationSent(id: string): void {
+		this.db.transaction(() => {
+			this.db.query("INSERT OR IGNORE INTO telegram_notifications VALUES (?, ?)").run(id, nowIso());
+			this.db.query("DELETE FROM telegram_notifications WHERE sent_at < ?").run(new Date(Date.now() - 7 * 86400_000).toISOString());
+		})();
+	}
+
 	close(): void {
-		// All ten fixed queries use Bun's connection-owned cache (below its 20-query limit).
-		// Do not leave uncached prepare() handles alive when closing on Windows.
+		// Cached statements belong to this connection.
 		this.db.close(true);
 	}
 }
@@ -138,3 +213,5 @@ function fromRow(row: MappingRow): ChatSessionMapping {
 		updatedAt: row.updated_at,
 	};
 }
+
+function pairingHash(code: string): string { return createHash("sha256").update(code).digest("hex"); }
