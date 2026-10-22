@@ -136,15 +136,6 @@ export interface JudgeEvent {
 	text: string;
 }
 
-export const PREVIEW_JUDGE: readonly JudgeEvent[] = [
-	{ id: "j1", at: minutesAgo(4), tone: "warn", agent: "Worker", where: "T-6 Dark theme toggle", text: "No tool call for 9 minutes after 'running the tests'; probably waiting on a lock. Not stuck yet." },
-	{ id: "j2", at: minutesAgo(17), tone: "bad", agent: "Worker", where: "T-5 Fix anchor links", text: "Spawned 6 workers to 'check each page'. Not sanctioned by the card; stopped 5, kept 1." },
-	{ id: "j3", at: minutesAgo(41), tone: "info", agent: "Main", where: "Fix the broken anchor links", text: "Ended its turn with a question for you: whether the link checker should fail the build." },
-	{ id: "j4", at: minutesAgo(95), tone: "ok", agent: "Worker", where: "T-10 Cache the first render pass", text: "Done with evidence: build 9.3s, 64 tests pass, PR #212 opened." },
-	{ id: "j5", at: minutesAgo(160), tone: "info", agent: "Chronicler", where: "Draft 0.5 release notes", text: "Wrote decisions/0004-release-cadence.md from the thread." },
-	{ id: "j6", at: minutesAgo(400), tone: "warn", agent: "nightly-docs-build", where: "routine", text: "link_check reported 3 broken links; filed a ticket in the inbox." },
-];
-
 /* ---------------------------------------------------------------- github */
 
 export interface Repo {

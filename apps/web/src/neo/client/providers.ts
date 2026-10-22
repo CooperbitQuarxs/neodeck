@@ -8,13 +8,23 @@ export interface ProvidersClient {
  list(): Promise<ProviderExposure[]>;
  setHidden(id: string, hidden: boolean): Promise<ProviderExposure[]>;
 }
-const fixtures = PREVIEW_PROVIDERS.map(p => ({ ...p }));
+const VISIBILITY_KEY = "neodeck.provider-picker-visibility";
+function savedVisibility(): Record<string, boolean> {
+ try {
+  const value: unknown = JSON.parse(localStorage.getItem(VISIBILITY_KEY) ?? "{}");
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  return Object.fromEntries(Object.entries(value).filter((entry): entry is [string, boolean] => typeof entry[1] === "boolean"));
+ } catch { return {}; }
+}
+const visibility = savedVisibility();
+const fixtures = PREVIEW_PROVIDERS.map(p => ({ ...p, hidden: visibility[p.id] ?? p.hidden }));
 const preview: ProvidersClient = {
  async list() { return fixtures.map(p => ({ ...p })); },
  async setHidden(id, hidden) {
   const provider = fixtures.find(p => p.id === id);
   if (!provider) throw new Error("Provider not found. Reload the provider list.");
   provider.hidden = hidden;
+  try { localStorage.setItem(VISIBILITY_KEY, JSON.stringify(Object.fromEntries(fixtures.map(p => [p.id, p.hidden])))); } catch { /* Storage can be unavailable in private browser contexts. */ }
   return this.list();
  },
 };

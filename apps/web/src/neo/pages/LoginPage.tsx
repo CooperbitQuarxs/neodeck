@@ -6,7 +6,7 @@
 import { type FormEvent, useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { NeoMark } from "@/components/BrandLockup";
-import { NeoButton } from "@/components/neo";
+import { NeoButton, NeoInput } from "@/components/neo";
 import { auth, useAccount } from "../client/auth";
 import { PREVIEW_ACCOUNTS } from "../client/preview-data";
 import { isPreview } from "../client/source";
@@ -54,11 +54,11 @@ export function LoginPage() {
 
 				<label className="neo-field">
 					<span className="neo-field-label">Handle</span>
-					<input className="neo-input" autoComplete="username" autoFocus value={handle} onChange={(e) => setHandle(e.target.value)} data-mono="true" spellCheck={false} />
+					<NeoInput autoComplete="username" autoFocus value={handle} onChange={(e) => setHandle(e.target.value)} mono spellCheck={false} />
 				</label>
 				<label className="neo-field">
 					<span className="neo-field-label">Password</span>
-					<input className="neo-input" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
+					<NeoInput type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
 				</label>
 				{error ? (
 					<p className="neo-field-error" role="alert">

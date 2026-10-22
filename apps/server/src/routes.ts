@@ -16,6 +16,7 @@ import { deriveLabel } from "./workspace-label.ts";
 import { McpAllowlistError, SessionClosedError, SessionInUseError, type AgentBridge } from "./bridge/types.ts";
 import { listSessionBackends, recordSessionBackend, sessionBackend } from "./backend/session-metadata.ts";
 
+import { FeatureUnavailableError } from "./backend/runtime.ts";
 const log = logger("routes");
 
 import { buildTasksRouter } from "./routes-tasks.ts";
@@ -221,9 +222,9 @@ export function buildRouter(
 		const id = c.req.param("id");
 		const handle = bridge.getSession(id);
 		if (!handle) return c.json({ error: "session not found or not active" }, 404);
-		let body: { name?: string; model?: { provider?: unknown; id?: unknown } };
+		let body: { name?: string; selector?: unknown; model?: { provider?: unknown; id?: unknown } };
 		try {
-			body = (await c.req.json()) as { name?: string; model?: { provider?: unknown; id?: unknown } };
+			body = await c.req.json();
 		} catch {
 			return c.json({ error: "invalid json" }, 400);
 		}
@@ -231,7 +232,12 @@ export function buildRouter(
 			if (typeof body.name === "string") {
 				await handle.setName(body.name.trim());
 			}
-			if (body.model && typeof body.model === "object") {
+			if (body.selector !== undefined) {
+				if (typeof body.selector !== "string" || !body.selector.trim()) return c.json({ error: "selector must be a non-empty string" }, 400);
+				if (!handle.setModelSelector) return c.json({ error: "This backend cannot select native roles or effort." }, 501);
+				await handle.setModelSelector(body.selector);
+			}
+			if (body.selector === undefined && body.model && typeof body.model === "object") {
 				const provider = typeof body.model.provider === "string" ? body.model.provider : "";
 				const modelId = typeof body.model.id === "string" ? body.model.id : "";
 				if (!provider || !modelId) {
@@ -246,11 +252,25 @@ export function buildRouter(
 		}
 	});
 
+	app.get("/models/selector", async (c) => {
+		if (!bridge.queryModels) return c.json({ error: "Native model search is unavailable on this backend." }, 501);
+		try {
+			return c.json(await bridge.queryModels(c.req.query("q") ?? "", {
+				...(c.req.query("sessionId") ? { sessionId: c.req.query("sessionId") } : {}),
+				cwd: c.req.query("cwd") ?? config.defaultCwd,
+			}));
+		} catch (error) {
+			if (error instanceof FeatureUnavailableError) return c.json({ error: "Native model search requires a newer NeoPi backend with query_model_selector." }, 501);
+			return c.json({ error: error instanceof Error ? error.message : String(error) }, 400);
+		}
+	});
+
 	app.get("/models", async (c) => {
 		const sessionId = c.req.query("sessionId");
 		try {
-			const opts: { sessionId?: string } = {};
+			const opts: { sessionId?: string; cwd?: string } = { cwd: config.defaultCwd };
 			if (sessionId) opts.sessionId = sessionId;
+			if (c.req.query("cwd")) opts.cwd = c.req.query("cwd");
 			const models = await bridge.listModels(opts);
 			const active = models.find((m) => m.isCurrent);
 			const body: ListModelsResponse = {

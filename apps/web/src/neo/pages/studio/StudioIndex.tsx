@@ -40,7 +40,7 @@ export function StudioIndex({ onCreate }: { onCreate: (kind: BuildableKind) => P
     if (needle && items.length === 0) return null;
     const Icon = KIND_ICONS[section.kind];
     return <section key={section.kind} className="neo-studio-section" aria-labelledby={`studio-${section.kind}`}>
-     <header><div><h2 id={`studio-${section.kind}`}><Icon size={15} />{section.title}{section.kind === "router" ? <PreviewChip domains={["studioGraphs"]} what="Routers" /> : null}</h2><p>{section.read}</p></div>
+     <header><div><h2 id={`studio-${section.kind}`}><Icon size={15} />{section.title}{section.kind === "router" ? <PreviewChip domains={["studioRouters"]} what="Routers" /> : null}</h2><p>{section.read}</p></div>
       {section.kind !== "map" ? <NeoButton size="sm" variant="ghost" onClick={() => void onCreate(section.kind as BuildableKind).catch(reason => setError(String(reason)))}><Plus size={13} />New {KIND_LABELS[section.kind].toLowerCase()}</NeoButton> : null}</header>
      {items.length === 0 ? <p className="neo-studio-section-empty">No {section.title.toLowerCase()} yet. New {KIND_LABELS[section.kind].toLowerCase()} starts one on an empty canvas.</p> : <ul className="neo-studio-rows">
       {items.map(g => <li key={g.id}><Link to={studioPath(g.id)} className="neo-studio-graph-row">

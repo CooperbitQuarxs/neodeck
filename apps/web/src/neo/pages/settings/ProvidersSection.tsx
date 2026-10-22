@@ -1,49 +1,85 @@
 import { useCallback, useEffect, useState } from "react";
 import type { EnvEntry, ProviderInfo } from "@npi-deck/protocol";
-import { Card, Empty, NeoBadge, NeoButton, Notice, SectionLabel, Table, type Column } from "@/components/neo";
+import { Card, Empty, NeoButton, NeoInput, Notice, SearchInput, SectionLabel } from "@/components/neo";
 import { settings } from "../../client/settings";
 import { ExposureTable } from "../UsagePage";
 import { OAuthFlow } from "./OAuthFlow";
-interface ProviderRow {id:string;name:string;oauth?:ProviderInfo;env?:EnvEntry}
-const ENV_PROVIDER:Record<string,string>={ANTHROPIC_API_KEY:"anthropic",OPENAI_API_KEY:"openai",OPENROUTER_API_KEY:"openrouter",GROQ_API_KEY:"groq",GOOGLE_API_KEY:"google",XAI_API_KEY:"xai"};
-export function ProvidersSection({admin}:{admin:boolean}){
- const [rows,setRows]=useState<ProviderRow[]>([]);const [notice,setNotice]=useState("");const [oauth,setOauth]=useState<{id:string;name:string}|null>(null);const [editing,setEditing]=useState("");const [key,setKey]=useState("");const [busy,setBusy]=useState(false);
- const refresh=useCallback(async()=>{try{const [providers,env]=await Promise.all([settings.auth.listProviders(),settings.engine.listEnv()]);const merged:ProviderRow[]=providers.providers.map(p=>({id:p.id,name:p.name,oauth:p}));for(const entry of env.entries){const id=ENV_PROVIDER[entry.key];if(!id)continue;const found=merged.find(p=>p.id===id);if(found)found.env=entry;else merged.push({id,name:{xai:"xAI",openai:"OpenAI",openrouter:"OpenRouter",groq:"Groq",google:"Google"}[id]??id,env:entry});}setRows(merged);}catch(e){setNotice(String(e));}},[]);
- useEffect(()=>{void refresh();},[refresh]);useEffect(()=>{if(!notice)return;const t=setTimeout(()=>setNotice(""),4000);return()=>clearTimeout(t);},[notice]);
- async function save(row:ProviderRow){
-  if(!row.env)return;
+
+interface ProviderRow { id: string; name: string; oauth?: ProviderInfo; env?: EnvEntry }
+const ENV_PROVIDER: Record<string, string> = { ANTHROPIC_API_KEY: "anthropic", OPENAI_API_KEY: "openai", OPENROUTER_API_KEY: "openrouter", GROQ_API_KEY: "groq", GOOGLE_API_KEY: "google", XAI_API_KEY: "xai" };
+const configured = (provider: ProviderRow) => provider.oauth?.state === "oauth" || provider.oauth?.state === "api-key" || provider.env?.isSet === true;
+
+export function ProvidersSection({ admin }: { admin: boolean }) {
+ const [rows, setRows] = useState<ProviderRow[]>([]);
+ const [notice, setNotice] = useState("");
+ const [oauth, setOauth] = useState<{ id: string; name: string } | null>(null);
+ const [editing, setEditing] = useState("");
+ const [key, setKey] = useState("");
+ const [busy, setBusy] = useState(false);
+ const [loading, setLoading] = useState(true);
+ const [query, setQuery] = useState("");
+ const refresh = useCallback(async () => {
+  try {
+   const [providers, env] = await Promise.all([settings.auth.listProviders(), settings.engine.listEnv()]);
+   const merged: ProviderRow[] = providers.providers.map(p => ({ id: p.id, name: p.name, oauth: p }));
+   for (const entry of env.entries) {
+    const id = ENV_PROVIDER[entry.key];
+    if (!id) continue;
+    const found = merged.find(p => p.id === id);
+    if (found) found.env = entry;
+    else merged.push({ id, name: { xai: "xAI", openai: "OpenAI", openrouter: "OpenRouter", groq: "Groq", google: "Google" }[id] ?? id, env: entry });
+   }
+   setRows(merged);
+  } catch (error) { setNotice(String(error)); }
+  finally { setLoading(false); }
+ }, []);
+ useEffect(() => { void refresh(); }, [refresh]);
+ async function save(row: ProviderRow) {
+  if (!row.env) return;
   setBusy(true);
-  try{
-   await settings.engine.patchEnv({[row.env.key]:key});
-   setEditing("");setKey("");
-   setNotice(row.env.source==="process-env" ? "Saved in the managed env file. Remove the launching process's value and restart to use it." : "Saved. Restart the server to apply this API key.");
+  try {
+   await settings.engine.patchEnv({ [row.env.key]: key });
+   setEditing(""); setKey("");
+   setNotice(row.env.source === "process-env" ? "Saved in the managed env file. Remove the launching process's value and restart to use it." : "Saved. Restart the server to apply this API key.");
    await refresh();
-  }catch(e){setNotice(String(e));}finally{setBusy(false);}
+  } catch (error) { setNotice(String(error)); } finally { setBusy(false); }
  }
- async function signOut(row:ProviderRow){
+ async function signOut(row: ProviderRow) {
   setBusy(true);
-  try{
-   if(row.oauth?.state==="oauth"){await settings.auth.revoke(row.id);setNotice("Signed out.");}
-   else if(row.env){
-    await settings.engine.patchEnv({[row.env.key]:null});
-    setNotice(row.env.source==="process-env" ? "Managed value removed. The launching process still supplies this key; remove it there and restart." : "Saved. Restart the server to stop using this API key.");
+  try {
+   if (row.oauth?.state === "oauth") { await settings.auth.revoke(row.id); setNotice("Signed out."); }
+   else if (row.env) {
+    await settings.engine.patchEnv({ [row.env.key]: null });
+    setNotice(row.env.source === "process-env" ? "Managed value removed. The launching process still supplies this key; remove it there and restart." : "Saved. Restart the server to stop using this API key.");
    }
    await refresh();
-  }catch(e){setNotice(String(e));}finally{setBusy(false);}
+  } catch (error) { setNotice(String(error)); } finally { setBusy(false); }
  }
- const columns:Column<ProviderRow>[]=[{key:"name",header:"Provider",render:p=>p.name},{key:"kind",header:"Auth",render:p=><NeoBadge>{p.oauth?.state==="oauth"?"OAuth":p.env?"API key":"OAuth"}</NeoBadge>},{key:"status",header:"Status",render:p=><span className="neo-settings-description">{p.oauth?.state==="oauth"?`Signed in${p.oauth.count>1?` · ${p.oauth.count} accounts`:""}`:p.env?.isSet||p.oauth?.state==="api-key"?"Key set":"Not configured"}</span>},{key:"actions",header:"",align:"right",render:p=>editing===p.id?<div className="neo-settings-actions"><input aria-label={`API key for ${p.name}`} className="neo-input" type="password" autoComplete="off" value={key} onChange={e=>setKey(e.target.value)}/><NeoButton size="sm" disabled={busy||!key.trim()} onClick={()=>void save(p)}>Save</NeoButton><NeoButton size="sm" variant="ghost" onClick={()=>{setEditing("");setKey("");}}>Cancel</NeoButton></div>:<div className="neo-settings-actions">{p.oauth&&<NeoButton size="sm" disabled={busy} onClick={()=>setOauth(p)}>Sign in</NeoButton>}{p.env&&<NeoButton size="sm" variant="ghost" disabled={busy} onClick={()=>{setEditing(p.id);setKey("");}}>Set key</NeoButton>}{(p.oauth?.state==="oauth"||p.env?.isSet)&&<NeoButton variant="ghost" size="sm" disabled={busy} onClick={()=>void signOut(p)}>Sign out</NeoButton>}</div>}];
- const configured = (provider:ProviderRow) => provider.oauth?.state==="oauth" || provider.oauth?.state==="api-key" || provider.env?.isSet===true;
- const otherProviders = rows.filter(provider=>!configured(provider));
- return <Card id="providers" title="Providers" description="Sign in to a provider or save an API key." flush>
+ const needle = query.trim().toLocaleLowerCase();
+ const visible = rows.filter(provider => !needle || [provider.id, provider.name].some(value => value.toLocaleLowerCase().includes(needle))).sort((a, b) => Number(configured(b)) - Number(configured(a)));
+ return <Card id="providers" title="Inference providers" description="Credentials used by the connected NeoPi runtime, separate from Deck sign-in and NeoProxy accounts.">
   <div className="neo-settings-stack">
-   {notice&&<Notice>{notice}</Notice>}
-   <Table columns={columns} rows={rows.filter(configured)} rowKey={provider=>provider.id} empty={<Empty title="No providers configured" hint="Open Other providers to sign in or set an API key."/>}/>
-   {otherProviders.length>0&&<details className="neo-settings-other-providers">
-    <summary>Other providers ({otherProviders.length})</summary>
-    <Table columns={columns} rows={otherProviders} rowKey={provider=>provider.id}/>
-   </details>}
-   {admin&&<div className="neo-settings-inset"><SectionLabel>Exposure</SectionLabel><ExposureTable/></div>}
+   {notice && <Notice>{notice}</Notice>}
+   <SearchInput value={query} onChange={setQuery} placeholder="Find an inference provider" aria-label="Find an inference provider" />
+   <div className="neo-settings-provider-list">
+    {visible.map(provider => <div className="neo-settings-provider" key={provider.id} data-configured={configured(provider)}>
+     <div className="neo-settings-provider-identity">
+      <strong>{provider.name}</strong>
+      <span className="neo-settings-description">{provider.oauth?.state === "oauth" ? `Signed in with OAuth${provider.oauth.count > 1 ? `, ${provider.oauth.count} accounts` : ""}` : configured(provider) ? "API key configured" : "Not configured"}</span>
+      {editing === provider.id && <label className="neo-settings-field">API key<NeoInput aria-label={`API key for ${provider.name}`} type="password" autoComplete="off" value={key} onChange={event => setKey(event.target.value)} autoFocus /></label>}
+     </div>
+     <div className="neo-settings-actions">
+      {editing === provider.id ? <><NeoButton size="sm" variant="primary" disabled={busy || !key.trim()} onClick={() => void save(provider)}>Save key</NeoButton><NeoButton size="sm" variant="ghost" disabled={busy} onClick={() => { setEditing(""); setKey(""); }}>Cancel</NeoButton></> : <>
+       {provider.oauth && <NeoButton size="sm" disabled={busy} onClick={() => setOauth(provider)}>Sign in</NeoButton>}
+       {provider.env && <NeoButton size="sm" variant="ghost" disabled={busy} onClick={() => { setEditing(provider.id); setKey(""); }}>Set API key</NeoButton>}
+       {(provider.oauth?.state === "oauth" || provider.env?.isSet) && <NeoButton variant="ghost" size="sm" disabled={busy} onClick={() => void signOut(provider)}>{provider.oauth?.state === "oauth" ? "Sign out" : "Remove key"}</NeoButton>}
+      </>}
+     </div>
+    </div>)}
+    {!visible.length && <Empty title={loading ? "Loading inference providers" : rows.length ? "No matching providers" : "No inference providers available"} hint={loading ? undefined : rows.length ? "Try a provider name such as Anthropic or OpenAI." : "Check the NeoPi connection and reload this page."} />}
+   </div>
+   {admin && <div className="neo-settings-stack neo-settings-provider-visibility"><SectionLabel>Deck picker visibility</SectionLabel><p className="neo-settings-description">This preview catalogue controls what Deck pickers show. It does not configure credentials or change which models NeoProxy serves.</p><ExposureTable /></div>}
   </div>
-  <OAuthFlow provider={oauth} onClose={()=>setOauth(null)} onComplete={()=>{setNotice("Saved. Provider signed in.");void refresh();}}/>
+  <OAuthFlow provider={oauth} onClose={() => setOauth(null)} onComplete={() => { setNotice("Saved. Provider signed in."); void refresh(); }} />
  </Card>;
 }
