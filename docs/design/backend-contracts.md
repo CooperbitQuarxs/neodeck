@@ -82,9 +82,16 @@ Notes are read live (`/api/kb/*`); humans do not write (the server refuses by de
 
 - `GET /api/kb/history?path=` → `{ events: { id, at, actor, kind: "wrote"|"asked"|"linked", text, threadId? }[] }`.
 
-## 10. Skills usage
+## 10. Skills, commands, extensions and usage
+
+Skills and marketplace operations are live. `GET /api/slash-commands` lists NeoPi built-ins, Deck commands and saved user/project prompts. `GET /api/skills/extensions?cwd=` lists discoverable code modules and manifest bundles through NeoPi's capability loader without executing extension code. It returns `{ extensions: ExtensionSummary[], warnings: string[] }`; the protocol owns the row shape. Discovery does not claim an extension is active in a particular session.
+
+The skill discovery source `agents` means shared `.agent/skills` and `.agents/skills` directories. It does not mean running agents, agent templates or inference providers. Marketplace plugins may separately bundle agent templates.
+
+Usage remains an explicitly enabled preview, hidden by default:
 
 - `GET /api/skills/usage` → `{ [skillId]: { lastUsedAt, uses7d } }`.
+- NeoPi must supply persisted per-skill invocation events with resolved path identity and coverage before this can become live. An available skill or arbitrary file read does not prove invocation. Unknown history must remain unknown.
 
 ## 11. GitHub (`github`)
 

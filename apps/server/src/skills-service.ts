@@ -20,10 +20,11 @@ import { readdir, readFile, stat } from "node:fs/promises";
 import * as path from "node:path";
 
 import type { Skill as SdkSkill } from "@oh-my-pi/pi-coding-agent/capability/skill";
-import { sdk } from "./backend/runtime.ts";
+import { feature, hasFeature, sdk } from "./backend/runtime.ts";
 
 import type {
 	CreateSkillRequest,
+	ListExtensionsResponse,
 	ListSkillsResponse,
 	SkillDetailResponse,
 	SkillFile,
@@ -68,7 +69,7 @@ const PROVIDER_LABEL: Readonly<Record<string, string>> = {
 	windsurf: "Windsurf",
 	cline: "Cline",
 	gemini: "Gemini",
-	agents: "Subagents",
+	agents: "Shared agent directories",
 	custom: "Custom",
 };
 
@@ -95,6 +96,41 @@ export class SkillsService {
 		private readonly config: Config,
 		private readonly marketplace: MarketplaceService,
 	) {}
+
+	async listExtensions(cwd?: string): Promise<ListExtensionsResponse> {
+		// NeoPi caches absent directories too. Refresh inventory after external file changes.
+		if (hasFeature("mcp-servers")) feature("mcp-servers").clearFsCache();
+		type DiscoveredExtension = {
+			name: string;
+			path: string;
+			level: string;
+			manifest?: { description?: string };
+			_source: { provider: string; providerName: string };
+		};
+		const { loadCapability } = sdk();
+		const results = await Promise.all(
+			(["extension-modules", "extensions"] as const).map(async (capability) => {
+				const result = await loadCapability<DiscoveredExtension>(capability, { cwd: cwd?.trim() || this.config.defaultCwd });
+				return {
+					extensions: result.items.map((item) => ({
+						id: `${capability}:${encodePathToId(item.path)}`,
+						name: item.name,
+						path: item.path,
+						kind: capability === "extension-modules" ? "module" as const : "bundle" as const,
+						description: item.manifest?.description,
+						provider: item._source.provider,
+						providerLabel: PROVIDER_LABEL[item._source.provider] ?? item._source.providerName,
+						level: item.level,
+					})),
+					warnings: result.warnings,
+				};
+			}),
+		);
+		return {
+			extensions: results.flatMap((result) => result.extensions).sort((a, b) => a.name.localeCompare(b.name)),
+			warnings: results.flatMap((result) => result.warnings),
+		};
+	}
 
 	async listSkills(cwd?: string): Promise<ListSkillsResponse> {
 		const resolvedCwd = cwd?.trim() || this.config.defaultCwd;
