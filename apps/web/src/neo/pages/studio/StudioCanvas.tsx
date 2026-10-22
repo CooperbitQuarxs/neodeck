@@ -54,7 +54,7 @@ function Canvas({ graph, selected, onSelect, onChange, run }: CanvasProps) {
  const [sizes, setSizes] = useState<Record<string, { width: number; height: number }>>({});
  const flow = useReactFlow<CanvasNode>(); const horizontal = graph.kind === "router";
  const initialized = useNodesInitialized();
- const framed = useRef(false), addButton = useRef<HTMLButtonElement>(null), paletteRoot = useRef<HTMLElement>(null);
+ const framed = useRef(false), addButton = useRef<HTMLButtonElement>(null), paletteRoot = useRef<HTMLElement>(null), root = useRef<HTMLDivElement>(null);
  useEffect(() => {
   if (!initialized || framed.current) return;
   const frame = requestAnimationFrame(() => {
@@ -73,18 +73,25 @@ function Canvas({ graph, selected, onSelect, onChange, run }: CanvasProps) {
   return { id: item.id, source: item.from.node, target: item.to.node, sourceHandle: item.from.port, targetHandle: item.to.port, selected: item.id === edge, type: horizontal ? "routing" : "default", data: { caption: source?.type === "router.stage" ? "demote" : undefined }, label: branch ? item.from.port : undefined, markerEnd: { type: MarkerType.ArrowClosed, width: 14, height: 14, color: "rgb(var(--ink-3))" }, style: { stroke: "rgb(var(--ink-4))", strokeWidth: 1.3 }, labelStyle: { fill: "rgb(var(--ink-2))", fontSize: 11.5 }, labelBgStyle: { fill: "var(--neo-panel)" }, labelBgPadding: [5, 3], labelBgBorderRadius: 5 };
  }), [graph.edges, graph.nodes, horizontal, edge]);
  useEffect(() => { if (selected) setEdge(null); }, [selected]);
- /* Opening the inspector narrows the canvas; bring the selected node back into view if it fell off the edge. */
+ /* Selecting a node opens the inspector, which narrows the canvas after this render; the dock can also
+    open later (an Execute refusal selects a node as its dialog closes). So check on selection and again
+    whenever the canvas resizes, and bring the selected node back into view if it fell off the edge. */
  useEffect(() => {
-  if (!selected) return;
-  const timer = setTimeout(() => {
-   const node = flow.getInternalNode(selected), box = document.querySelector(".neo-studio-canvas")?.getBoundingClientRect();
-   if (!node || !box) return;
+  const element = root.current;
+  if (!selected || !element) return;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const reveal = () => {
+   const node = flow.getInternalNode(selected), box = element.getBoundingClientRect();
+   if (!node || box.width === 0) return;
    const width = node.measured.width ?? 224, height = node.measured.height ?? 120, at = node.internals.positionAbsolute;
    const topLeft = flow.flowToScreenPosition(at), bottomRight = flow.flowToScreenPosition({ x: at.x + width, y: at.y + height });
    if (topLeft.x >= box.left && topLeft.y >= box.top && bottomRight.x <= box.right && bottomRight.y <= box.bottom) return;
    void flow.setCenter(at.x + width / 2, at.y + height / 2, { zoom: flow.getZoom(), duration: 220 });
-  }, 60);
-  return () => clearTimeout(timer);
+  };
+  const schedule = () => { clearTimeout(timer); timer = setTimeout(reveal, 80); };
+  const observer = new ResizeObserver(schedule);
+  observer.observe(element); schedule();
+  return () => { clearTimeout(timer); observer.disconnect(); };
  }, [selected, flow]);
  useEffect(() => {
   if (!palette) return;
@@ -133,7 +140,7 @@ function Canvas({ graph, selected, onSelect, onChange, run }: CanvasProps) {
   onChange({ ...graph, nodes: [...graph.nodes, node] }); onSelect(node.id); closePalette(false); void flow.setCenter(position.x + 112, position.y + 65, { zoom: Math.max(.8, flow.getZoom()), duration: 250 });
  }
  const available = NODE_TYPES.filter(n => n.kind === graph.kind && `${n.label} ${n.blurb} ${n.category}`.toLowerCase().includes(search.toLowerCase()));
- return <div className="neo-studio-canvas">
+ return <div ref={root} className="neo-studio-canvas">
  <GraphCanvasSurface<CanvasNode, Edge> nodes={nodes} edges={edges} nodeTypes={nodeTypes} edgeTypes={edgeTypes} onNodesChange={changes} onEdgesChange={edgeChanges} onDelete={remove} onNodeClick={(_, node) => onSelect(node.id)} onEdgeClick={(_, item) => { setEdge(item.id); onSelect(null); }} onPaneClick={() => { onSelect(null); setEdge(null); if (palette) closePalette(false); }} onConnect={connect} fitViewOptions={{ padding: .08, maxZoom: 1 }} minZoom={.3} nodesFocusable edgesFocusable deleteKeyCode={DELETE_KEYS} />
  {graph.nodes.length === 0 ? <div className="neo-studio-canvas-empty"><Empty icon={Workflow} title="Start with a node" hint="Add a trigger or an input, then connect what should happen next." /></div> : null}
  <button ref={addButton} type="button" className="neo-studio-add" onClick={() => palette ? closePalette() : setPalette(true)} aria-expanded={palette} aria-haspopup="dialog"><Plus size={14} />Add node</button>
