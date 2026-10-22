@@ -247,7 +247,8 @@ export class CardAgentRunner {
 				const result = stream.result();
 				if (assignment.completedByMove) { status = "completed"; outcome = result.answer ?? "Card moved to the configured completion column"; }
 				else if (signal.aborted) { status = "cancelled"; outcome = "Cancelled"; }
-				else if (exit !== 0 || result.error || result.answer === undefined) throw new Error(result.error ?? `NeoPi worker exit ${exit}: ${stderr}`);
+				else if (exit !== 0) throw new Error(`NeoPi worker exit ${exit}: ${stderr.trim() || result.error || "no diagnostic output"}`);
+				else if (result.error || result.answer === undefined) throw new Error(result.error ?? "NeoPi worker returned no answer");
 				else { status = "completed"; outcome = result.answer; }
 			} finally {
 				signal.removeEventListener("abort", abort);
