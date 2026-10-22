@@ -1,6 +1,7 @@
 import { afterEach, expect, mock, spyOn, test } from "bun:test";
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { homedir } from "node:os";
 import { INBOX_CARD_ADDED_EVENT, type InboxHistoryEvent, type InboxProposal, type InboxReceipt, type InboxRouting } from "@npi-deck/protocol";
 import { createInbox, getInbox } from "./db/inbox.ts";
 import { closeDb, getDb, openDb } from "./db/index.ts";
@@ -15,7 +16,7 @@ import { githubIssueTransport } from "./routines/github-issues.ts";
 let directory = "";
 afterEach(() => { mock.restore(); closeDb(); if (directory) fs.rmSync(directory, { recursive: true, force: true }); directory = ""; });
 function boot() {
-	const root = path.join(process.env.HOME!, ".cache/npi-canary/neodeck-pool/InboxRouter/tests");
+	const root = path.join(homedir(), ".cache/npi-canary/neodeck-pool/InboxRouter/tests");
 	fs.mkdirSync(root, { recursive: true });
 	directory = fs.mkdtempSync(path.join(root, "routing-"));
 	openDb({ path: path.join(directory, "deck.db") });

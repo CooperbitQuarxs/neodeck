@@ -1,5 +1,5 @@
 import { ImagePlus, Send, X } from "lucide-react";
-import { type ClipboardEvent, type DragEvent, useRef, useState } from "react";
+import { type ClipboardEvent, type DragEvent, useEffect, useRef, useState } from "react";
 import type { InboxKind } from "@npi-deck/protocol";
 import { NeoButton, Segmented } from "@/components/neo";
 import { uploadImage, type UploadedImage } from "@/lib/uploads-api";
@@ -20,6 +20,7 @@ export function CaptureComposer({ onCapture }: { onCapture: (title: string, body
 	const titleInput = useRef<HTMLInputElement>(null);
 	const pending = useRef(0);
 	const submitting = useRef(false);
+	useEffect(() => { if (!busy && notice) titleInput.current?.focus(); }, [busy, notice]);
 
 	async function attach(files: File[]): Promise<void> {
 		if (submitting.current || files.length === 0) return;
@@ -49,7 +50,6 @@ export function CaptureComposer({ onCapture }: { onCapture: (title: string, body
 			await onCapture(title.trim(), [body, images].filter(Boolean).join("\n\n"), kind);
 			setTitle(""); setBody(""); setAttachments([]);
 			setNotice("Captured in the inbox.");
-			requestAnimationFrame(() => titleInput.current?.focus());
 		} catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)); }
 		finally { submitting.current = false; setBusy(false); }
 	}

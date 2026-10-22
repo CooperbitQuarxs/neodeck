@@ -23,6 +23,7 @@ export function InboxPage() {
 	const openId = params.get("item");
 	const tasksCounter = useStore(state => state.tasksChangeCounter);
 	const request = useRef(0);
+	const focusTarget = useRef<string | null>(null);
 	const refresh = useCallback(async () => {
 		const version = ++request.current;
 		const [inbox, routes] = await Promise.allSettled([inboxApi.list({ includeProcessed: true }), inboxApi.routing()]);
@@ -45,10 +46,16 @@ export function InboxPage() {
 	}, [items, filter, search]);
 	const open = items?.find(item => item.id === openId);
 	const waiting = items?.filter(item => !item.processedAt).length ?? 0;
+	useEffect(() => {
+		const target = focusTarget.current;
+		if (!target) return;
+		const element = document.getElementById(target) ?? (target !== "inbox-item-title" ? document.querySelector<HTMLInputElement>('[aria-label="Search the inbox"]') : null);
+		if (element) { element.focus(); focusTarget.current = null; }
+	}, [openId, open?.id]);
 
 	function select(id: string | null, moveFocus = true): void {
+		focusTarget.current = moveFocus ? id ? "inbox-item-title" : openId : null;
 		setParams(previous => { const next = new URLSearchParams(previous); if (id) next.set("item", id); else next.delete("item"); return next; });
-		if (moveFocus) requestAnimationFrame(() => document.getElementById(id ? "inbox-item-title" : openId ?? "")?.focus());
 	}
 	async function capture(title: string, body: string, kind: InboxKind): Promise<void> {
 		const created = await inboxApi.create({ title, body, kind, source: "deck" });
