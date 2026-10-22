@@ -1,6 +1,11 @@
 import type {
 	CreateInboxItemRequest,
 	InboxItem,
+	InboxDestination,
+	InboxHistoryEvent,
+	InboxProposal,
+	InboxReceipt,
+	InboxRouting,
 	InboxKind,
 	ListInboxResponse,
 	PromoteInboxItemRequest,
@@ -23,6 +28,21 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const inboxApi = {
+	routing(): Promise<InboxRouting> {
+		return req<InboxRouting>("/inbox/routing");
+	},
+	proposal(id: string): Promise<InboxProposal> {
+		return req<InboxProposal>(`/inbox/${encodeURIComponent(id)}/proposal`);
+	},
+	history(id: string): Promise<{ events: InboxHistoryEvent[] }> {
+		return req(`/inbox/${encodeURIComponent(id)}/history`);
+	},
+	file(id: string, destination: InboxDestination): Promise<{ receipt: InboxReceipt }> {
+		return req(`/inbox/${encodeURIComponent(id)}/file`, { method: "POST", body: JSON.stringify({ destination }) });
+	},
+	previewIssue(id: string, repo: string): Promise<{ plan: { destination: InboxDestination; title: string; body: string } }> {
+		return req(`/inbox/${encodeURIComponent(id)}/file`, { method: "POST", body: JSON.stringify({ destination: { kind: "issue", repo }, dryRun: true }) });
+	},
 	list(opts: { kind?: InboxKind; includeProcessed?: boolean } = {}): Promise<ListInboxResponse> {
 		const q = new URLSearchParams();
 		if (opts.kind) q.set("kind", opts.kind);

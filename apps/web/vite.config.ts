@@ -40,6 +40,7 @@ export default defineConfig({
 		// `vite preview` inherits this proxy (preview.proxy defaults to server.proxy).
 		proxy: {
 			"/api": { target: SERVER_HTTP, changeOrigin: true, configure: stampProxyPeer },
+			"/uploads": { target: SERVER_HTTP, changeOrigin: true, configure: stampProxyPeer },
 			"/ws": { target: SERVER_WS, ws: true, changeOrigin: true, configure: stampProxyPeer },
 		},
 	},

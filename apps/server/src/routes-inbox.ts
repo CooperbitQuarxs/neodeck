@@ -9,7 +9,10 @@ import type {
 } from "@npi-deck/protocol";
 
 import { createInbox, deleteInbox, getInbox, inboxMutation, listInbox, updateInbox } from "./db/inbox.ts";
-import { createTask, getDefaultState, getState } from "./db/tasks.ts";
+import { createTask, getDefaultState, getState, listStates } from "./db/tasks.ts";
+import { getDb } from "./db/index.ts";
+import { InboxFilingConflictError, inboxFiling, inboxHistory, inboxProposal, inboxRouting, recordInboxFiling, reserveInboxFiling } from "./db/inbox-routing.ts";
+import { fileInboxIssue } from "./inbox-issue.ts";
 
 const KINDS: ReadonlySet<InboxKind> = new Set([
 	"email",
@@ -47,6 +50,73 @@ export function buildInboxRouter(): Hono {
 		} catch (err) {
 			return c.json({ error: String(err) }, 400);
 		}
+	});
+
+	app.get("/inbox/routing", (c) => c.json(inboxRouting()));
+
+	app.get("/inbox/:id/proposal", (c) => {
+		const item = getInbox(c.req.param("id"));
+		return item ? c.json(inboxProposal(item)) : c.json({ error: "not found" }, 404);
+	});
+
+	app.get("/inbox/:id/history", (c) => {
+		const item = getInbox(c.req.param("id"));
+		return item ? c.json({ events: inboxHistory(item) }) : c.json({ error: "not found" }, 404);
+	});
+
+	app.post("/inbox/:id/file", async (c) => {
+		const item = getInbox(c.req.param("id"));
+		if (!item) return c.json({ error: "not found" }, 404);
+		let body: unknown;
+		try { body = await c.req.json(); }
+		catch { return c.json({ error: "invalid json" }, 400); }
+		if (!body || typeof body !== "object" || !("destination" in body)) return c.json({ error: "destination required" }, 400);
+		const destination = body.destination;
+		if (!destination || typeof destination !== "object" || !("kind" in destination) || typeof destination.kind !== "string") {
+			return c.json({ error: "invalid destination" }, 400);
+		}
+		const capability = inboxRouting().destinations.find(entry => entry.kind === destination.kind);
+		if (!capability) return c.json({ error: "unknown destination kind" }, 400);
+		if (!capability.available) return c.json({ error: capability.reason }, 501);
+		if ("dryRun" in body && typeof body.dryRun !== "boolean") return c.json({ error: "dryRun must be a boolean" }, 400);
+		if (destination.kind === "issue") {
+			if (!("repo" in destination) || typeof destination.repo !== "string") return c.json({ error: "issue destination requires repo" }, 400);
+			try {
+				const result = await fileInboxIssue(item, destination.repo, "dryRun" in body && body.dryRun === true,
+					AbortSignal.any([c.req.raw.signal, AbortSignal.timeout(30_000)]));
+				return c.json(result);
+			} catch (error) {
+				return c.json({ error: String(error) }, error instanceof InboxFilingConflictError ? 409 : 400);
+			}
+		}
+		if ("dryRun" in body && body.dryRun === true) return c.json({ error: "dryRun is supported for GitHub issue filing only" }, 400);
+		if (!("project" in destination) || typeof destination.project !== "string"
+			|| !("column" in destination) || typeof destination.column !== "string") {
+			return c.json({ error: "card destination requires project and column strings" }, 400);
+		}
+		const project = destination.project.trim();
+		const column = destination.column;
+		const state = listStates().find(entry => entry.id === column || entry.name.toLowerCase() === column.toLowerCase());
+		if (!state) return c.json({ error: `unknown column: ${column}` }, 400);
+		try {
+			const result = getDb().transaction(() => {
+				const prior = inboxFiling(item.id);
+				if (prior) {
+					if (prior.destination.kind !== "card" || prior.destination.project !== project || prior.destination.column !== state.id) return null;
+					return { receipt: prior.receipt };
+				}
+				reserveInboxFiling(item, { kind: "card", project, column: state.id });
+				const provenance = `_Filed from inbox ${item.id}_`;
+				const task = createTask({
+					title: item.title, body: item.body.trim() ? `${item.body}\n\n---\n${provenance}` : provenance,
+					stateId: state.id, cwd: project || null, properties: { origin: "inbox", origin_ref: item.id },
+				});
+				const receipt = recordInboxFiling(item, task);
+				updateInbox(item.id, { processed: true });
+				return { receipt };
+			})();
+			return result ? c.json(result) : c.json({ error: "This item was already filed elsewhere. Open its history to find the receipt." }, 409);
+		} catch (err) { return c.json({ error: String(err) }, err instanceof InboxFilingConflictError ? 409 : 400); }
 	});
 
 	app.get("/inbox/:id", (c) => {
@@ -110,14 +180,15 @@ export function buildInboxRouter(): Hono {
 			: provenance;
 
 		try {
-			const out = inboxMutation(`promote:${item.id}`, c.req.header("Idempotency-Key"), (): PromoteInboxItemResponse => {
+			const out = inboxMutation(`promote:${item.id}`, c.req.header("Idempotency-Key"), () => getDb().transaction((): PromoteInboxItemResponse => {
 				const task = createTask({ title: item.title, body: taskBody, stateId, properties: body.properties, ...(body.cwd !== undefined ? { cwd: body.cwd } : {}) });
+				recordInboxFiling(item, task);
 				// Keep recurring-template promotion unchanged when no receipt key is supplied.
 				const inbox = body.markProcessed !== false
 					? updateInbox(item.id, { processed: true }) ?? item
 					: item;
 				return { task, inbox };
-			});
+			})());
 			return c.json(out, 201);
 		} catch (err) {
 			return c.json({ error: String(err) }, 400);

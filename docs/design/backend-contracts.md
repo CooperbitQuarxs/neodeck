@@ -24,11 +24,17 @@ deck (still served); NeoProxy's `exposed: false` removes a provider.
 - `GET /api/accounts` (admin) → `{ accounts: Account[] }`; `POST /api/accounts` `{ handle, name, password, role, models }`; `PATCH /api/accounts/:id` `{ name?, role?, models?, allotment?, password? }`.
 - `Account { id, handle, name, role: "admin"|"member", hue, roles: string[], allotment?: number }`; `roles` are the virtual models (`neoproxy/<name>`) the admin granted the account.
 
-## 2. Classifier and inbox history (`classifier`)
+## 2. Classifier and inbox history (`classifier`, live)
 
-- `GET /api/inbox/:id/proposal` → `Proposal { itemId, kind, destination, confidence, reason }`.
-- `POST /api/inbox/:id/file` `{ destination }` → `{ receipt: { kind, ref, url } }`, and appends to the item's history. `destination` is one of `card{project,column}`, `issue{repo}`, `thread{agent}`, `note{path}`.
-- `GET /api/inbox/:id/history` → `{ events: { at, actor, text }[] }`.
+- `GET /api/inbox/routing` → `InboxRouting { classifier, flows, columns, defaultColumn, destinations }`. The classifier names the current handler; flows list the actual routine inbox subscriptions, including disabled subscriptions. Only enabled subscriptions receive new captures. A saved Studio classifier document is not an active inbox subscription.
+- `GET /api/inbox/:id/proposal` → `InboxProposal { itemId, kind, destination, confidence, reason, classifier: "manual" }`. The live adapter preserves the capture's chosen kind and proposes the board's configured default column without inferring a project. Confidence is zero because no model classification occurred. The interface does not display this as a model certainty score.
+- `POST /api/inbox/:id/file` `{ destination }` → `{ receipt: { kind, ref, url, label } }`. Board filing creates the card, records its inbox origin, stores the receipt and marks the item processed in one transaction. Repeating the same destination returns the receipt; a different destination returns `409` instead of duplicating a card. `card{project,column}` uses a working directory or an empty string for unassigned, and an actual column ID or exact column name.
+- GitHub issue filing reuses the native `action.file-issue` implementation, including its stable operation marker, provider journal and uncertain-acceptance reconciliation. `issue{repo}` requires `owner/repository`; the actual issue uses this server's existing GitHub login. A destination reservation preserves the original capture across retries and blocks a racing board filing while acceptance is unresolved.
+- `POST /api/inbox/:id/file` `{ destination: issue{repo}, dryRun: true }` → `{ plan: { destination, title, body } }`. Preview validates the same action request but creates no issue, no provider journal entry, no reservation and no processing update. The interface offers this separately from **File issue**.
+- `GET /api/inbox/:id/history` → `{ events: { at, actor, text, url?, receipt? }[] }`. History includes capture, persisted filing receipts, legacy keyed promotion receipts, processing state and queued/running/completed routine delivery records. It survives a server restart.
+- Destination shapes remain `card{project,column}`, `issue{repo}`, `thread{agent}`, `note{path}`. Thread and note destinations return `501` with a reason and leave the item untouched. Agent-template instantiation needs the NeoPi contract; knowledge writes deliberately require a project agent's `kb_write` capability. The inbox lists these restrictions instead of simulating a successful write.
+- Model-driven suggestions remain unavailable, explicitly separate from the live manual proposal and filing contract. The required NeoPi inference and agent-instantiation contracts are recorded in the pool's upstream-needs handoff. No title-keyword fixture classifier runs in the live interface.
+- Captures support multiline Markdown bodies and PNG/JPEG/GIF/WebP image attachments through the existing `POST /api/uploads/image`, up to 10 MB each.
 
 ## 3. Presence (`presence`)
 
