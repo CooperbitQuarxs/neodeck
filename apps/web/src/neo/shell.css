@@ -16,6 +16,14 @@
 	border-color: transparent;
 	border-radius: var(--r-control);
 }
+.neo-engine-location {
+	max-width: 180px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	font-family: var(--font-mono);
+	font-size: 10.5px;
+	color: rgb(var(--ink-3));
+}
 
 .neo-shell .neo-sidebar {
 	padding: 18px 12px 12px;
@@ -39,7 +47,14 @@
 	margin: 12px 12px 12px 0;
 	box-shadow: none;
 }
-.neo-shell[data-collapsed="true"] .neo-panel { margin-left: 12px; }
+.neo-shell[data-collapsed="true"] main.neo-panel { margin-left: 12px; }
+.neo-shell .neo-dock {
+	width: 360px;
+	flex: none;
+	flex-direction: column;
+	overflow: auto;
+}
+.neo-shell .neo-dock:empty { display: none; }
 .neo-mobile-nav-heading { display: none; }
 
 .neo-account-button {
@@ -58,6 +73,11 @@
 }
 
 @media (max-width: 899px) {
+	.neo-workspace { flex-direction: column; }
+	.neo-shell .neo-dock {
+		width: auto;
+		max-height: 45vh;
+	}
 	.neo-shell .neo-topbar { padding: 0 10px; gap: 10px; }
 	.neo-shell .neo-sidebar {
 		position: absolute;
@@ -71,11 +91,12 @@
 	.neo-mobile-nav-heading { display: flex; align-items: center; justify-content: space-between; }
 	.neo-shell .neo-scrim { z-index: calc(var(--neo-layer-modal, 200) - 1); }
 	.neo-shell .neo-panel,
-	.neo-shell[data-collapsed="true"] .neo-panel {
+	.neo-shell[data-collapsed="true"] main.neo-panel {
 		margin: 0;
 		border-radius: 0;
 		border: 0;
 	}
+	.neo-shell .neo-dock { border-top: 1px solid var(--neo-line-1); }
 }
 
 @media (max-width: 540px) {

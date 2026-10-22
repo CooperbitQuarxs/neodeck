@@ -25,6 +25,7 @@ export function Shell() {
 	const toggleRef = useRef<HTMLButtonElement>(null);
 	const navRef = useRef<HTMLElement>(null);
 	const mainRef = useRef<HTMLElement>(null);
+	const dockRef = useRef<HTMLElement>(null);
 	useEffect(() => {
 		const media = window.matchMedia("(max-width: 899px)");
 		const update = () => { setMobile(media.matches); setNavOpen(false); };
@@ -39,6 +40,7 @@ export function Shell() {
 		const previousOverflow = document.body.style.overflow;
 		document.body.style.overflow = "hidden";
 		mainRef.current?.setAttribute("inert", "");
+		dockRef.current?.setAttribute("inert", "");
 		navRef.current?.querySelector<HTMLElement>("button, a")?.focus();
 		const trap = (event: KeyboardEvent) => {
 			if (event.key !== "Tab") return;
@@ -53,6 +55,7 @@ export function Shell() {
 		return () => {
 			document.body.style.overflow = previousOverflow;
 			mainRef.current?.removeAttribute("inert");
+			dockRef.current?.removeAttribute("inert");
 			document.removeEventListener("keydown", trap);
 			toggleRef.current?.focus();
 		};
@@ -85,7 +88,7 @@ export function Shell() {
 				</div>
 			</header>
 
-			<div className="relative flex min-h-0 flex-1">
+			<div className="neo-workspace relative flex min-h-0 flex-1">
 				{mobile && navOpen ? <button type="button" className="neo-scrim" aria-label="Close navigation" tabIndex={-1} onClick={() => setNavOpen(false)} /> : null}
 				<nav
 					id="deck-navigation"
@@ -108,6 +111,7 @@ export function Shell() {
 						<Outlet />
 					</div>
 				</main>
+				<aside ref={dockRef} id="neo-dock" className="neo-panel neo-dock" aria-label="Inspector" />
 			</div>
 		</div>
 	);

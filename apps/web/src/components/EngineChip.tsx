@@ -34,6 +34,7 @@ export function EngineChip() {
 			<span className="neo-dot" data-tone={tone} data-pulse={tone === "live" ? "true" : undefined} />
 			<span>{word}</span>
 			{detail ? <span className="neo-chip-detail">{detail}</span> : null}
+			<span className="neo-engine-location" title="Deck connection">{window.location.host}</span>
 		</Link>
 	);
 }
