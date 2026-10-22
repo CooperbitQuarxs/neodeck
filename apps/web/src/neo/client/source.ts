@@ -12,6 +12,7 @@ export type Domain =
 	| "accounts"
 	| "inbox"
 	| "classifier"
+	| "classifierInference"
 	| "board"
 	| "boardEvidence"
 	| "threads"
@@ -38,7 +39,10 @@ export const SOURCES: Readonly<Record<Domain, Source>> = {
 	auth: "preview",
 	accounts: "preview",
 	inbox: "live",
-	classifier: "preview",
+	/** Manual proposal, durable board filing, routing and delivery history. Model inference is unavailable. */
+	classifier: "live",
+	/** Model-backed suggestions need a native tool-free structured-inference adapter. */
+	classifierInference: "preview",
 	/** Cards, columns, moves, assignment: the deck's tasks API. */
 	board: "live",
 	/** The evidence timeline, origin and flow chip on a card. */

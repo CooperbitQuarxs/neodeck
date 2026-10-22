@@ -7,6 +7,7 @@ All notable changes to NPI deck (a fork of bjb2/omp-deck; entries before the for
 
 ### Added
 
+- Inbox capture now has a docked multiline composer with image attachments and Ctrl/Cmd+Enter. Routing names the actual handler and subscribed flows, and every item shows durable board or GitHub filing receipts and routine delivery history. GitHub filing reuses the existing reconciled issue action and has a write-free preview. Unavailable model classification and agent-only destinations are explained instead of reporting preview success. Related to [#237](https://github.com/PsychedelicShayna/neodeck/issues/237).
 - Studio now edits pipelines, virtual-model routers, classifiers and board flows beside live routines and the knowledge map, with typed connections, a node inspector, editable TOML and per-node run timelines.
 - Knowledge now has a searchable note tree, a linked Markdown reader, and a map toggled with M. Follow backlinks, browse recent notes, or ask an agent to change a note in a prefilled thread.
 - Threads now groups conversations by attention, opens real session transcripts, and keeps each agent's colour and message target visible. Preview threads support several primary agents, removable spawn restrictions, folded tools and spawned-agent depth, and remain available when live sessions cannot load.
