@@ -3,6 +3,9 @@ import { compatible, graphFromToml, graphToToml, nodePorts, nodeType, type Build
 import { SOURCES } from "./source";
 
 export type { GraphKind, BuildableKind, GraphSummary, StudioGraph, StudioNode, StudioEdge, StudioRun, StudioRunOptions, GraphProblem };
+export class StudioRequestError extends Error {
+ constructor(message: string, readonly problems: GraphProblem[] = []) { super(message); }
+}
 export interface StudioClient {
  list(): Promise<GraphSummary[]>; get(id: string): Promise<StudioGraph>; save(graph: StudioGraph): Promise<StudioGraph>; create(kind: BuildableKind, name: string): Promise<StudioGraph>; remove(id: string): Promise<void>; setEnabled(id: string, enabled: boolean): Promise<void>; run(id: string, options?: StudioRunOptions): Promise<StudioRun>; runs(id: string): Promise<StudioRun[]>;
  source(id: string): Promise<string>; saveSource(id: string, source: string): Promise<StudioGraph>;
@@ -59,7 +62,11 @@ const preview: StudioClient = {
 };
 async function response(path: string, init?: RequestInit): Promise<Response> {
  const result = await fetch(`/api/graphs${path}`, { ...init, headers: { "content-type": "application/json", ...init?.headers } });
- if (!result.ok) { const body = await result.json().catch(() => ({})) as { error?: string; unsupported?: { nodeId: string; type: string }[] }; throw new Error(body.error ? `${body.error}${body.unsupported?.length ? ` ${body.unsupported.map(node => node.type).join(", ")}` : ""}` : `Graph request failed (${result.status}).`); }
+ if (!result.ok) {
+  const body = await result.json().catch(() => ({})) as { error?: string; problems?: GraphProblem[]; unsupported?: { nodeId: string; type: string }[] };
+  const details = body.problems?.map(problem => problem.message).join("; ") ?? body.unsupported?.map(node => `${node.type} (${node.nodeId})`).join(", ");
+  throw new StudioRequestError(body.error ? `${body.error}${details && !body.error.includes(details) ? ` ${details}` : ""}` : `Graph request failed (${result.status}).`, body.problems);
+ }
  return result;
 }
 async function request<T>(path: string, init?: RequestInit): Promise<T> { return (await response(path, init)).json() as Promise<T>; }

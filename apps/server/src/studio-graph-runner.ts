@@ -1,8 +1,8 @@
-import { isGraphValue, nodePorts, nodeType, studioNodeExecution, type GraphEmission, type GraphObject, type GraphValue, type RoutineGraph, type StudioGraph, type StudioNode, type StudioRun, type StudioRunOptions } from "@npi-deck/protocol";
+import { isGraphValue, nodePorts, nodeType, studioNodeExecution, type GraphEmission, type GraphExecutionResult, type GraphObject, type GraphProblem, type GraphValue, type RoutineGraph, type StudioGraph, type StudioNode, type StudioRun, type StudioRunOptions } from "@npi-deck/protocol";
 import { getInbox, updateInbox } from "./db/inbox.ts";
 import { getState, getTask, updateTask } from "./db/tasks.ts";
 import { registerGraphActions } from "./routines/graph-actions.ts";
-import { executeGraph, GraphNodeRegistry, type GraphNodeContext } from "./routines/graph-runner.ts";
+import { executeGraph, GraphNodeRegistry, GraphValidationError, type GraphNodeContext } from "./routines/graph-runner.ts";
 import { evaluate } from "./routines/sandbox.ts";
 
 function text(value: unknown): string { return typeof value === "string" ? value : JSON.stringify(value) ?? ""; }
@@ -87,17 +87,40 @@ async function action(node: StudioNode, value: GraphValue, context: GraphNodeCon
 	return [];
 }
 
+function isSource(graph: StudioGraph, node: StudioNode): boolean {
+	return !nodePorts(node).inputs.length || node.type === "bf.column" && !graph.edges.some(edge => edge.to.node === node.id);
+}
+function disconnectedNodes(graph: StudioGraph): StudioNode[] {
+	const queue = graph.nodes.filter(node => isSource(graph, node)).map(node => node.id);
+	const reached = new Set(queue);
+	const outgoing = new Map<string, string[]>();
+	for (const edge of graph.edges) {
+		const targets = outgoing.get(edge.from.node) ?? []; targets.push(edge.to.node); outgoing.set(edge.from.node, targets);
+	}
+	for (let index = 0; index < queue.length; index++) for (const target of outgoing.get(queue[index]!) ?? []) {
+		if (!reached.has(target)) { reached.add(target); queue.push(target); }
+	}
+	return graph.nodes.filter(node => !reached.has(node.id));
+}
+function nodeLabel(node: StudioNode): string { return `${String(node.config.name || nodeType(node.type)?.label || node.type)} (${node.id})`; }
+export class StudioRunValidationError extends Error {
+	constructor(readonly problems: GraphProblem[]) { super(`Graph cannot execute: ${problems.map(problem => problem.message).join("; ")}`); }
+}
+
 export async function runStudioGraph(graph: StudioGraph, options: StudioRunOptions = {}): Promise<StudioRun> {
 	const mode = options.mode ?? "preview";
 	if (!graph.nodes.length) throw new Error("Add a node before running this graph.");
 	const unsupported = graph.nodes.filter(node => studioNodeExecution(node.type) === "preview");
 	if (mode === "execute" && unsupported.length) throw new Error(`Execution is unavailable for: ${unsupported.map(node => String(node.config.name || nodeType(node.type)!.label)).join(", ")}. These nodes can be saved and previewed; no actions were sent.`);
+	const disconnected = disconnectedNodes(graph), disconnectedIds = new Set(disconnected.map(node => node.id));
+	if (mode === "execute" && disconnected.length) throw new StudioRunValidationError(disconnected.map(node => ({ nodeId: node.id, message: `Connect ${nodeLabel(node)} to a trigger before executing.` })));
 	const runId = crypto.randomUUID(), startedAt = new Date().toISOString();
 	const registry = new GraphNodeRegistry(), actions = new GraphNodeRegistry(); registerGraphActions(actions);
 	const skipped = new Map<string, string>();
-	const definition: RoutineGraph = { version: 2, nodes: [], edges: graph.edges.map(edge => ({ ...edge, from: { nodeId: edge.from.node, port: edge.from.port }, to: { nodeId: edge.to.node, port: edge.to.port } })), budget: { max_duration_secs: 120, max_steps_executed: graph.nodes.length } };
+	const definition: RoutineGraph = { version: 2, nodes: [], edges: graph.edges.filter(edge => !disconnectedIds.has(edge.from.node) && !disconnectedIds.has(edge.to.node)).map(edge => ({ ...edge, from: { nodeId: edge.from.node, port: edge.from.port }, to: { nodeId: edge.to.node, port: edge.to.port } })), budget: { max_duration_secs: 120, max_steps_executed: graph.nodes.length } };
 	for (const [index, node] of graph.nodes.entries()) {
-		const ports = nodePorts(node), source = !ports.inputs.length || node.type === "bf.column" && !graph.edges.some(edge => edge.to.node === node.id);
+		if (disconnectedIds.has(node.id)) continue;
+		const ports = nodePorts(node), source = isSource(graph, node);
 		const type = `studio.${index}`;
 		definition.nodes.push({ id: node.id, type, config: { eventType: "manual" } });
 		registry.register({
@@ -110,12 +133,26 @@ export async function runStudioGraph(graph: StudioGraph, options: StudioRunOptio
 			},
 		});
 	}
-	const result = await executeGraph(definition, { eventType: "manual", event: {}, operationId: runId }, registry, { runId, routineId: graph.id, dryRun: mode === "preview" });
+	let result: GraphExecutionResult = { status: "success", nodeRuns: [], outputs: [] };
+	if (definition.nodes.length) {
+		try {
+			result = await executeGraph(definition, { eventType: "manual", event: {}, operationId: runId }, registry, { runId, routineId: graph.id, dryRun: mode === "preview" });
+		} catch (error) {
+			if (!(error instanceof GraphValidationError)) throw error;
+			throw new StudioRunValidationError(error.errors.map(problem => {
+				const nodeIndex = /^\/nodes\/(\d+)/.exec(problem.path), edgeIndex = /^\/edges\/(\d+)/.exec(problem.path);
+				const node = nodeIndex ? graph.nodes.find(node => node.id === definition.nodes[Number(nodeIndex[1])]?.id) : undefined;
+				const edge = edgeIndex ? definition.edges[Number(edgeIndex[1])] : undefined;
+				return { nodeId: node?.id ?? edge?.to.nodeId, message: `${node ? nodeLabel(node) : edge ? `Connection ${edge.id}` : "Graph"}: ${problem.message.replaceAll("routine graph", "graph")}` };
+			}));
+		}
+	}
 	const authored = new Map(graph.nodes.map(node => [node.id, node]));
+	const endedAt = new Date().toISOString();
 	return {
-		id: runId, graphId: graph.id, startedAt, endedAt: new Date().toISOString(),
+		id: runId, graphId: graph.id, startedAt, endedAt,
 		ok: result.status === "success", trigger: mode === "preview" ? "Manual preview" : "Manual execution", mode,
-		nodes: result.nodeRuns.map(node => {
+		nodes: [...result.nodeRuns.map(node => {
 			const original = authored.get(node.nodeId)!;
 			const output: unknown[] = node.outputs.map(output => ({ port: output.port, value: output.result.value }));
 			for (const effect of node.effects ?? []) output.push({ effect: effect.status, receipt: effect.receipt, destination: effect.destination });
@@ -125,6 +162,9 @@ export async function runStudioGraph(graph: StudioGraph, options: StudioRunOptio
 				note: skipped.get(node.nodeId) ?? node.error ?? (node.status === "skipped" ? "No active upstream branch reached this node." : original.type === "cls.output" ? `Classification: ${String(original.config.label ?? "")}` : undefined),
 				...(output.length ? { output } : {}),
 			};
-		}),
+		}), ...disconnected.map(node => ({
+			nodeId: node.id, startedAt: endedAt, endedAt, status: "skipped" as const,
+			note: `${nodeLabel(node)} is not connected to a trigger. No work was executed for this node.`,
+		}))],
 	};
 }

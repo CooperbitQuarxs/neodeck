@@ -1,9 +1,9 @@
 import { Hono } from "hono";
-import { graphFromToml, graphToToml, isGraphValue, NODE_TYPES, studioNodeExecution, type StudioGraph, type StudioRunOptions } from "@npi-deck/protocol";
+import { graphFromToml, graphToToml, isGraphValue, NODE_TYPES, nodeType, studioNodeExecution, type StudioGraph, type StudioRunOptions } from "@npi-deck/protocol";
 import { deleteStudioGraph, getStudioGraph, listStudioGraphs, listStudioRuns, saveStudioGraph, storeStudioRun } from "./db/studio-graphs.ts";
 import { validateStudioGraph } from "./studio-graph-validation.ts";
 import { getRoutine, listRoutines } from "./db/routines.ts";
-import { runStudioGraph } from "./studio-graph-runner.ts";
+import { runStudioGraph, StudioRunValidationError } from "./studio-graph-runner.ts";
 
 const message = (error: unknown): string => error instanceof Error ? error.message : String(error);
 function object(value: unknown): value is Record<string, unknown> { return !!value && typeof value === "object" && !Array.isArray(value); }
@@ -80,7 +80,11 @@ export function buildGraphsRouter(): Hono {
 			validateStudioGraph(graph, id);
 			if (body.mode === "execute") {
 				const unsupported = graph.nodes.filter(node => studioNodeExecution(node.type) === "preview");
-				if (unsupported.length) return c.json({ error: "Some nodes do not have an execution adapter. No inference or actions were sent.", unsupported: unsupported.map(node => ({ nodeId: node.id, type: node.type })) }, 409);
+				if (unsupported.length) return c.json({
+					error: "Some nodes do not have an execution adapter. No inference or actions were sent.",
+					unsupported: unsupported.map(node => ({ nodeId: node.id, type: node.type })),
+					problems: unsupported.map(node => ({ nodeId: node.id, message: `${String(node.config.name || nodeType(node.type)?.label || node.type)} (${node.id}) has no execution adapter.` })),
+				}, 409);
 			}
 		} catch (error) { return c.json({ error: message(error) }, 400); }
 		running.add(id);
@@ -88,7 +92,11 @@ export function buildGraphsRouter(): Hono {
 			const run = await runStudioGraph(graph, body);
 			storeStudioRun(graph, run);
 			return c.json(run, 201);
-		} catch (error) { return c.json({ error: message(error) }, 400); }
+		} catch (error) {
+			return error instanceof StudioRunValidationError
+				? c.json({ error: error.message, problems: error.problems }, 400)
+				: c.json({ error: message(error) }, 400);
+		}
 		finally { running.delete(id); }
 	});
 	return app;
