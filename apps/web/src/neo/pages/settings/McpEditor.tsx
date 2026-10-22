@@ -1,6 +1,6 @@
 import { type ReactNode, useState } from "react";
 import type { McpServerScope, McpTransport } from "@npi-deck/protocol";
-import { NeoBadge, NeoButton, NeoSelect, SectionLabel } from "@/components/neo";
+import { NeoBadge, NeoButton, NeoSelect, SectionLabel, NeoInput } from "@/components/neo";
 import type { McpDraft } from "./McpDraft";
 
 export function McpEditor({ initial, creating, busy, formId, onSave }: {
@@ -19,33 +19,33 @@ export function McpEditor({ initial, creating, busy, formId, onSave }: {
 			<SectionLabel>{creating ? "New server" : `Edit ${initial.name}`}</SectionLabel>
 			<div className="neo-settings-mcp-grid">
 				{creating && <>
-					<Field label="Name"><input className="neo-input" required value={draft.name} onChange={event => set("name", event.target.value)} placeholder="my-server" /></Field>
+					<Field label="Name"><NeoInput className="neo-input" required value={draft.name} onChange={event => set("name", event.target.value)} placeholder="my-server" /></Field>
 					<Field label="Scope"><NeoSelect value={draft.scope} onChange={event => set("scope", event.target.value as McpServerScope)}><option value="user">User</option><option value="project">Project</option></NeoSelect></Field>
 				</>}
 				<Field label="Transport"><NeoSelect value={draft.transport} onChange={event => set("transport", event.target.value as McpTransport)}><option value="stdio">stdio</option><option value="http">http</option><option value="sse">sse</option></NeoSelect></Field>
-				<Field label="Timeout in milliseconds"><input className="neo-input" type="number" min="0" step="1" placeholder="NeoPi default" value={draft.timeout} onChange={event => set("timeout", event.target.value)} /></Field>
+				<Field label="Timeout in milliseconds"><NeoInput className="neo-input" type="number" min="0" step="1" placeholder="NeoPi default" value={draft.timeout} onChange={event => set("timeout", event.target.value)} /></Field>
 			</div>
 			{draft.transport === "stdio" ? <>
-				<Field label="Command"><input className="neo-input" required value={draft.command} onChange={event => set("command", event.target.value)} placeholder="bunx" /></Field>
-				<Field label="Working directory"><input className="neo-input" value={draft.cwd} onChange={event => set("cwd", event.target.value)} placeholder="Optional" /></Field>
+				<Field label="Command"><NeoInput className="neo-input" required value={draft.command} onChange={event => set("command", event.target.value)} placeholder="bunx" /></Field>
+				<Field label="Working directory"><NeoInput className="neo-input" value={draft.cwd} onChange={event => set("cwd", event.target.value)} placeholder="Optional" /></Field>
 				<div className="neo-settings-stack">
 					<SectionLabel>Arguments</SectionLabel>
 					{draft.args.map((arg, index) => <div key={index} className="neo-settings-mcp-entry">
-						<input aria-label={`Argument ${index + 1}`} className="neo-input" readOnly={arg.keepIndex !== undefined} value={arg.flag !== undefined ? `${arg.flag} ••••••` : arg.text} onChange={event => set("args", draft.args.map((item, i) => i === index ? { text: event.target.value } : item))} />
+						<NeoInput aria-label={`Argument ${index + 1}`} className="neo-input" readOnly={arg.keepIndex !== undefined} value={arg.flag !== undefined ? `${arg.flag} ••••••` : arg.text} onChange={event => set("args", draft.args.map((item, i) => i === index ? { text: event.target.value } : item))} />
 						{arg.keepIndex !== undefined && <NeoBadge title="Kept at its stored index. Remove this row to replace the credential and its flag together.">Stored</NeoBadge>}
 						<NeoButton size="sm" variant="ghost" aria-label={`Remove argument ${index + 1}`} onClick={() => set("args", draft.args.filter((_, i) => i !== index))}>Remove</NeoButton>
 					</div>)}
 					<div><NeoButton size="sm" variant="ghost" onClick={() => set("args", [...draft.args, { text: "" }])}>Add argument</NeoButton></div>
 				</div>
 			</> : <Field label="URL">
-				<input className="neo-input" type="text" required={!draft.urlKept} autoComplete="off" value={draft.url} placeholder={draft.urlKept ? "Stored URL retained. Type to replace." : "https://example.com/mcp"} onChange={event => setDraft(current => ({ ...current, url: event.target.value, urlKept: false }))} />
+				<NeoInput className="neo-input" type="text" required={!draft.urlKept} autoComplete="off" value={draft.url} placeholder={draft.urlKept ? "Stored URL retained. Type to replace." : "https://example.com/mcp"} onChange={event => setDraft(current => ({ ...current, url: event.target.value, urlKept: false }))} />
 				{draft.urlKept && <span className="neo-settings-description">The server hides the entire URL because any part can contain a credential. Leaving this unchanged keeps the stored URL.</span>}
 			</Field>}
 			<div className="neo-settings-stack">
 				<SectionLabel>{pairsKey === "env" ? "Environment variables" : "Headers"}</SectionLabel>
 				{pairs.map((pair, index) => <div className="neo-settings-mcp-pair" key={index}>
-					<input className="neo-input" aria-label={`${pairsKey === "env" ? "Variable" : "Header"} name ${index + 1}`} placeholder="Name" value={pair.key} onChange={event => set(pairsKey, pairs.map((item, i) => i === index ? { ...item, key: event.target.value } : item))} />
-					<input className="neo-input" aria-label={`Value for ${pair.key || `entry ${index + 1}`}`} autoComplete="off" type="password" placeholder={pair.stored ? "Stored value retained" : "Value"} value={pair.stored ? "" : pair.value} onChange={event => set(pairsKey, pairs.map((item, i) => i === index ? { ...item, value: event.target.value, stored: false } : item))} />
+					<NeoInput className="neo-input" aria-label={`${pairsKey === "env" ? "Variable" : "Header"} name ${index + 1}`} placeholder="Name" value={pair.key} onChange={event => set(pairsKey, pairs.map((item, i) => i === index ? { ...item, key: event.target.value } : item))} />
+					<NeoInput className="neo-input" aria-label={`Value for ${pair.key || `entry ${index + 1}`}`} autoComplete="off" type="password" placeholder={pair.stored ? "Stored value retained" : "Value"} value={pair.stored ? "" : pair.value} onChange={event => set(pairsKey, pairs.map((item, i) => i === index ? { ...item, value: event.target.value, stored: false } : item))} />
 					<NeoButton size="sm" variant="ghost" aria-label={`Remove ${pair.key || `entry ${index + 1}`}`} onClick={() => set(pairsKey, pairs.filter((_, i) => i !== index))}>Remove</NeoButton>
 				</div>)}
 				<div><NeoButton size="sm" variant="ghost" onClick={() => set(pairsKey, [...pairs, { key: "", value: "", stored: false }])}>Add {pairsKey === "env" ? "variable" : "header"}</NeoButton></div>

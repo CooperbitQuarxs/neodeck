@@ -134,6 +134,26 @@ are not implemented by the CLI adapter.
 
 Env (`/api/settings/env`), NeoPi config (`/api/npi-config`), models (`/api/models-config`), MCP (`/api/mcp-servers`), bridges (`/api/bridges`), workspaces and notifications are live. The contract adds accounts (§1), dictation (§8), the GitHub app (§11), and a deck-config read: `GET /api/state` already serves it.
 
+`GET /api/npi-config/model-roles?cwd=` reads role provenance for the requested
+workspace through the pinned SDK. `PATCH /api/npi-config` accepts optional
+`expectedValue` for non-secret settings and rejects a changed global value
+with HTTP 409 before invoking the native setting setter and `Settings.flush`.
+Role assignments and ordinary non-secret configuration forms send this snapshot.
+Secrets cannot be compared through this field.
+
+The dedicated `/models` workspace uses the live inventory, SDK-backed global
+role assignments and the existing revision-checked custom catalogue editor.
+Project-scope role writes and effort-rule editing require the newer native
+`get_models_configuration`, `set_model_role_configuration`,
+`set_model_role_storage` and `set_effort_rules` contracts. The current pin does
+not expose these, so Deck reports the unavailable capability without inventing
+native policy or writing role YAML in the browser.
+
+Preview provider visibility is persisted under the browser key
+`neodeck.provider-picker-visibility` and published through `useProviders()`.
+It hides matching inference providers in Deck pickers, including for admins,
+without changing served-model exposure or credentials.
+
 ## 14. Native model selection
 
 - `GET /api/models?sessionId=&cwd=` reads the live catalogue within the session or workspace.

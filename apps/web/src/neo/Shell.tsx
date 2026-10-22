@@ -197,7 +197,7 @@ function DictationButton() {
 	);
 }
 
-/** `G` then a letter jumps to a page. Ignored while typing. */
+/** `G` then a letter jumps to a page; Alt-M opens model configuration. Ignored while typing. */
 function useJumpShortcuts(): void {
 	const navigate = useNavigate();
 	useEffect(() => {
@@ -207,8 +207,13 @@ function useJumpShortcuts(): void {
 			const editing = target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT" || target.isContentEditable);
 			const overlay = [...document.querySelectorAll('[role="dialog"], [role="menu"], [role="listbox"], .neo-shell[data-nav-open="true"]')]
 				.some((element) => element.getClientRects().length > 0);
-			if (e.defaultPrevented || e.isComposing || e.ctrlKey || e.metaKey || e.altKey || editing || overlay) {
+			if (e.defaultPrevented || e.isComposing || e.ctrlKey || e.metaKey || editing || overlay) {
 				armed = 0;
+				return;
+			}
+			if (e.altKey) {
+				armed = 0;
+				if (e.key.toLowerCase() === "m" && !e.shiftKey) { e.preventDefault(); navigate("/models"); }
 				return;
 			}
 			const now = Date.now();

@@ -89,6 +89,26 @@ test("a saved record reaches config.yml and the live session; reset removes the 
 	expect(reset.live[0]).toMatchObject({ provenance: "default", effectiveValue: {} });
 });
 
+test("stale expected values reject role edits without replacing a newer assignment", async () => {
+	const before = await roles();
+	const first = await patch({ id: "modelRoles", entries: { review: "openai/gpt-4o" }, expectedValue: before.setting.value });
+	expect(first.status).toBe(200);
+	const persisted = await readFile(configFile, "utf8");
+	const stale = await patch({ id: "modelRoles", entries: { review: "anthropic/claude-sonnet" }, expectedValue: before.setting.value });
+	expect(stale.status).toBe(409);
+	expect(await stale.text()).toContain("changed since this page loaded");
+	expect(await readFile(configFile, "utf8")).toBe(persisted);
+	const fresh = await roles();
+	expect((await patch({ id: "modelRoles", entries: { review: "anthropic/claude-sonnet" }, expectedValue: fresh.setting.value })).status).toBe(200);
+});
+
+test("expected-value checks cannot be used to compare secret configuration", async () => {
+	const before = await readFile(configFile, "utf8");
+	const response = await patch({ id: "searxng.token", value: "new-secret", expectedValue: null });
+	expect(response.status).toBe(400);
+	expect(await readFile(configFile, "utf8")).toBe(before);
+});
+
 test.skipIf(!("setActiveRole" in live))("live settings report role provenance without replacing the saved global value", async () => {
 	const configured = await patch({ id: "roleSettings", value: { review: { "compaction.thresholdTokens": 64000 } } });
 	expect(configured.status).toBe(200);

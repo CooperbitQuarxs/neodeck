@@ -145,6 +145,15 @@ export function useTheme(): UseThemeResult {
 		typeof window === "undefined" ? "neo" : systemPreferredTheme(),
 	);
 
+	// Multiple controls in this document share the root attribute, not hook-local state.
+	useEffect(() => {
+		const sync = () => { setActive(activeAttribute()); setStored(readStoredTheme()); };
+		const observer = new MutationObserver(sync);
+		observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+		sync();
+		return () => observer.disconnect();
+	}, []);
+
 	// React to the OS toggling between light and dark while the app is open.
 	// We only follow it when the user hasn't pinned a choice.
 	useEffect(() => {
