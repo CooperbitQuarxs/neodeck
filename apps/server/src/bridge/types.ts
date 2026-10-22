@@ -56,6 +56,10 @@ export interface AgentBridge {
 	subscribeSubagents(sessionId: string, listener: (nodes: SubagentNode[]) => void): () => void;
 	readSubagentTranscript(sessionId: string, id: string, fromByte?: number): Promise<SubagentTranscriptResponse>;
 	abortSubagent(sessionId: string, id: string): Promise<void>;
+	/** Live runtime identities only. Does not resume sessions or discover definitions. */
+	agentInstances?(): import("@npi-deck/protocol").AgentInstance[];
+	/** Steer an existing, owned child. Never revives a disposed runtime. */
+	steerSubagent?(sessionId: string, id: string, text: string): Promise<void>;
 	/** Pin a session against the idle reaper while a client is subscribed. */
 	trackSubscriberAdded(sessionId: string, connectionId: string): void;
 	/** Drop a subscriber; once subscribers hit zero and idle window elapses, the reaper claims it. */
