@@ -6,6 +6,7 @@ const refs = new Map<string, any>();
 const listeners = new Set<(change: any) => void>();
 const registry = {
 	get: (id: string) => refs.get(id),
+	list: () => [...refs.values()],
 	onChange: (listener: (change: any) => void) => { listeners.add(listener); return () => listeners.delete(listener); },
 };
 const released: Array<{ id: string; ref: unknown; tombstone: boolean }> = [];
@@ -172,5 +173,31 @@ test("a finished child keeps its first terminal status except for a later abort"
 	expect(tree.snapshot()[0]?.status).toBe("aborted");
 	events.emit("task:subagent:progress", { progress: { id: "finished", status: "completed" } });
 	expect(tree.snapshot()[0]?.status).toBe("aborted");
+	tree.dispose();
+});
+
+test("instance capabilities follow native ownership, identity and live sessions", async () => {
+	refs.clear();
+	refs.set("rootA", { id: "rootA", kind: "main" });
+	refs.set("rootB", { id: "rootB", kind: "main" });
+	const calls: string[] = [];
+	const child = { id: "native-child", parentId: "rootA", kind: "sub", status: "running", createdAt: 1,
+		displayName: "Research", sessionFile: "/native/research.jsonl", history: { agent: "research", resolvedModel: "native/old" },
+		session: { model: { provider: "native", id: "current" }, thinkingLevel: "high", steer: async (text: string) => { calls.push(text); } } };
+	refs.set(child.id, child);
+	refs.set("observer", { id: "observer", parentId: "rootA", kind: "advisor", status: "running", createdAt: 2, displayName: "Review", sessionFile: "/native/review.jsonl", session: {} });
+	refs.set("foreign", { ...child, id: "foreign", parentId: "rootB" });
+	const events = bus(), tree = new SubagentTree("rootA", events, api);
+	events.emit("task:subagent:lifecycle", { id: child.id, status: "started" });
+	const rows = tree.instances("thread-a");
+	expect(rows).toHaveLength(2);
+	expect(rows[0]).toMatchObject({ id: "native-child", templateId: null, templateName: "research", sessionId: "thread-a", model: "native/current", thinking: "high", parentInstanceId: "rootA", actions: { steer: true, cancel: true } });
+	expect(rows[1]).toMatchObject({ id: "observer", observes: true, actions: { steer: false, cancel: false } });
+	await tree.steer(child.id, "Check ownership");
+	expect(calls).toEqual(["Check ownership"]);
+	await expect(tree.steer("foreign", "Wrong root")).rejects.toThrow("Forbidden subagent");
+	child.status = "parked"; child.session = null as any;
+	await expect(tree.steer(child.id, "Do not revive")).rejects.toThrow("Subagent no longer active");
+	expect(tree.instances("thread-a")[0]?.actions.steer).toBe(false);
 	tree.dispose();
 });

@@ -36,19 +36,24 @@ deck (still served); NeoProxy's `exposed: false` removes a provider.
 
 ## 4. Threads with several agents (`threadAgents`)
 
-A thread is a session that hosts agents as equals. Today a session has exactly one (the deck's `Main`); the contract adds the rest.
+The native instance is the unit of identity. Main is an ordinary depth-zero instance, and a template never has a lifecycle state. `AgentTemplate` and `AgentInstance` in `packages/protocol/src/agents.ts` are the shared wire types.
 
-- `GET /api/threads/:id/agents` → `{ agents: ThreadAgent[] }`; `ThreadAgent { id, name, hue, model, template, state: "needs-you"|"working"|"idle", restrictions: Restriction[], spawnedBy? }`.
-- `POST /api/threads/:id/agents` `{ name, hue, model, template, restrictions }` → `ThreadAgent`; `DELETE /api/threads/:id/agents/:agentId`.
-- `POST /api/threads/:id/send` `{ text, to: agentId | "all", images? }`: the composer's target. Assistant messages on the websocket carry `agentId` so the transcript can colour them.
-- `PATCH /api/threads/:id/agents/:agentId` `{ model?, restrictions? }`: loosening or tightening at runtime (the owner's model: hierarchy is a restriction, not a type).
+- `GET /api/threads/:id/agents` → `{ agents: AgentInstance[], capabilities }`. Requires a live session; browsing this endpoint never resumes one. Includes Main and owned native children and observers. A persisted thread must be resumed before its runtime roster is available.
+- `DELETE /api/threads/:id/agents/:agentId` cancels an owned instance when its advertised `actions.cancel` permits it. For Main, cancellation aborts the current turn, not the session history.
+- `POST /api/threads/:id/send` `{ text, to: instanceId }` steers an existing runtime when `actions.steer` permits it. Main must already be running; use the existing WebSocket composer to start a new Main turn. Child image steering is unavailable. Broadcast to `"all"` returns 501 until NeoPi's equal-participant conversation design is decided.
+- `PATCH /api/threads/:id/agents/:agentId` `{ model }` updates Main through the native model selector when available. This SDK cannot mutate child models or arbitrary restrictions. Unsupported operations return explicit errors, never local cosmetic state.
+- `POST /api/threads/:id/agents` returns 501. Native template instantiation waits for neopi#11. The aggregate `threadAgents` source stays preview; live runtime reads are separately marked `agentInstances: live`.
 
-## 5. Agents, templates and the judge (`agents`, `judge`)
+## 5. Agents, templates and the judge (`agents`, `agentTemplates`, `agentInstances`, `judge`)
 
-- `GET /api/agents` → `{ agents: LiveAgent[] }` across threads, cards and routines. `LiveAgent { id, name, template, model, where: { kind: "thread"|"card"|"routine", id, label }, state, owner, tokens, costUsd, since, hue }`.
-- `GET /api/agents/templates` → `{ templates: AgentTemplate[] }`; `POST`/`PUT /api/agents/templates/:id`; `DELETE`. `AgentTemplate { id, name, blurb, model, restrictions: Restriction[] }`; `Restriction { key: "visibility"|"lifecycle"|"spawn"|"model"|"prompt"|"tools", label }`.
-- `POST /api/agents` `{ template, name, hue, model, restrictions, where }` spawns one; `POST /api/agents/:id/stop`; `PATCH /api/agents/:id` `{ model?, restrictions? }`.
-- `GET /api/judge/events?limit=` → `{ events: JudgeEvent[] }`; websocket frame `judge_event`. `POST /api/judge/events/:id/undo` re-spawns what a "stopped" event stopped. `GET/PUT /api/judge` `{ model, intervalSec, paused }`.
+- `GET /api/agents/instances` → `{ instances: AgentInstance[], capabilities }`. `GET /api/agents` returns the same native instances under `agents`. Lists live deck sessions and their owned native children. It does not invent card/routine instances, ownership, costs or usage the runtime has not reported.
+- An instance exposes `id`, `templateId`, `sessionId`, optional `threadId` and journal `sessionFile`, `parentInstanceId`, `label`, lifecycle `status`, optional native `model`, `thinking`, task and timestamps, and `actions: { steer, cancel, setThinking, setFast, enter }`. An unavailable fact stays absent. Template identity is null unless native authority establishes it.
+- `POST /api/agents/instances/:id/steer` `{ text }` and `POST /api/agents/instances/:id/cancel` act only on the instance's current native generation. `/api/agents/:id/stop` and `/api/agents/instances/:id/stop` also cancel. Parked children cannot be revived by steering.
+- `GET /api/agents/templates` → `{ templates: AgentTemplate[], capabilities }`; `GET /api/agents/templates/:id`, `POST /api/agents/templates`, `PUT /api/agents/templates/:id`, and `DELETE /api/agents/templates/:id` persist **deck-authored** configuration in SQLite. Definition fields are `id`, `name`, optional `description`, opaque `model`, `thinking`, `tools`, `systemPrompt` and informational `preset`. Provenance is assigned by the server as `{ format: "deck" }`. A fresh database has no seeded definitions. These records are not installed into NeoPi and cannot be executed yet.
+- `GET /api/agents/capabilities` distinguishes local template persistence, native instance listing, native definition discovery, spawn, restrictions and judge support. Native definition discovery needs `list_agent_definitions`; Deck does not read agent files as an alternate authority. Neither a model role such as `@default` nor today's advisor/task preset is an agent type.
+- `POST /api/agents` and `POST /api/agents/instances` return 501, with the native spawn dependency explained. `PATCH /api/agents/instances/:id` and `/api/agents/:id` support Main's model updates under the same limits as thread updates.
+- `GET /api/judge` → `{ available: false, reason }`; `GET /api/judge/events?limit=1..500` → `{ events: [], available: false, reason }`. No fleet judge exists in the pin. `PUT /api/judge` and `POST /api/judge/events/:id/undo` return 501. No fabricated judge events or `judge_event` WebSocket frames are emitted. Native TTSR judging is not a fleet judge.
+- `agentTemplates` and `agentInstances` are live. Aggregate `agents`, equal-participant `threadAgents` and `judge` remain preview because their full capabilities are not backed.
 
 ## 6. Board evidence (`boardEvidence`)
 

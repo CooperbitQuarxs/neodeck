@@ -36,6 +36,7 @@ import { buildAuthOAuthRouter } from "./routes-auth-oauth.ts";
 import { buildOnboardingRouter } from "./routes-onboarding.ts";
 import { buildSubagentsRouter } from "./routes-subagents.ts";
 import { buildAdvisorsRouter } from "./routes-advisors.ts";
+import { buildAgentsRouter } from "./routes-agents.ts";
 import { buildModelsConfigRouter } from "./routes-models-config.ts";
 import { buildNpiConfigRouter } from "./routes-npi-config.ts";
 import { buildIntegrationsRouter } from "./routes-integrations.ts";
@@ -286,6 +287,7 @@ export function buildRouter(
 	app.route("/onboarding", buildOnboardingRouter());
 	app.route("/subagents", buildSubagentsRouter(bridge));
 	app.route("/", buildAdvisorsRouter(bridge, config));
+	app.route("/", buildAgentsRouter(bridge));
 	app.route("/", buildModelsConfigRouter());
 	app.route("/", buildNpiConfigRouter(bridge, config));
 	app.route("/", buildMcpServersRouter(bridge, config));

@@ -19,6 +19,8 @@ export type Domain =
 	| "models"
 	| "dictation"
 	| "agents"
+	| "agentTemplates"
+	| "agentInstances"
 	| "judge"
 	| "studio"
 	| "studioGraphs"
@@ -45,12 +47,16 @@ export const SOURCES: Readonly<Record<Domain, Source>> = {
 	boardEvidence: "preview",
 	/** Sessions and transcripts: the deck's websocket store. */
 	threads: "live",
-	/** Several agents in one thread, their colours, the composer target. */
+	/** Equal-participant creation and broadcast wait for NeoPi's hierarchy design. */
 	threadAgents: "preview",
 	/** The model catalogue behind the picker: `/api/models` plus role mapping. */
 	models: "live",
 	dictation: "preview",
 	agents: "preview",
+	/** Deck-authored definitions only; native definition discovery is unavailable. */
+	agentTemplates: "live",
+	/** Native identities and permitted actions, without preview instances. */
+	agentInstances: "live",
 	judge: "preview",
 	/** Flows are routines: `/api/routines` and the native graph. */
 	studio: "live",

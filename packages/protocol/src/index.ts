@@ -16,6 +16,7 @@
 export { compileStructuredOutputSchema, validateRoutineSpec } from "./validate";
 export type { ValidationError, ValidationResult } from "./validate";
 export * from "./graph";
+export type { AgentTemplate, AgentTemplateInput, AgentInstance, AgentCapabilities } from "./agents";
 export { isGraphValue, validateRoutineGraph } from "./graph-validation";
 import type { RoutineGraph } from "./graph";
 // MIXTURES.toml document, validation report and mixture trace projections (#80).
