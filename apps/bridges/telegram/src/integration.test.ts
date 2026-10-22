@@ -120,12 +120,14 @@ test("setup, pairing, chat routing, streaming, capture and attention use only fa
 		await until(() => sockets.size === 1);
 		// The observer refreshes subscriptions every three seconds.
 		await Bun.sleep(3100);
-		const alert = JSON.stringify({ type: "ext_ui_dialog_open", sessionId: "thread-a", dialogId: "question-1", kind: "confirm", title: "Ship the release?" });
+		const alert = JSON.stringify({ type: "ext_ui_dialog_open", sessionId: "thread-a", dialogId: "question-1", kind: "confirm", prompt: "Ship the release?" });
 		for (const socket of sockets) socket.send(alert);
 		await until(() => calls.some(call => call.method === "sendMessage" && call.body.text.startsWith("Needs you:")));
 		for (const socket of sockets) socket.send(alert);
 		await Bun.sleep(100);
-		expect(calls.filter(call => call.method === "sendMessage" && call.body.text.startsWith("Needs you:"))).toHaveLength(1);
+		const attention = calls.filter(call => call.method === "sendMessage" && call.body.text.startsWith("Needs you:"));
+		expect(attention).toHaveLength(1);
+		expect(attention[0]?.body.text).toContain("Ship the release?");
 		await request("/conversations/7", "PATCH", { mode: "capture", notify: false });
 		enqueue("Ordinary capture"); await until(() => captures.length === 2);
 		await request("/users/7", "DELETE");

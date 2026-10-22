@@ -160,7 +160,7 @@ export class TelegramBridge {
 			const id = `${row.id}:${frame.sessionId}:${eventId}`;
 			if (this.store.notificationSent(id)) continue;
 			try {
-				const title = frame.type === "plan_proposed" ? "A plan is ready for review." : frame.title || "Your agent has a question.";
+				const title = frame.type === "plan_proposed" ? "A plan is ready for review." : frame.prompt || "Your agent has a question.";
 				await this.telegram.sendMessage(row.chatId, `Needs you: ${title.slice(0, 2500)}\nOpen this thread in NeoDeck to respond.\nThread ${frame.sessionId}`, undefined,
 					row.directTopicId !== undefined ? { direct_messages_topic_id: row.directTopicId } : row.threadId && row.threadId !== 1 ? { message_thread_id: row.threadId } : {});
 				this.store.markNotificationSent(id);

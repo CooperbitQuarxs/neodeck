@@ -66,8 +66,8 @@ export function TelegramIntegration() {
 	const updateConversation = (row: TelegramConversation, value: Parameters<typeof telegram.conversation>[1]) => run(row.id, () => telegram.conversation(row.id, value));
 	return <Card title="Telegram" description="Capture a thought, continue a thread, or hear when an agent needs you." className="neo-telegram" actions={<div className="neo-telegram-status" role="status"><Dot tone={active && pollFresh && !data?.runtime.error ? "live" : data?.bridge.status === "crashed" || data?.runtime.error ? "bad" : undefined} />{status}</div>}>
 		<IntegrationNotice notice={notice} />
-		{data?.runtime.error && <Notice tone="bad">{data.runtime.error}</Notice>}
-		{data?.bridge.lastError && <Notice tone="bad">{data.bridge.lastError}</Notice>}
+		{data?.runtime.error && <div role="alert"><Notice tone="warn">{data.runtime.error}</Notice></div>}
+		{data?.bridge.lastError && <div role="alert"><Notice tone="warn">{data.bridge.lastError}</Notice></div>}
 		{data?.restartRequired && <Notice tone="warn">Saved connection changes are not active yet. Restart the bridge before pairing another account.</Notice>}
 		<div className="neo-telegram-setup">
 			<form className="neo-telegram-section" onSubmit={event => { event.preventDefault(); void save(); }}>
