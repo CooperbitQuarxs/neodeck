@@ -88,11 +88,18 @@ Notes are read live (`/api/kb/*`); humans do not write (the server refuses by de
 
 ## 11. GitHub (`github`)
 
-- `GET /api/github/repos` → `{ repos: Repo[] }`; `Repo { id, name, defaultBranch, integrationBranch, openIssues, openPrs, lastNightly }`.
-- `GET /api/github/wheel?repo=` → `{ items: WheelItem[] }` (stages `ready → implementing → pr → review → merged → nightly`); `POST /api/github/wheel/:id/advance` `{ to, model? }`.
-- `GET /api/github/issues?repo=&state=` → `{ issues }`; `GET /api/github/prs?repo=` → `{ prs }` with checks and review state; `GET /api/github/items/:id` → the item with its timeline and comments.
-- `POST /api/github/issues` `{ repo, title, body, labels, card?: boolean }` → `{ number, url, cardId? }`.
-- `POST /api/integrations/github` installs the app; `GET` reports the connection.
+The GitHub page is live and read-only through the server's authenticated
+`gh api graphql`. Queries name the configured repository explicitly, never a
+fork's upstream. No GitHub mutations are exposed by this adapter.
+
+- `GET /api/github/repos` → `{ repos: string[] }`, tracked `owner/repo` addresses.
+- `PUT /api/github/repos` `{ repos: string[] }` saves only the local watchlist in `$NPI_DECK_HOME/github-repos.json`, up to 20 repositories. An empty list tracks nothing. Before the first save, `NPI_DECK_GITHUB_REPOS` supplies comma/space-separated addresses, or the server discovers GitHub `origin` remotes from configured workspaces.
+- `GET /api/github/snapshot` → `{ repos, issues, pulls, wheel, viewer, configuredRepos, errors, fetchedAt, limit: 100 }`. One query per repository retrieves the 100 most recently updated issues and PRs, repository-wide open counts, PR checks/review decisions and the last 20 conversation comments. `viewer` is the server CLI's GitHub login and supports the PR author filter, not Deck account identity. Inline reviews and full history stay on GitHub. Results are cached for 30 seconds with single-flight refreshes. Four workers share a 45-second deadline; each CLI call also has a 30-second limit. Timed-out or failed repositories report errors without hiding successful repositories. The HTTP request has a finite 60-second ceiling.
+- Ready follows `ready`, `agent: pending` or `state: ready`; Implementing follows `implementing`, `agent: started`, `human: started` or `state: implementing`. Open PRs enter PR open, then Review when GitHub reports a review decision or review label. Merged is GitHub's merged state. Nightly requires an explicit `nightly`, `state: nightly` or `status: nightly` label, never an inferred deployment. Wheel timestamps are last updates, not claimed transition history.
+
+The GitHub App installation in Settings remains preview. App-backed writes,
+issue filing, wheel advancement, agent assignment and full event timelines
+are not implemented by the CLI adapter.
 
 ## 12. Usage and providers (`usage`, `providers`)
 
