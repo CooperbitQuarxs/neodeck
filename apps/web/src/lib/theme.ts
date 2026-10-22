@@ -23,14 +23,14 @@ export const THEMES: ThemeDefinition[] = [
 	{
 		id: "neo",
 		label: "Neo",
-		description: "The NeoPi web language: black chassis, inset panel, cyan → pink accent. Default.",
+		description: "The NeoPi web language, shared with NeoProxy: purple-black chassis, inset panel, cyan → pink accent. Default.",
 		swatchTokens: [
 			{ token: "paper", label: "Page" },
 			{ token: "paper-2", label: "Card" },
 			{ token: "ink", label: "Ink" },
 			{ token: "accent", label: "Accent" },
 		],
-		metaThemeColor: "#000000",
+		metaThemeColor: "#0b0810",
 		colorScheme: "dark",
 	},
 	{
@@ -43,7 +43,7 @@ export const THEMES: ThemeDefinition[] = [
 			{ token: "ink", label: "Ink" },
 			{ token: "accent", label: "Accent" },
 		],
-		metaThemeColor: "#f2f2f3",
+		metaThemeColor: "#f3f1f5",
 		colorScheme: "light",
 	},
 	{

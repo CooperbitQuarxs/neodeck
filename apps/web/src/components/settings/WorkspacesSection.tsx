@@ -87,7 +87,7 @@ export function WorkspacesSection() {
 						<div className="mt-1 break-all font-mono text-xs text-ink">{data.defaultCwd}</div>
 						<div className="mt-1 text-xs text-ink-3">
 							New chats start here. Change it with{" "}
-							<Link className="underline" to="/settings?section=env">
+							<Link className="underline" to="/legacy/settings?section=env">
 								NPI_DECK_DEFAULT_CWD under Env
 							</Link>
 							.

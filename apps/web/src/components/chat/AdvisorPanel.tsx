@@ -194,7 +194,7 @@ function AdvisorPicker({ sessionId, status, onApplied, onCancel }: {
 			</div>
 			{error && <p role="alert" className="text-xs text-danger">{error}</p>}
 			{!roster && !error && <p className="text-xs text-ink-3">Loading roster…</p>}
-			{roster && roster.advisors.length === 0 && <p className="text-xs text-ink-3">This workspace has no WATCHDOG advisors. <Link to="/advisors" className="text-accent hover:underline">Add advisors to the roster</Link>.</p>}
+			{roster && roster.advisors.length === 0 && <p className="text-xs text-ink-3">This workspace has no WATCHDOG advisors. <Link to="/legacy/advisors" className="text-accent hover:underline">Add advisors to the roster</Link>.</p>}
 			{roster && roster.advisors.length > 0 && <ul className="space-y-1">
 				{roster.advisors.map(a => <li key={a.name}>
 					<label className="flex cursor-pointer items-center gap-2 rounded px-1 py-0.5 hover:bg-paper-3">
@@ -212,7 +212,7 @@ function AdvisorPicker({ sessionId, status, onApplied, onCancel }: {
 				</button>
 				{running && <button type="button" className="btn-ghost px-3 py-1 text-xs" disabled={busy} onClick={() => void apply([])}>Stop all advisors</button>}
 				<button type="button" className="btn-ghost px-3 py-1 text-xs" onClick={onCancel}>Cancel</button>
-				<Link to="/advisors" className="ml-auto text-xs text-accent hover:underline">Edit roster</Link>
+				<Link to="/legacy/advisors" className="ml-auto text-xs text-accent hover:underline">Edit roster</Link>
 			</div>
 		</div>
 	</section>;

@@ -186,7 +186,7 @@ function RunMini({ routineId, run }: { routineId: string; run: RoutineRun }) {
 	const running = !run.endedAt && !run.abortedAt;
 	return (
 		<li>
-			<Link to={`/routines/${routineId}/runs/${run.id}`} className="flex items-center gap-2 rounded-[var(--r-chip)] px-1.5 py-1 text-[12px] hover:bg-[var(--neo-hover)]">
+			<Link to={`/legacy/routines/${encodeURIComponent(routineId)}/runs/${encodeURIComponent(run.id)}`} className="flex items-center gap-2 rounded-[var(--r-chip)] px-1.5 py-1 text-[12px] hover:bg-[var(--neo-hover)]">
 				<span className="neo-dot" data-tone={running ? "accent" : ok ? "ok" : "bad"} data-pulse={running || undefined} />
 				<span className="neo-mono text-ink-3">{new Date(run.startedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
 				<span className="text-ink-4">{run.trigger}</span>
