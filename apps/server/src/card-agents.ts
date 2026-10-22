@@ -105,7 +105,7 @@ export class CardAgentRunner {
 		}
 		queueMicrotask(() => this.drain());
 	}
-	assign(taskId: string): CardRun {
+	assign(taskId: string, selector?: string): CardRun {
 		if (this.closing) throw new Error("Card runner is shutting down");
 		const current = this.assignments.get(taskId);
 		if (current) return { ...current.run };
@@ -113,6 +113,11 @@ export class CardAgentRunner {
 		if (!task) throw new Error("Task not found");
 		if (task.archivedAt) throw new Error("Cannot assign an archived card");
 		const properties = cardExecutionProperties(task.body);
+		// A per-run selection never rewrites the card or global model policy.
+		if (selector !== undefined) {
+			if (selector.startsWith("@")) { properties.role = selector.slice(1); properties.model = undefined; }
+			else { properties.model = selector; properties.role = undefined; }
+		}
 		this.checkColumns();
 		const run: CardRun = {
 			id: `card-${crypto.randomUUID()}`, taskId, status: "queued", assignedAt: new Date().toISOString(), ownedWorktree: !properties.worktree,
