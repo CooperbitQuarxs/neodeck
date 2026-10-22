@@ -137,6 +137,19 @@
 .neo-studio-keys { display: flex; flex-direction: column; gap: 7px; font-size: 12px; line-height: 1.5; color: rgb(var(--ink-3)); }
 .neo-studio-keys kbd, .neo-studio-foot kbd { font-family: var(--font-sans); font-size: 11px; padding: 0 5px; border: 1px solid var(--neo-line-3); border-bottom-width: 2px; border-radius: 4px; color: rgb(var(--ink-2)); background: var(--neo-raised); }
 
+/* What a step does when the graph is executed: a dot and a sentence. */
+.neo-studio-support { display: flex; align-items: baseline; gap: 8px; font-size: 12px; line-height: 1.5; color: rgb(var(--ink-2)); }
+.neo-studio-support > i { flex: none; width: 7px; height: 7px; border-radius: var(--r-pill); background: rgb(var(--success)); transform: translateY(-1px); }
+.neo-studio-support[data-support="action"] > i { background: rgb(var(--accent)); }
+.neo-studio-support[data-support="preview"] > i { background: rgb(var(--ink-4)); }
+.neo-studio-execute { display: flex; flex-direction: column; gap: 16px; }
+.neo-studio-execute h3 { font-size: 13px; font-weight: 600; color: rgb(var(--ink)); }
+.neo-studio-execute p { margin-top: 2px; font-size: 12px; line-height: 1.5; color: rgb(var(--ink-2)); }
+.neo-studio-execute section[data-support="preview"] h3 { color: rgb(var(--danger)); }
+.neo-studio-execute ul { margin-top: 8px; display: flex; flex-direction: column; gap: 4px; }
+.neo-studio-execute li { display: flex; justify-content: space-between; gap: 12px; font-size: 12.5px; padding: 5px 10px; border-radius: var(--r-control); background: var(--neo-raised); }
+.neo-studio-execute li small { color: rgb(var(--ink-3)); font-size: 11.5px; }
+
 /* Runs, inside the panel */
 .neo-studio-runs { display: flex; flex-direction: column; gap: 1px; margin: -4px -6px 0; }
 .neo-studio-run-row { display: grid; grid-template-columns: 7px auto 1fr auto; align-items: center; gap: 9px; padding: 7px 8px; border-radius: var(--r-control); font-size: 12.5px; color: rgb(var(--ink)); text-align: left; cursor: pointer; }
