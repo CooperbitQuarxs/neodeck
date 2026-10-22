@@ -7,9 +7,11 @@ export interface KnowledgeHistoryEntry {
 	id: string;
 	at: string;
 	actor: string;
-	kind: "wrote" | "asked" | "linked";
+	kind: "wrote" | "asked" | "linked" | "committed";
 	text: string;
 }
+
+export interface KnowledgeHistory { available: boolean; entries: KnowledgeHistoryEntry[] }
 
 /** Read-only wiki contract. Changes are requested through an agent thread. */
 export interface KnowledgeClient {
@@ -19,21 +21,21 @@ export interface KnowledgeClient {
 	backlinks(path: string): Promise<KbBacklinksResponse>;
 	search(query: string): Promise<KbSearchResponse>;
 	status(): Promise<KbStatusResponse>;
-	history(path: string): Promise<KnowledgeHistoryEntry[]>;
+	history(path: string): Promise<KnowledgeHistory>;
 }
 
 const historyAt = Date.now();
-const previewHistory = async (path: string): Promise<KnowledgeHistoryEntry[]> => [
+const previewHistory = async (path: string): Promise<KnowledgeHistory> => ({ available: false, entries: [
 	{ id: `${path}:written`, at: new Date(historyAt - 2 * 86_400_000).toISOString(), actor: "chronicler", kind: "wrote", text: "from thread 'Draft 0.5 release notes'" },
 	{ id: `${path}:asked`, at: new Date(historyAt - 5 * 86_400_000).toISOString(), actor: "lin", kind: "asked", text: "for a rewrite" },
-];
+] });
 
 const live: KnowledgeClient = {
 	...kbApi,
 	history: SOURCES.knowledgeHistory === "preview" ? previewHistory : async (path) => {
 		const response = await fetch(`/api/kb/history?path=${encodeURIComponent(path)}`);
 		if (!response.ok) throw new Error(`Could not load note history (${response.status}).`);
-		return (await response.json()) as KnowledgeHistoryEntry[];
+		return (await response.json()) as KnowledgeHistory;
 	},
 };
 

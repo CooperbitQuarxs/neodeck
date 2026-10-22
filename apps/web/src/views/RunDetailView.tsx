@@ -95,7 +95,7 @@ export function RunDetailView() {
 		<Layout
 			sidebar={
 				<div className="flex h-full min-h-0 flex-col p-3">
-					<Link to="/routines" className="meta mb-2 flex items-center gap-1 text-ink-3 hover:text-ink">
+					<Link to="/legacy/routines" className="meta mb-2 flex items-center gap-1 text-ink-3 hover:text-ink">
 						<ArrowLeft className="h-3 w-3" />
 						Back to routines
 					</Link>
