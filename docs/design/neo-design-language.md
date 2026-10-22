@@ -43,6 +43,27 @@ express, so a parallel `--neo-*` set exists for the component layer. The
 legacy Paper, Slate and Horizon themes derive their `--neo-*` values from
 their own palette, so the shell renders under all five themes.
 
+### Layers
+
+`apps/web/src/neo/layers.css` defines the shared stacking scale. Use these
+tokens rather than page-specific numbers:
+
+| Token suffix, prefixed with `--neo-layer-` | Value | Role |
+| --- | --- | --- |
+| `base` | 0 | Ambient backgrounds |
+| `raised` | 1 | Ordinary content and local selection |
+| `sticky` | 10 | Sticky headers |
+| `chrome` | 20 | Shell and canvas controls |
+| `popover` | 100 | Portalled menus, lists and popovers |
+| `modal` | 200 | Modal backdrops, with panels one level higher |
+| `modal-popover` | 210 | Popovers opened inside a modal |
+| `tooltip` | 300 | Noninteractive hints |
+| `toast` | 400 | Transient notifications |
+
+Menus must portal out of clipped panels. Raising a child cannot escape its
+parent's stacking context. Modal focus handling must include portalled child
+popovers, and Escape dismisses only the topmost overlay.
+
 ### Surfaces (one step up per notch)
 
 | Token | Neo | Neo light | Role |
