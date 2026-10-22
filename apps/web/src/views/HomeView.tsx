@@ -61,10 +61,10 @@ export function HomeView() {
 							description="Everything the office needs you for, in one place. Numbers link to where they come from."
 							actions={
 								<>
-									<NeoLinkButton to="/inbox?capture=1" variant="primary">
+									<NeoLinkButton to="/legacy/inbox?capture=1" variant="primary">
 										<Inbox size={14} /> Capture
 									</NeoLinkButton>
-									<NeoLinkButton to="/threads">
+									<NeoLinkButton to="/legacy/threads">
 										<MessagesSquare size={14} /> New thread
 									</NeoLinkButton>
 								</>
@@ -72,18 +72,18 @@ export function HomeView() {
 						/>
 
 						<StatGrid>
-							<Stat label="Unread inbox" value={snap ? unread.length : "–"} foot={snap ? `${snap.inbox.length} total` : "loading"} to="/inbox" icon={Inbox} />
-							<Stat label="In flight" value={snap ? inFlight.length : "–"} foot={snap ? `${snap.tasks.length} cards on the board` : "loading"} to="/tasks" icon={KanbanSquare} />
-							<Stat label="Threads" value={backend ? sessions.length : "–"} foot={backend ? "in this workspace" : "needs an engine"} to="/threads" icon={MessagesSquare} />
-							<Stat label="Routines" value={snap ? enabledRoutines.length : "–"} foot={snap ? `${snap.routines.length} defined, ${enabledRoutines.length} enabled` : "loading"} to="/routines" icon={Clock} />
-							<Stat label="Engine" value={backend ? "NeoPi" : "none"} foot={backend ? (backend.version ?? backend.commit?.slice(0, 7) ?? backend.path) : "attach one on the NeoPi page"} to="/neopi" icon={Zap} />
+							<Stat label="Unread inbox" value={snap ? unread.length : "–"} foot={snap ? `${snap.inbox.length} total` : "loading"} to="/legacy/inbox" icon={Inbox} />
+							<Stat label="In flight" value={snap ? inFlight.length : "–"} foot={snap ? `${snap.tasks.length} cards on the board` : "loading"} to="/legacy/tasks" icon={KanbanSquare} />
+							<Stat label="Threads" value={backend ? sessions.length : "–"} foot={backend ? "in this workspace" : "needs an engine"} to="/legacy/threads" icon={MessagesSquare} />
+							<Stat label="Routines" value={snap ? enabledRoutines.length : "–"} foot={snap ? `${snap.routines.length} defined, ${enabledRoutines.length} enabled` : "loading"} to="/legacy/routines" icon={Clock} />
+							<Stat label="Engine" value={backend ? "NeoPi" : "none"} foot={backend ? (backend.version ?? backend.commit?.slice(0, 7) ?? backend.path) : "attach one on the NeoPi page"} to="/settings#engine" icon={Zap} />
 						</StatGrid>
 
 						<div className="neo-grid neo-grid-main-side items-start">
 							<Card
 								title="Inbox"
 								description={unread.length ? "Newest first. Open one to read, label, or promote it." : "Nothing waiting. Capture a thought and it lands here."}
-								actions={<NeoLinkButton to="/inbox" size="sm">All items</NeoLinkButton>}
+								actions={<NeoLinkButton to="/legacy/inbox" size="sm">All items</NeoLinkButton>}
 								flush
 								index={1}
 							>
@@ -113,7 +113,7 @@ export function HomeView() {
 							</Card>
 
 							<div className="flex flex-col gap-4">
-								<Card title="Board" description="Cards by column." actions={<NeoLinkButton to="/tasks" size="sm">Open</NeoLinkButton>} index={2}>
+								<Card title="Board" description="Cards by column." actions={<NeoLinkButton to="/legacy/tasks" size="sm">Open</NeoLinkButton>} index={2}>
 									{snap && snap.states.length ? (
 										<ul className="flex flex-col gap-2">
 											{snap.states.map((state) => {
@@ -133,11 +133,11 @@ export function HomeView() {
 								</Card>
 								<Card title="Connections" index={3}>
 									<ul className="flex flex-col gap-2 text-[13px]">
-										<Row icon={Zap} label="NeoPi engine" to="/neopi" tone={backend ? "ok" : "warn"} status={backend ? "attached" : "none"} />
-										<Row icon={Send} label="Telegram" to="/telegram" tone={telegram?.status === "running" ? "ok" : undefined} status={telegram ? telegram.status : "not set up"} />
-										<Row icon={GitBranch} label="GitHub" to="/github" tone="planned" status="planned" />
-										<Row icon={Workflow} label="Flows" to="/flows" tone="planned" status="planned" />
-										<Row icon={Users} label="People" to="/people" tone="planned" status="planned" />
+										<Row icon={Zap} label="NeoPi engine" to="/settings#engine" tone={backend ? "ok" : "warn"} status={backend ? "attached" : "none"} />
+										<Row icon={Send} label="Telegram" to="/legacy/telegram" tone={telegram?.status === "running" ? "ok" : undefined} status={telegram ? telegram.status : "not set up"} />
+										<Row icon={GitBranch} label="GitHub" to="/legacy/github" tone="planned" status="planned" />
+										<Row icon={Workflow} label="Flows" to="/legacy/flows" tone="planned" status="planned" />
+										<Row icon={Users} label="People" to="/legacy/people" tone="planned" status="planned" />
 									</ul>
 								</Card>
 							</div>
@@ -146,7 +146,7 @@ export function HomeView() {
 						{!backend ? (
 							<Construction>
 								No NeoPi engine is attached to this deck, so threads and agent-backed routines are unavailable. Inbox, board, routines and settings keep
-								working. Attach a source tree on the <a className="text-accent underline underline-offset-2" href="/neopi">NeoPi page</a>.
+								working. Attach a source tree on the <a className="text-accent underline underline-offset-2" href="/settings#engine">NeoPi page</a>.
 							</Construction>
 						) : null}
 					</Page>

@@ -85,7 +85,7 @@ export function Layout({ sidebar, main, inspector, topBar, tools }: Props) {
 					</span>
 					<DictationButton />
 					<ThemeToggle />
-					<NeoLinkButton to="/people" variant="ghost" icon aria-label="You (accounts are planned)" title="You — accounts are planned">
+					<NeoLinkButton to="/legacy/people" variant="ghost" icon aria-label="You (accounts are planned)" title="You — accounts are planned">
 						<UserRound size={16} />
 					</NeoLinkButton>
 				</div>
@@ -196,7 +196,7 @@ function ThemeToggle() {
  */
 function DictationButton() {
 	return (
-		<NeoLinkButton to="/neopi#dictation" variant="ghost" icon aria-label="Dictation (planned)" title="Dictation — planned, not wired yet">
+		<NeoLinkButton to="/settings#dictation" variant="ghost" icon aria-label="Dictation (planned)" title="Dictation — planned, not wired yet">
 			<Mic size={16} />
 		</NeoLinkButton>
 	);

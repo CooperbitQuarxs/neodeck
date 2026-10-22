@@ -63,7 +63,7 @@ export const SOURCES: Readonly<Record<Domain, Source>> = {
 	/** Pipelines, routers, classifiers, board flows. */
 	studioGraphs: "preview",
 	knowledge: "live",
-	knowledgeHistory: "preview",
+	knowledgeHistory: "live",
 	skills: "live",
 	skillsUsage: "preview",
 	github: "preview",
