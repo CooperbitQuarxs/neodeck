@@ -22,6 +22,7 @@ export type Domain =
 	| "judge"
 	| "studio"
 	| "studioGraphs"
+	| "studioRouters"
 	| "knowledge"
 	| "knowledgeHistory"
 	| "skills"
@@ -54,8 +55,10 @@ export const SOURCES: Readonly<Record<Domain, Source>> = {
 	judge: "preview",
 	/** Flows are routines: `/api/routines` and the native graph. */
 	studio: "live",
-	/** Pipelines, routers, classifiers, board flows. */
-	studioGraphs: "preview",
+	/** Authored pipelines, classifiers and board flows: `/api/graphs`. */
+	studioGraphs: "live",
+	/** Router designs stay browser-local until NeoProxy owns their save API. */
+	studioRouters: "preview",
 	knowledge: "live",
 	knowledgeHistory: "preview",
 	skills: "live",

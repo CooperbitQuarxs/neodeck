@@ -1,6 +1,6 @@
 import type { BuildableKind, GraphKind } from "./studio-vocab";
 
-export interface GraphSummary { id: string; kind: GraphKind; name: string; description: string; nodes: number; enabled: boolean; lastRun?: { at: string; ok: boolean } }
+export interface GraphSummary { id: string; kind: GraphKind; name: string; description: string; nodes: number; enabled: boolean; lastRun?: { at: string; ok?: boolean } }
 export interface StudioGraph { id: string; kind: BuildableKind; name: string; description: string; enabled: boolean; nodes: StudioNode[]; edges: StudioEdge[]; settings: Record<string, unknown>; lastRun?: { at: string; ok: boolean }; updatedAt: string }
 export interface StudioNode { id: string; type: string; config: Record<string, unknown>; position: { x: number; y: number } }
 export interface StudioEdge { id: string; from: { node: string; port: string }; to: { node: string; port: string } }

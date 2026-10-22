@@ -21,6 +21,7 @@ const log = logger("routes");
 import { buildTasksRouter } from "./routes-tasks.ts";
 import { buildSettingsRouter } from "./routes-settings.ts";
 import { buildRoutinesRouter } from "./routes-routines.ts";
+import { buildGraphsRouter } from "./routes-graphs.ts";
 import { buildHooksRouter } from "./routes-hooks.ts";
 import { buildInboxRouter } from "./routes-inbox.ts";
 import { buildUtilityRouter } from "./routes-cron.ts";
@@ -271,6 +272,7 @@ export function buildRouter(
 	app.route("/", buildTasksRouter(opts.cardAgents));
 	app.route("/", buildUploadsRouter({ uploadsRoot: config.uploadsRoot }));
 	app.route("/", buildRoutinesRouter(runner));
+	app.route("/", buildGraphsRouter());
 	app.route("/", buildHooksRouter(runner));
 	app.route("/", buildInboxRouter());
 	app.route("/", buildUtilityRouter());

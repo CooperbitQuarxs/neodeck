@@ -7,6 +7,7 @@ All notable changes to NPI deck (a fork of bjb2/omp-deck; entries before the for
 
 ### Added
 
+- Studio graph documents now persist on the server as TOML, with durable run history and a shared 72-node catalog. Preview runs evaluate local transforms and branches without inference or output actions; explicit execution supports board, inbox, notification and issue actions, and rejects unsupported nodes before dispatch. Routers remain browser-local NeoProxy previews. Existing browser-authored graphs import without discarding their local copy.
 - Studio now edits pipelines, virtual-model routers, classifiers and board flows beside live routines and the knowledge map, with typed connections, a node inspector, editable TOML and per-node run timelines.
 - Knowledge now has a searchable note tree, a linked Markdown reader, and a map toggled with M. Follow backlinks, browse recent notes, or ask an agent to change a note in a prefilled thread.
 - Threads now groups conversations by attention, opens real session transcripts, and keeps each agent's colour and message target visible. Preview threads support several primary agents, removable spawn restrictions, folded tools and spawned-agent depth, and remain available when live sessions cannot load.
