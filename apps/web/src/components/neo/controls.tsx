@@ -5,7 +5,7 @@
  * need in the same measurements.
  */
 import { Search, X } from "lucide-react";
-import { type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, forwardRef, useId } from "react";
+import { type InputHTMLAttributes, type TextareaHTMLAttributes, type ReactNode, forwardRef, useId } from "react";
 import { cn } from "@/lib/utils";
 import { NeoButton } from "./primitives";
 
@@ -73,9 +73,12 @@ export function Toolbar({ children, end, className }: { children?: ReactNode; en
 	);
 }
 
-/** Native select in the input measurements. */
-export const NeoSelect = forwardRef<HTMLSelectElement, Omit<SelectHTMLAttributes<HTMLSelectElement>, "size"> & { size?: "sm"; mono?: boolean }>(function NeoSelect({ className, size, mono, ...rest }, ref) {
-	return <select ref={ref} className={cn("neo-input neo-select", className)} data-size={size} data-mono={mono || undefined} {...rest} />;
+export const NeoInput = forwardRef<HTMLInputElement, Omit<InputHTMLAttributes<HTMLInputElement>, "size"> & { size?: "sm"; mono?: boolean }>(function NeoInput({ className, size, mono, ...rest }, ref) {
+	return <input ref={ref} className={cn("neo-input", className)} data-size={size} data-mono={mono || undefined} {...rest}/>;
+});
+
+export const NeoTextarea = forwardRef<HTMLTextAreaElement, TextareaHTMLAttributes<HTMLTextAreaElement> & { mono?: boolean }>(function NeoTextarea({ className, mono, ...rest }, ref) {
+	return <textarea ref={ref} className={cn("neo-input", className)} data-mono={mono || undefined} {...rest}/>;
 });
 
 /** Checkbox with its label, 12.5 px, accent-coloured. */
