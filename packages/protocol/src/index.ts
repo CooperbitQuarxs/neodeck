@@ -760,6 +760,23 @@ export interface UpgradePluginResponse {
 // Skills (enumeration across every omp skill provider)
 // ─────────────────────────────────────────────────────────────────────────────
 
+/** Discoverable extension code or a manifest bundle. Discovery does not prove a session loaded it. */
+export interface ExtensionSummary {
+	id: string;
+	name: string;
+	path: string;
+	kind: "module" | "bundle";
+	description?: string;
+	provider: string;
+	providerLabel: string;
+	level: string;
+}
+
+export interface ListExtensionsResponse {
+	extensions: ExtensionSummary[];
+	warnings: string[];
+}
+
 /**
  * Parsed SKILL.md frontmatter. `name` falls back to the directory name when
  * the file omits an explicit `name:` field, matching the omp SDK's loader.
@@ -787,7 +804,7 @@ export type SkillProvider =
 	| "windsurf"
 	| "cline"
 	| "gemini"
-	| "agents"           // skills nested under subagent dirs
+	| "agents"           // shared .agent/skills and .agents/skills directories
 	| "custom"           // custom directories from runtime config
 	| (string & {});     // forward-compat
 

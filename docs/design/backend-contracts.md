@@ -89,9 +89,16 @@ Notes are read live through `/api/kb/*`. Humans request edits through a project 
 - A directory outside Git returns `available: false` with no entries; an uncommitted note in a Git repository returns `available: true` with no entries. Missing, excluded and escaping paths return 404. Git failures after repository discovery return 500 rather than fabricated history.
 - Agent activity events remain unavailable. Git history is labeled separately and does not imply a thread link or capture receipt.
 
-## 10. Skills usage
+## 10. Skills, commands, extensions and usage
+
+Skills and marketplace operations are live. `GET /api/slash-commands` lists NeoPi built-ins, Deck commands and saved user/project prompts. `GET /api/skills/extensions?cwd=` lists discoverable code modules and manifest bundles through NeoPi's capability loader without executing extension code. It returns `{ extensions: ExtensionSummary[], warnings: string[] }`; the protocol owns the row shape. Discovery does not claim an extension is active in a particular session.
+
+The skill discovery source `agents` means shared `.agent/skills` and `.agents/skills` directories. It does not mean running agents, agent templates or inference providers. Marketplace plugins may separately bundle agent templates.
+
+Usage remains an explicitly enabled preview, hidden by default:
 
 - `GET /api/skills/usage` → `{ [skillId]: { lastUsedAt, uses7d } }`.
+- NeoPi must supply persisted per-skill invocation events with resolved path identity and coverage before this can become live. An available skill or arbitrary file read does not prove invocation. Unknown history must remain unknown.
 
 ## 11. GitHub (`github`)
 

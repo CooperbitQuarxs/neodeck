@@ -7,6 +7,8 @@ All notable changes to NPI deck (a fork of bjb2/omp-deck; entries before the for
 
 ### Changed
 
+- Skills & tools separates live skills, slash commands, extension discovery, marketplace plugins and sources. Shared `.agent` directories are no longer mislabeled as subagents; usage examples are opt-in rather than mixed into the installed inventory. GPT-6.1 Sol on behalf of PsychedelicShayna.
+
 - The Neo themes now use NeoProxy's chassis: purple-tinted black surfaces (`#0b0810` page, `#100c16` panel, `#16111d` card) and NeoProxy's ink ramp, so NeoDeck and NeoProxy read as one family. Neo light moves to the matching lilac-grey page. Claude Opus 5.5.
 
 ### Added
