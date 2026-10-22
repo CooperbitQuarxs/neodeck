@@ -12,6 +12,7 @@ import { broadcastBus } from "../broadcast-bus.ts";
 import { afterCommit, getDb, id, nowIso } from "./index.ts";
 import { latestCardRun } from "./card-runs.ts";
 import { withCardProperties } from "../card-properties.ts";
+import { latestTaskEvidence, recordTaskEvent } from "./task-evidence.ts";
 
 /**
  * Every committed change to the board goes through this module, so it is the
@@ -69,6 +70,7 @@ function rowToTask(r: TaskRow): Task {
 	if (r.archived_at !== null) t.archivedAt = r.archived_at;
 	const run = latestCardRun(r.id);
 	if (run) t.run = run;
+	t.evidence = latestTaskEvidence(r.id, run);
 	return t;
 }
 
@@ -209,12 +211,14 @@ export function deleteState(stateId: string): { reassigned: number } {
 
 	let reassigned = 0;
 	db.transaction(() => {
+		const moved = db.query<{ id: string }, [string]>("SELECT id FROM tasks WHERE state_id = ?").all(stateId);
 		const result = db
 			.query<unknown, [string, string, string]>(
 				"UPDATE tasks SET state_id = ?, updated_at = ? WHERE state_id = ?",
 			)
 			.run(fallback.id, nowIso(), stateId);
 		reassigned = Number(result.changes ?? 0);
+		for (const task of moved) recordTaskEvent(task.id, `Moved to ${fallback.name} because ${target.name} was removed`);
 		// Renumber the fallback column to keep ordering stable.
 		renumberColumn(fallback.id);
 		db.query<unknown, [string]>("DELETE FROM task_states WHERE id = ?").run(stateId);
@@ -325,6 +329,7 @@ export function createTask(input: {
 			`INSERT INTO tasks (id, display_id, title, body, state_id, order_in_state, cwd, created_at, updated_at, state_entered_at)
 			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		).run(taskId, displayId, input.title, withCardProperties(input.body ?? "", input.properties), state.id, maxOrder + 1000, normalizeCwd(input.cwd), now, now, now);
+		recordTaskEvent(taskId, "Entered " + state.name);
 	})();
 	const out = getTask(taskId);
 	if (!out) throw new Error("createTask failed");
@@ -356,25 +361,31 @@ export function updateTask(
 	// edits must NOT reset the per-column recency sort.
 	const stateChanged = patch.stateId !== undefined && patch.stateId !== existing.stateId;
 	const stateEnteredAt = stateChanged ? nowIso() : existing.stateEnteredAt;
-	db.query<
-		unknown,
-		[string, string, string, number, string | null, string, string, string | null, string]
-	>(
-		`UPDATE tasks
-		   SET title = ?, body = ?, state_id = ?, order_in_state = ?, cwd = ?,
-		       updated_at = ?, state_entered_at = ?, archived_at = ?
-		 WHERE id = ?`,
-	).run(
-		next.title,
-		withCardProperties(next.body, patch.properties),
-		next.stateId,
-		next.orderInState,
-		normalizeCwd(next.cwd),
-		nowIso(),
-		stateEnteredAt,
-		archivedAt,
-		taskId,
-	);
+	db.transaction(() => {
+		db.query<
+			unknown,
+			[string, string, string, number, string | null, string, string, string | null, string]
+		>(
+			`UPDATE tasks
+			   SET title = ?, body = ?, state_id = ?, order_in_state = ?, cwd = ?,
+			       updated_at = ?, state_entered_at = ?, archived_at = ?
+			 WHERE id = ?`,
+		).run(
+			next.title,
+			withCardProperties(next.body, patch.properties),
+			next.stateId,
+			next.orderInState,
+			normalizeCwd(next.cwd),
+			nowIso(),
+			stateEnteredAt,
+			archivedAt,
+			taskId,
+		);
+		if (stateChanged) recordTaskEvent(taskId, `Moved to ${getState(next.stateId)?.name ?? next.stateId}`);
+		if (patch.archived !== undefined && Boolean(existing.archivedAt) !== patch.archived) recordTaskEvent(taskId, patch.archived ? "Archived" : "Restored");
+		if (patch.title !== undefined && patch.title !== existing.title) recordTaskEvent(taskId, `Renamed to ${patch.title}`);
+		if (patch.body !== undefined && patch.body !== existing.body || patch.properties !== undefined) recordTaskEvent(taskId, "Updated the card's instructions or properties");
+	})();
 	notifyTasksChanged();
 	return getTask(taskId);
 }
@@ -428,6 +439,7 @@ export function moveTask(taskId: string, stateId: string, index: number): Task |
 			db.query<unknown, [string, string]>(
 				"UPDATE tasks SET state_entered_at = ? WHERE id = ?",
 			).run(now, taskId);
+			recordTaskEvent(taskId, `Moved from ${getState(existing.stateId)?.name ?? existing.stateId} to ${targetState.name}`);
 		}
 	})();
 
@@ -463,7 +475,7 @@ export function findTaskByDisplayOrId(ref: string): Task | undefined {
 		if (!Number.isFinite(num)) return undefined;
 		const row = getDb()
 			.query<TaskRow, [number]>(
-				`SELECT id, display_id, title, body, state_id, order_in_state, cwd, created_at, updated_at, archived_at
+				`SELECT id, display_id, title, body, state_id, order_in_state, cwd, created_at, updated_at, state_entered_at, archived_at
 				 FROM tasks WHERE display_id = ?`,
 			)
 			.get(num) as TaskRow | null;

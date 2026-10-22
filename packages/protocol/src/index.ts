@@ -1613,6 +1613,8 @@ export interface Task {
 	archivedAt?: string;
 	/** Latest persisted assignment and outcome, independent of card front matter. */
 	run?: CardRun;
+	/** Latest durable activity note, state change, or assignment result. */
+	evidence?: { text: string; at: string };
 }
 
 export interface CreateTaskRequest {

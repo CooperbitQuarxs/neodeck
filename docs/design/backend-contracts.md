@@ -57,12 +57,17 @@ The native instance is the unit of identity. Main is an ordinary depth-zero inst
 
 ## 6. Board evidence (`boardEvidence`)
 
-Cards and columns are live (`/api/tasks`, `/api/task-states`). The contract adds what a card knows about itself:
+Cards, columns and evidence are live (`/api/tasks`, `/api/task-states`).
 
-- `GET /api/tasks/:id/events` → `{ events: BoardEvent[] }`; `BoardEvent { id, at, actor, text, tone? }` (captured, assigned, run started/finished, PR opened, review, merged).
-- `GET /api/tasks/:id/links` → `{ issue?: { repo, number, url }, pr?: { repo, number, url }, thread?: { id }, flow?: { id, name } }`.
-- Card properties the deck reads from the card's front matter: `origin: inbox|github|thread|routine|manual`, `origin_ref`, `holder: { kind: "person", handle } | { kind: "agent", id }`.
-- `POST /api/tasks/:id/assign` accepts `{ model? }` (today it takes no body).
+- `GET /api/tasks/:id/events` → `{ events: BoardEvent[] }`; `BoardEvent { id, at, actor, text, tone? }`. Notes and card edits/moves are durable SQLite receipts. Assignment, start and result receipts come from every persisted run, including previous attempts. Older cards have a creation receipt; historical moves before this journal existed are not invented.
+- `POST /api/tasks/:id/events` `{ text, actor? }` appends a note or agent handoff, then notifies open boards. Text is required and capped at 20,000 characters. It does not trigger inference or change the card's state.
+- `GET /api/tasks/:id/links` → `{ issue?: { repo, number, url }, pr?: { repo, number, url }, thread?: { id }, flow?: { id, name } }`. Frontmatter `links` is authoritative for explicit references. GitHub URLs in instructions, notes and run output supply additional evidence. A URL is not proof of checks, review or merge.
+- Card properties remain in frontmatter: `origin: inbox|github|thread|routine|manual`, `origin_ref`, `holder: { kind: "person", handle, name?, hue? } | { kind: "agent", id, name?, model?, hue? }`, `links`, and optional `parent` pointing to a task id or `T-N`. Related cards describe decomposition, not execution dependencies. They do not silently gate or launch one another.
+- Task responses include `evidence?: { text, at }`, the latest stored activity. The UI uses persisted run identities, not a fictional worker roster.
+- `POST /api/tasks/:id/assign` accepts `{ model? }`. A concrete selector or `@role:effort` overrides only this run; omission inherits the card/deck configuration. The selector is carried through to NeoPi, without resolving policy in the browser or rewriting YAML.
+- Board is an agent-managed content queue. Inbox is its capture door; people inspect assignments, linked work and receipts. Direct card creation, manual state changes and column editing remain explicit secondary controls. Automatic decomposition and native template spawning are not claimed.
+
+Logic reference: [Nous Research Hermes Agent](https://github.com/NousResearch/hermes-agent), MIT, especially its durable card/run/event separation and profile-based orchestration. No Hermes source code is copied into this implementation.
 
 ## 7. Studio graphs (`studioGraphs`)
 
