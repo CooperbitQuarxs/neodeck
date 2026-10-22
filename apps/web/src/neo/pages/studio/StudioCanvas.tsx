@@ -73,6 +73,19 @@ function Canvas({ graph, selected, onSelect, onChange, run }: CanvasProps) {
   return { id: item.id, source: item.from.node, target: item.to.node, sourceHandle: item.from.port, targetHandle: item.to.port, selected: item.id === edge, type: horizontal ? "routing" : "default", data: { caption: source?.type === "router.stage" ? "demote" : undefined }, label: branch ? item.from.port : undefined, markerEnd: { type: MarkerType.ArrowClosed, width: 14, height: 14, color: "rgb(var(--ink-3))" }, style: { stroke: "rgb(var(--ink-4))", strokeWidth: 1.3 }, labelStyle: { fill: "rgb(var(--ink-2))", fontSize: 11.5 }, labelBgStyle: { fill: "var(--neo-panel)" }, labelBgPadding: [5, 3], labelBgBorderRadius: 5 };
  }), [graph.edges, graph.nodes, horizontal, edge]);
  useEffect(() => { if (selected) setEdge(null); }, [selected]);
+ /* Opening the inspector narrows the canvas; bring the selected node back into view if it fell off the edge. */
+ useEffect(() => {
+  if (!selected) return;
+  const timer = setTimeout(() => {
+   const node = flow.getInternalNode(selected), box = document.querySelector(".neo-studio-canvas")?.getBoundingClientRect();
+   if (!node || !box) return;
+   const width = node.measured.width ?? 224, height = node.measured.height ?? 120, at = node.internals.positionAbsolute;
+   const topLeft = flow.flowToScreenPosition(at), bottomRight = flow.flowToScreenPosition({ x: at.x + width, y: at.y + height });
+   if (topLeft.x >= box.left && topLeft.y >= box.top && bottomRight.x <= box.right && bottomRight.y <= box.bottom) return;
+   void flow.setCenter(at.x + width / 2, at.y + height / 2, { zoom: flow.getZoom(), duration: 220 });
+  }, 60);
+  return () => clearTimeout(timer);
+ }, [selected, flow]);
  useEffect(() => {
   if (!palette) return;
   const outside = (event: MouseEvent) => { const target = event.target as Node; if (!paletteRoot.current?.contains(target) && !addButton.current?.contains(target)) closePalette(false); };

@@ -123,13 +123,12 @@ function StudioEditor({ requested }: { requested: string }) {
  const stored = flow ? "Deck routines" : router ? "This browser, until NeoProxy can save routers" : SOURCES.studioGraphs === "live" ? "The deck server" : "This browser";
  const kind = isMap ? "map" : flow ? "flow" : graph?.kind ?? summary?.kind ?? "pipeline"; const KindIcon = KIND_ICONS[kind];
  const showPanel: "node" | Panel = selectedNode && panel !== "runs" ? "node" : panel;
- const docked = typeof document !== "undefined" && Boolean(document.getElementById("neo-dock"));
  function rename(value: string): void { if (flow && flowState) builder.current?.updateSpec({ ...flowState.spec, name: value }); else if (graph) change({ ...graph, name: value }); }
- return <div className="neo-studio" data-panel={showPanel ?? undefined} data-docked={docked || undefined} data-map={isMap || undefined}>
+ return <div className="neo-studio" data-panel={showPanel ?? undefined} data-map={isMap || undefined}>
   <header className="neo-studio-bar">
    <div className="neo-studio-ident">
     <Link to="/studio" className="neo-studio-back"><ArrowLeft size={13} />Studio</Link>
-    <div className="neo-studio-title"><KindIcon size={16} aria-hidden="true" /><input className="neo-studio-name" aria-label="Graph name" value={title} readOnly={isMap || loading || (!flow && !graph)} onChange={event => rename(event.target.value)} size={Math.max(8, Math.min(40, title.length + 1))} /><span className="neo-studio-kind">{KIND_LABELS[kind]}</span>{!isMap && !flow ? <PreviewChip domains={["studioGraphs"]} what="This graph" /> : null}</div>
+    <div className="neo-studio-title"><KindIcon size={16} aria-hidden="true" /><input className="neo-studio-name" aria-label="Graph name" value={title} readOnly={isMap || loading || (!flow && !graph)} onChange={event => rename(event.target.value)} size={Math.max(6, Math.min(40, title.length))} />{isMap ? null : <span className="neo-studio-kind">{KIND_LABELS[kind]}</span>}{!isMap && !flow ? <PreviewChip domains={["studioGraphs"]} what="This graph" /> : null}</div>
    </div>
    {isMap ? <div className="neo-studio-bar-tools">
     <SearchInput size="sm" value={mapSearch} onChange={setMapSearch} placeholder="Search notes on the map" aria-label="Search notes on the map" width={260} />
