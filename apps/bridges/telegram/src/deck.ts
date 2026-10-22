@@ -171,7 +171,7 @@ export class DeckClient {
 					return;
 				}
 				if (frame.type === "ext_ui_dialog_open" && frame.sessionId === args.sessionId) {
-					args.onText(`Needs you: ${frame.title || "your agent has a question"}. Open this thread in NeoDeck to respond.`);
+					args.onText(`Needs you: ${frame.prompt || "your agent has a question"}. Open this thread in NeoDeck to respond.`);
 					armIdleTimer();
 					return;
 				}
