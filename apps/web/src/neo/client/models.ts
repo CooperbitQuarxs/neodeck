@@ -67,7 +67,11 @@ export const models = {
 };
 
 export function hiddenProviderIds(exposure: readonly { id: string; hidden: boolean }[]): ReadonlySet<string> {
-	return new Set(exposure.filter(provider => provider.hidden).flatMap(provider => provider.id === "codex" ? ["codex", "openai-codex"] : [provider.id]));
+	return new Set(exposure.filter(provider => provider.hidden).flatMap(provider => {
+		if (provider.id === "codex" || provider.id === "openai-codex") return ["codex", "openai-codex"];
+		if (provider.id === "zai" || provider.id === "zai-coding-plan") return ["zai", "zai-coding-plan"];
+		return [provider.id];
+	}));
 }
 export function visibleModels<T extends { provider: string }>(items: readonly T[], hidden: ReadonlySet<string>): T[] {
 	return items.filter(item => !hidden.has(item.provider));

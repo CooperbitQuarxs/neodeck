@@ -52,6 +52,8 @@ function overlayPointer(event: PointerEvent) {
 	if (top && !contains(top, event.target as Node)) top.close();
 }
 function overlayFocus(event: FocusEvent) {
+	const top = stack.at(-1);
+	if (top && !top.modal && !contains(top, event.target as Node)) top.close();
 	const scope = modalScope();
 	if (!scope.length || scope.some(entry => contains(entry, event.target as Node))) return;
 	const panel = scope.at(-1)?.panel.current;

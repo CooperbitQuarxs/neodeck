@@ -1,7 +1,6 @@
 import type { CardRun, ListTasksResponse, Task } from "@npi-deck/protocol";
 import { isMap, parseDocument } from "yaml";
 import { tasksApi } from "@/lib/tasks-api";
-import type { Account } from "./preview-data";
 import { PREVIEW_ACCOUNTS, PREVIEW_WHEEL } from "./preview-data";
 import { SOURCES } from "./source";
 
@@ -12,63 +11,61 @@ export interface BoardCard {
 	id: string; number: number; title: string; body: string; columnId: string; cwd?: string;
 	createdAt: string; updatedAt: string; archived: boolean; run?: CardRun;
 	origin: { kind: "inbox" | "github" | "thread" | "routine" | "manual"; ref?: string };
-	holder?: { kind: "agent"; name: string; hue: number; model: string } | { kind: "person"; handle: string; name: string; hue: number };
+	holder?: { kind: "agent"; id?: string; name: string; hue: number; model: string } | { kind: "person"; handle: string; name: string; hue: number };
+	parent?: string;
 	evidence?: { text: string; at: string };
 }
 /** A timestamped receipt. Live receipts derive only from persisted task and run fields. */
 export interface BoardEvent { id: string; at: string; actor: string; text: string; tone?: "ok" | "warn" | "bad" }
 /** Related GitHub work and the board flow that owns it. */
-export interface BoardLinks { issue?: { repo: string; number: number; url?: string }; pr?: { repo: string; number: number; url?: string }; flow?: { id: string; name: string } }
+export interface BoardLinks { issue?: { repo: string; number: number; url?: string }; pr?: { repo: string; number: number; url?: string }; thread?: { id: string }; flow?: { id: string; name: string } }
 /** Task operations shared by the deck endpoint and the mutable preview office. */
 export interface BoardClient {
 	columns(): Promise<BoardColumn[]>; cards(opts: { archived?: boolean }): Promise<BoardCard[]>;
-	create(input: { title: string; body?: string; columnId?: string; cwd?: string }): Promise<BoardCard>;
-	update(id: string, patch: { title?: string; body?: string; archived?: boolean }): Promise<BoardCard>;
+	create(input: { title: string; body?: string; columnId?: string; cwd?: string; properties?: Record<string, unknown> }): Promise<BoardCard>;
+	update(id: string, patch: { title?: string; body?: string; archived?: boolean; properties?: Record<string, unknown> }): Promise<BoardCard>;
 	move(id: string, columnId: string): Promise<BoardCard>; remove(id: string): Promise<void>;
 	assign(id: string, model?: string): Promise<BoardCard>; cancel(id: string): Promise<BoardCard>;
 	events(id: string): Promise<BoardEvent[]>; links(id: string): Promise<BoardLinks>;
+	note(id: string, text: string): Promise<void>;
 	createColumn(name: string): Promise<BoardColumn>; updateColumn(id: string, patch: { name?: string; color?: string }): Promise<BoardColumn>;
 	removeColumn(id: string): Promise<void>; reorderColumns(ids: string[]): Promise<BoardColumn[]>;
 }
 
-const personHolders = new Map<string, BoardCard["holder"]>();
 const claimedEvents = new Map<string, BoardEvent[]>();
 
-/** Preview-only ownership. Never writes a simulated person into the tasks backend. */
-export const boardEvidence = {
-	async claim(id: string, account: Account): Promise<void> {
-		personHolders.set(id, { kind: "person", handle: account.handle, name: account.name, hue: account.hue });
-		const events = claimedEvents.get(id) ?? [];
-		events.push({ id: crypto.randomUUID(), at: new Date().toISOString(), actor: account.name, text: "claimed this card" });
-		claimedEvents.set(id, events);
-	},
-};
+function propertiesFromBody(body: string): Record<string, unknown> {
+	const header = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/.exec(body);
+	if (!header) return {};
+	const doc = parseDocument(header[1]!);
+	return !doc.errors.length && isMap(doc.contents) ? doc.toJSON() as Record<string, unknown> : {};
+}
 
 function originFromBody(body: string): BoardCard["origin"] {
-	const header = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/.exec(body);
-	if (header) {
-		const doc = parseDocument(header[1]!);
-		if (!doc.errors.length && isMap(doc.contents)) {
-			const raw: unknown = doc.get("origin") ?? doc.get("source");
-			if (typeof raw === "string") {
-				const kind = raw.split(/[:/ ]/, 1)[0]?.toLowerCase();
-				if (kind === "inbox" || kind === "github" || kind === "thread" || kind === "routine") return { kind, ref: raw === kind ? undefined : raw };
-			}
-		}
+	const props = propertiesFromBody(body);
+	const raw = props.origin ?? props.source;
+	if (typeof raw === "string") {
+		const kind = raw.split(/[:/ ]/, 1)[0]?.toLowerCase();
+		if (kind === "inbox" || kind === "github" || kind === "thread" || kind === "routine") return { kind, ref: typeof props.origin_ref === "string" ? props.origin_ref : raw === kind ? undefined : raw };
 	}
-	// Inbox promotion currently writes a provenance receipt, not a YAML source key.
 	const receipt = /_Promoted from inbox · [^\n]* · ([^\s_]+)_/.exec(body);
 	return receipt ? { kind: "inbox", ref: receipt[1] } : { kind: "manual" };
 }
 
 function withHolder(card: BoardCard): BoardCard {
-	const holder = card.run ? { kind: "agent" as const, name: "Worker", hue: 40, model: card.run.model ?? card.run.role ?? "Deck default" } : personHolders.get(card.id) ?? card.holder;
+	const hasActiveRun = card.run && (card.run.status === "running" || card.run.status === "queued");
+	const holder = card.run && (hasActiveRun || !card.holder) ? { kind: "agent" as const, id: card.run.id, name: `Agent ${card.run.id.slice(-8)}`, hue: 40, model: card.run.role ? `@${card.run.role}` : card.run.model ?? "Deck default" } : card.holder;
 	const latest = card.run?.error ?? card.run?.outcome;
-	return { ...card, holder, evidence: latest ? { text: latest, at: card.run?.finishedAt ?? card.updatedAt } : card.evidence };
+	return { ...card, holder, evidence: card.evidence ?? (latest ? { text: latest, at: card.run?.finishedAt ?? card.updatedAt } : undefined) };
 }
 
 function fromTask(task: Task): BoardCard {
-	return withHolder({ id: task.id, number: task.displayId, title: task.title, body: task.body, columnId: task.stateId, cwd: task.cwd, createdAt: task.createdAt, updatedAt: task.updatedAt, archived: Boolean(task.archivedAt), run: task.run, origin: originFromBody(task.body) });
+	const props = propertiesFromBody(task.body);
+	const rawHolder = props.holder && typeof props.holder === "object" ? props.holder as Record<string, unknown> : {};
+	let holder: BoardCard["holder"];
+	if (rawHolder.kind === "person" && typeof rawHolder.handle === "string") holder = { kind: "person", handle: rawHolder.handle, name: typeof rawHolder.name === "string" ? rawHolder.name : rawHolder.handle, hue: typeof rawHolder.hue === "number" ? rawHolder.hue : 40 };
+	if (rawHolder.kind === "agent" && typeof rawHolder.id === "string") holder = { kind: "agent", id: rawHolder.id, name: typeof rawHolder.name === "string" ? rawHolder.name : rawHolder.id, model: typeof rawHolder.model === "string" ? rawHolder.model : "Unknown", hue: typeof rawHolder.hue === "number" ? rawHolder.hue : 40 };
+	return withHolder({ id: task.id, number: task.displayId, title: task.title, body: task.body, columnId: task.stateId, cwd: task.cwd, createdAt: task.createdAt, updatedAt: task.updatedAt, archived: Boolean(task.archivedAt), run: task.run, evidence: task.evidence, origin: originFromBody(task.body), holder, parent: typeof props.parent === "string" ? props.parent : undefined });
 }
 
 function runEvents(card: BoardCard): BoardEvent[] {
@@ -106,23 +103,29 @@ async function liveCard(id: string): Promise<BoardCard> {
 const live: BoardClient = {
 	async columns() { return (await list()).states.sort((a, b) => a.position - b.position); },
 	async cards(opts) { return (await list()).tasks.filter((t) => opts.archived || !t.archivedAt).map(remember); },
-	async create(input) { return remember(await tasksApi.create({ title: input.title, body: input.body, stateId: input.columnId, cwd: input.cwd })); },
+	async create(input) { return remember(await tasksApi.create({ title: input.title, body: input.body, stateId: input.columnId, cwd: input.cwd, properties: input.properties })); },
 	async update(id, patch) { return remember(await tasksApi.update(id, patch)); },
 	async move(id, columnId) {
 		const peers = (await tasksApi.list()).tasks.filter((t) => t.stateId === columnId && t.id !== id);
 		return remember(await tasksApi.move(id, { stateId: columnId, index: peers.length }));
 	},
 	async remove(id) { await tasksApi.remove(id); liveCards.delete(id); },
-	// The live assignment endpoint accepts no model. Keep selection visible but do not rewrite card YAML.
-	async assign(id) { await tasksApi.assign(id); return liveCard(id); },
+	async assign(id, model) { await tasksApi.assign(id, model); return liveCard(id); },
 	async cancel(id) { await tasksApi.cancel(id); return liveCard(id); },
-	async events(id) { return runEvents(liveCards.get(id) ?? await liveCard(id)); },
-	async links(id) { return fixtureLinks(liveCards.get(id) ?? await liveCard(id)); },
+	async events(id) { return (await evidenceRequest<{ events: BoardEvent[] }>(id, "events")).events; },
+	async links(id) { return evidenceRequest<BoardLinks>(id, "links"); },
+	async note(id, text) { await evidenceRequest(id, "events", { method: "POST", body: JSON.stringify({ text }) }); },
 	createColumn: (name) => tasksApi.createState({ name }),
 	updateColumn: (id, patch) => tasksApi.updateState(id, patch),
 	async removeColumn(id) { await tasksApi.removeState(id); },
 	async reorderColumns(ids) { return (await tasksApi.reorderStates(ids)).states; },
 };
+
+async function evidenceRequest<T>(id: string, resource: string, init?: RequestInit): Promise<T> {
+	const response = await fetch(`/api/tasks/${encodeURIComponent(id)}/${resource}`, { ...init, headers: { "content-type": "application/json" } });
+	if (!response.ok) throw new Error(await response.text());
+	return response.json() as Promise<T>;
+}
 
 const ago = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString();
 let previewColumns: BoardColumn[] = ["Backlog", "Ready", "In progress", "Review", "Done"].map((name, i) => ({ id: `preview-${i}`, name, color: "#6c6c74", position: i, isDefault: i === 0 }));
@@ -139,7 +142,7 @@ const preview: BoardClient = {
 	async cards(opts) { return previewCards.filter((c) => opts.archived || !c.archived).map(withHolder); },
 	async create(input) {
 		const stamp = new Date().toISOString();
-		const card: BoardCard = { id: crypto.randomUUID(), number: Math.max(0, ...previewCards.map((c) => c.number)) + 1, title: input.title, body: input.body ?? "", cwd: input.cwd, columnId: input.columnId ?? previewColumns[0]!.id, createdAt: stamp, updatedAt: stamp, archived: false, origin: { kind: "manual" } };
+		const card: BoardCard = { id: crypto.randomUUID(), number: Math.max(0, ...previewCards.map((c) => c.number)) + 1, title: input.title, body: input.body ?? "", cwd: input.cwd, columnId: input.columnId ?? previewColumns[0]!.id, createdAt: stamp, updatedAt: stamp, archived: false, origin: { kind: "manual" }, parent: typeof input.properties?.parent === "string" ? input.properties.parent : undefined };
 		previewCards.push(card); return card;
 	},
 	async update(id, patch) { return patchPreview(id, patch); },
@@ -149,6 +152,7 @@ const preview: BoardClient = {
 	async cancel(id) { const card = getPreview(id); return patchPreview(id, { run: card.run ? { ...card.run, status: "cancelled", finishedAt: new Date().toISOString() } : undefined }); },
 	async events(id) { const card = getPreview(id); const events = runEvents(card); if (card.evidence) events.push({ id: `${id}-evidence`, actor: "", ...card.evidence }); return events.sort((a, b) => a.at.localeCompare(b.at)); },
 	async links(id) { return fixtureLinks(getPreview(id)); },
+	async note(id, text) { const events = claimedEvents.get(id) ?? []; events.push({ id: crypto.randomUUID(), at: new Date().toISOString(), actor: "", text }); claimedEvents.set(id, events); },
 	async createColumn(name) { const column: BoardColumn = { id: crypto.randomUUID(), name, color: "#6c6c74", position: previewColumns.length, isDefault: previewColumns.length === 0 }; previewColumns.push(column); return column; },
 	async updateColumn(id, patch) { previewColumns = previewColumns.map((c) => c.id === id ? { ...c, ...patch } : c); return previewColumns.find((c) => c.id === id)!; },
 	async removeColumn(id) { const fallback = previewColumns.find((c) => c.isDefault); if (fallback?.id === id) throw new Error("Keep the default column for cards without a destination."); previewColumns = previewColumns.filter((c) => c.id !== id); previewCards = previewCards.map((c) => c.columnId === id ? { ...c, columnId: fallback!.id } : c); },

@@ -11,10 +11,11 @@ test("native effort suffixes leave opaque provider and role selectors intact", (
 });
 
 test("hidden providers filter both model rows and policies resolved through them", () => {
-	const hidden = hiddenProviderIds([{ id: "codex", hidden: true }, { id: "anthropic", hidden: false }]);
+	const hidden = hiddenProviderIds([{ id: "codex", hidden: true }, { id: "zai", hidden: true }, { id: "anthropic", hidden: false }]);
 	const rows = [
 		{ selector: "@review", provider: "openai-codex" },
 		{ selector: "openai-codex/sol", provider: "openai-codex" },
+		{ selector: "zai-coding-plan/glm", provider: "zai-coding-plan" },
 		{ selector: "anthropic/opus", provider: "anthropic" },
 	];
 	expect(visibleModels(rows, hidden).map(row => row.selector)).toEqual(["anthropic/opus"]);

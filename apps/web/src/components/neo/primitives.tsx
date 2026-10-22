@@ -177,14 +177,31 @@ export interface SegmentedOption<T extends string> {
 }
 
 export function Segmented<T extends string>({ options, value, onChange, label }: { options: readonly SegmentedOption<T>[]; value: T; onChange: (value: T) => void; label?: string }) {
+	const selected = options.findIndex(option => option.value === value);
 	return (
-		<div className="neo-segmented" role="radiogroup" aria-label={label}>
-			{options.map((option) => (
+		<div className="neo-segmented" role="radiogroup" aria-label={label} onKeyDown={event => {
+			if (event.altKey || event.ctrlKey || event.metaKey || !options.length) return;
+			const buttons = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="radio"]'));
+			const index = buttons.indexOf(event.target as HTMLButtonElement);
+			if (index < 0) return;
+			const rtl = getComputedStyle(event.currentTarget).direction === "rtl";
+			let next: number;
+			if (event.key === "Home") next = 0;
+			else if (event.key === "End") next = options.length - 1;
+			else if (event.key === "ArrowRight" || event.key === "ArrowDown") next = (index + (event.key === "ArrowRight" && rtl ? -1 : 1) + options.length) % options.length;
+			else if (event.key === "ArrowLeft" || event.key === "ArrowUp") next = (index + (event.key === "ArrowLeft" && rtl ? 1 : -1) + options.length) % options.length;
+			else return;
+			event.preventDefault();
+			onChange(options[next]!.value);
+			buttons[next]?.focus();
+		}}>
+			{options.map((option, index) => (
 				<button
 					key={option.value}
 					type="button"
 					role="radio"
 					aria-checked={option.value === value}
+					tabIndex={index === (selected < 0 ? 0 : selected) ? 0 : -1}
 					title={option.title}
 					className="neo-segmented-option"
 					data-active={option.value === value}
