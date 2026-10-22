@@ -19,6 +19,7 @@ export interface TelegramBridgeConfig {
 	dbPath: string;
 	pollTimeoutSeconds: number;
 	editIntervalMs: number;
+	apiOrigin?: string;
 }
 
 export function loadTelegramBridgeConfig(): TelegramBridgeConfig {
@@ -28,9 +29,6 @@ export function loadTelegramBridgeConfig(): TelegramBridgeConfig {
 	if (!botToken) throw new Error("TELEGRAM_BOT_TOKEN is required");
 
 	const allowedUserIds = parseAllowedUsers(process.env.TELEGRAM_ALLOWED_USERS);
-	if (allowedUserIds.size === 0) {
-		throw new Error("TELEGRAM_ALLOWED_USERS must contain at least one numeric Telegram user id");
-	}
 
 	const deckApiBase = normalizeBaseUrl(process.env.NPI_DECK_API_BASE?.trim() || `http://127.0.0.1:${deck.port}`);
 	const deckWsUrl = toWsUrl(deckApiBase);
@@ -52,6 +50,7 @@ export function loadTelegramBridgeConfig(): TelegramBridgeConfig {
 		dbPath,
 		pollTimeoutSeconds: clamp(parseInt10(process.env.TELEGRAM_POLL_TIMEOUT_SECONDS, 30), 1, 50),
 		editIntervalMs: clamp(parseInt10(process.env.TELEGRAM_EDIT_INTERVAL_MS, 700), 250, 5000),
+		apiOrigin: process.env.TELEGRAM_API_ORIGIN,
 	};
 }
 

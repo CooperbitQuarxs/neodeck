@@ -1,4 +1,4 @@
-import type { ImageAttachment } from "@npi-deck/protocol";
+import type { ImageAttachment, ServerFrame, TelegramConversation } from "@npi-deck/protocol";
 
 import { loadTelegramBridgeConfig, type TelegramBridgeConfig } from "./config.ts";
 import { DeckClient, SessionNotActiveError } from "./deck.ts";
@@ -19,9 +19,12 @@ export class TelegramBridge {
 	private offset: number | undefined;
 	private stopping = false;
 	private bot: BotIdentity | undefined;
+	private stopAttention?: () => void;
+	private readonly notifications = new Set<string>();
+	private attentionDelivery: Promise<void> = Promise.resolve();
 
 	constructor(private readonly config: TelegramBridgeConfig, services?: { telegram?: TelegramApi; deck?: DeckClient; store?: TelegramBridgeStore; identity?: BotIdentity }) {
-		this.telegram = services?.telegram ?? new TelegramApi(config.botToken);
+		this.telegram = services?.telegram ?? new TelegramApi(config.botToken, config.apiOrigin);
 		this.deck = services?.deck ?? new DeckClient(config.deckApiBase, config.deckWsUrl);
 		this.store = services?.store ?? new TelegramBridgeStore(config.dbPath);
 		this.bot = services?.identity;
@@ -29,6 +32,14 @@ export class TelegramBridge {
 
 	async run(): Promise<void> {
 		this.bot = await this.telegram.getMe();
+		this.store.setRuntime({ username: this.bot.username });
+		this.stopAttention = this.deck.watchAttention(
+			() => this.store.conversations().filter(row => row.notify && this.canNotify(row)).flatMap(row => row.sessionId ? [row.sessionId] : []),
+			frame => {
+				this.attentionDelivery = this.attentionDelivery.then(() => this.notifyAttention(frame))
+					.catch(err => console.error("telegram attention notification failed", this.safeError(err)));
+			},
+		);
 		await this.telegram.setCommands(["help", "task", "capture", "inbox", "chat", "session", "sessions", "bind", "resume", "new", "stop", "properties", "model", "title", "compact"]
 			.map((command) => ({ command, description: HELP.split("\n").find((line) => line.startsWith(`/${command}`))?.split(" — ")[1]?.slice(0, 100) ?? command })));
 		console.info("telegram bridge started", { deckApiBase: this.config.deckApiBase, allowedUsers: this.config.allowedUserIds.size, allowedGroups: this.config.allowedChatIds.size });
@@ -36,36 +47,54 @@ export class TelegramBridge {
 		for (const update of this.store.pendingIntakes()) void this.dispatch(update);
 		while (!this.stopping) {
 			try {
-				for (const update of await this.telegram.getUpdates(this.offset, this.config.pollTimeoutSeconds)) {
-					void this.dispatch(update);
-				}
+				const updates = await this.telegram.getUpdates(this.offset, this.config.pollTimeoutSeconds);
+				this.store.setRuntime({ username: this.bot.username, polledAt: nowIso() });
+				for (const update of updates) void this.dispatch(update);
 			} catch (err) {
-				if (!this.stopping) { console.error("telegram poll failed", this.safeError(err)); await sleep(3000); }
+				if (!this.stopping) {
+					this.store.setRuntime({ ...this.store.runtime(), error: this.safeError(err) });
+					console.error("telegram poll failed", this.safeError(err));
+					await sleep(3000);
+				}
 			}
 		}
 		await Promise.allSettled(this.queues.values());
+		await this.attentionDelivery;
 		this.close();
 	}
 
-	stop(): void { this.stopping = true; }
-	close(): void { this.store.close(); }
+	stop(): void { this.stopping = true; this.stopAttention?.(); }
+	close(): void { this.stopAttention?.(); this.store.close(); }
 
 	/** Public ingress seam for offline transport simulation; no polling or external sends required. */
 	dispatch(update: TelegramUpdate): Promise<void> {
 		const message = update.message;
 		if (!message) { this.offset = Math.max(this.offset ?? 0, update.update_id + 1); return Promise.resolve(); }
 		if (!this.bot) throw new Error("Bot identity is required before dispatch.");
-		const text = invokedText(message, this.config, this.bot);
+		const pairing = parseCommand(message.text ?? "", this.bot.username);
+		if (message.chat.type === "private" && message.from && !message.from.is_bot && pairing?.name === "start" && pairing.args.startsWith("pair_")) {
+			const user = message.from;
+			const accepted = this.store.consumePairing(pairing.args.slice(5), String(user.id), user.username ? `@${user.username}` : user.first_name ?? String(user.id));
+			this.offset = Math.max(this.offset ?? 0, update.update_id + 1);
+			if (!accepted) return Promise.resolve();
+			this.rememberConversation(message);
+			return this.say(message, "Paired with NeoDeck. /capture saves an inbox note. /chat talks to your selected thread. Choose this chat's default action and notifications in Settings.").catch(err => console.error("telegram pairing reply failed", this.safeError(err)));
+		}
+		const text = invokedText(message, this.config, this.bot, this.store.isPaired(String(message.from?.id)));
 		if (text === undefined) { this.offset = Math.max(this.offset ?? 0, update.update_id + 1); return Promise.resolve(); }
+		this.rememberConversation(message);
 		const command = parseCommand(text, this.bot.username);
-		const durableIntake = !command || command.name === "task" || command.name === "capture";
-		// Persist authorized intake before any subsequent poll can acknowledge it.
-		if (durableIntake) this.store.stageIntake(update);
-		this.offset = Math.max(this.offset ?? 0, update.update_id + 1);
 		const key = conversationKey(message);
+		const mode = this.store.conversation(key)?.mode ?? "task";
+		const durableIntake = (!command && mode !== "chat") || command?.name === "task" || command?.name === "capture";
+		// Freeze intake mode before confirming the update. A later preference change
+		// must not turn a replayed capture into an agent prompt.
+		if (durableIntake) this.store.stageIntake(command ? update : { ...update, message: { ...message, text: `/${mode} ${text}` } });
+		this.offset = Math.max(this.offset ?? 0, update.update_id + 1);
 		// Abort must not wait behind the prompt it is cancelling.
 		if (command?.name === "stop") return this.stopChat(message).catch((err) => this.reportError(message, err));
-		const controller = command?.name === "chat" ? new AbortController() : undefined;
+		const chatMode = !command && mode === "chat";
+		const controller = command?.name === "chat" || chatMode ? new AbortController() : undefined;
 		if (controller) {
 			const pending = this.chatControllers.get(key) ?? new Set<AbortController>();
 			pending.add(controller);
@@ -74,7 +103,7 @@ export class TelegramBridge {
 		const next = (this.queues.get(key) ?? Promise.resolve())
 			.catch(() => undefined).then(() => controller?.signal.aborted
 				? this.say(message, "Chat cancelled before start.")
-				: this.handleMessage(message, text, controller?.signal))
+				: this.handleMessage(message, text, controller?.signal, mode))
 			.then(() => { if (durableIntake) this.store.completeIntake(update.update_id); })
 			.catch((err) => this.reportError(message, err))
 			.finally(() => {
@@ -103,9 +132,52 @@ export class TelegramBridge {
 		for (const chunk of splitTelegramText(text)) await this.telegram.sendMessage(message.chat.id, chunk, message.message_id, threadRouting(message));
 	}
 
-	private async handleMessage(message: TelegramMessage, text: string, chatSignal?: AbortSignal): Promise<void> {
+	private rememberConversation(message: TelegramMessage): void {
+		const id = conversationKey(message);
+		const previous = this.store.conversation(id);
+		this.store.saveConversation({
+			id, chatId: String(message.chat.id), userId: String(message.from!.id),
+			label: message.chat.title ?? (message.from?.username ? `@${message.from.username}` : message.from?.first_name ?? id),
+			threadId: effectiveThreadId(message), directTopicId: message.direct_messages_topic?.topic_id,
+			lastSeenAt: nowIso(), mode: previous?.mode ?? "task", notify: previous?.notify ?? false,
+			lastNotificationAt: previous?.lastNotificationAt, lastError: previous?.lastError,
+		});
+	}
+
+	private canNotify(row: TelegramConversation): boolean {
+		if (!this.config.allowedUserIds.has(row.userId) && !this.store.isPaired(row.userId)) return false;
+		if (!row.chatId.startsWith("-")) return true;
+		if (!this.config.allowedChatIds.has(row.chatId)) return false;
+		const topic = String(row.threadId ?? 1);
+		const matches = (topics: Set<string>) => topics.has(topic) || topics.has(`${row.chatId}:${topic}`);
+		return !(row.threadId !== undefined && matches(this.config.ignoredTopics)) && (!this.config.allowedTopics.size || matches(this.config.allowedTopics));
+	}
+
+	private async notifyAttention(frame: ServerFrame): Promise<void> {
+		if (frame.type !== "ext_ui_dialog_open" && frame.type !== "plan_proposed") return;
+		const eventId = frame.type === "plan_proposed" ? frame.proposalId : frame.dialogId;
+		for (const row of this.store.conversations()) {
+			if (!row.notify || row.sessionId !== frame.sessionId || !this.canNotify(row)) continue;
+			const id = `${row.id}:${frame.sessionId}:${eventId}`;
+			if (this.notifications.has(id) || this.store.notificationSent(id)) continue;
+			this.notifications.add(id);
+			try {
+				const title = frame.type === "plan_proposed" ? "A plan is ready for review." : frame.title || "Your agent has a question.";
+				await this.telegram.sendMessage(row.chatId, `Needs you: ${title.slice(0, 2500)}\nOpen this thread in NeoDeck to respond.\nThread ${frame.sessionId}`, undefined,
+					row.directTopicId !== undefined ? { direct_messages_topic_id: row.directTopicId } : row.threadId && row.threadId !== 1 ? { message_thread_id: row.threadId } : {});
+				this.store.markNotificationSent(id);
+				this.store.saveConversation({ ...this.store.conversation(row.id)!, lastNotificationAt: nowIso(), lastError: undefined });
+			} catch (err) {
+				this.store.saveConversation({ ...this.store.conversation(row.id)!, lastError: this.safeError(err) });
+				throw err;
+			} finally { this.notifications.delete(id); }
+		}
+	}
+
+	private async handleMessage(message: TelegramMessage, text: string, chatSignal?: AbortSignal, mode: TelegramConversation["mode"] = "task"): Promise<void> {
 		const key = conversationKey(message);
-		const command = parseCommand(text, this.bot!.username);
+		const explicit = parseCommand(text, this.bot!.username);
+		const command = explicit ?? (mode === "chat" || mode === "capture" ? { name: mode, args: text } : undefined);
 		const args = command?.args ?? text;
 		const unsupported = unsupportedAttachments(message);
 		if (unsupported.length) {

@@ -27,6 +27,7 @@ import { buildUtilityRouter } from "./routes-cron.ts";
 import { buildSlashCommandsRouter } from "./routes-slash-commands.ts";
 import { buildFsRouter } from "./routes-fs.ts";
 import { buildBridgesRouter } from "./routes-bridges.ts";
+import { buildTelegramRouter } from "./routes-telegram.ts";
 import { buildMarketplaceRouter } from "./routes-marketplace.ts";
 import { buildSkillsRouter } from "./routes-skills.ts";
 import { buildKbRouter } from "./routes-kb.ts";
@@ -279,6 +280,7 @@ export function buildRouter(
 	app.route("/", buildSettingsRouter(bridge, config, opts));
 	app.route("/", buildStartersRouter());
 	app.route("/", buildBridgesRouter(supervisor));
+	app.route("/", buildTelegramRouter(bridge, supervisor));
 	app.route("/", buildMarketplaceRouter(marketplace));
 	app.route("/", buildSkillsRouter(skills));
 	app.route("/", buildKbRouter(kb, { resolveAgent: token => opts.cardAgents?.resolveToken(token) }));

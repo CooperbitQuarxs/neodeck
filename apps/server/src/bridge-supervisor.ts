@@ -230,7 +230,7 @@ export function buildDefaultBridgeSupervisor(): BridgeSupervisor {
 			name: "telegram",
 			label: "Telegram",
 			entry: telegramBridgeEntry(),
-			requiredEnv: ["TELEGRAM_BOT_TOKEN", "TELEGRAM_ALLOWED_USERS"],
+			requiredEnv: ["TELEGRAM_BOT_TOKEN"],
 		},
 	]);
 }
