@@ -8,6 +8,7 @@ All notable changes to NPI deck (a fork of bjb2/omp-deck; entries before the for
 ### Changed
 
 - The Neo themes now use NeoProxy's chassis: purple-tinted black surfaces (`#0b0810` page, `#100c16` panel, `#16111d` card) and NeoProxy's ink ramp, so NeoDeck and NeoProxy read as one family. Neo light moves to the matching lilac-grey page. Claude Opus 5.5.
+- Settings uses shared styled fields and portal selectors, clearer inference-provider credential rows, and browser-persistent Deck-only picker visibility. Models has a dedicated workspace for the live catalogue, global role assignments and custom definitions. Role and non-secret setting saves reject stale read snapshots. Project scope and effort-rule editing explicitly require the newer native API. GPT-6.1 Sol on behalf of PsychedelicShayna.
 
 ### Added
 

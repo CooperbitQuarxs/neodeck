@@ -313,6 +313,8 @@ export interface NpiConfigPatchRequest {
 	value?: unknown;
 	unset?: boolean;
 	entries?: Record<string, unknown>;
+	/** Reject stale non-secret edits when the global value no longer matches this read snapshot. */
+	expectedValue?: unknown;
 }
 
 /** What one live chat's settings resolve for the patched key after the reload. */
