@@ -66,6 +66,18 @@ export function buildKbRouter(service: KbService, options: {
 		}
 	});
 
+	app.get("/kb/history", async (c) => {
+		const path = c.req.query("path");
+		if (!path) return c.json({ error: "path is required" }, 400);
+		try {
+			const history = await service.getHistory(path);
+			return history ? c.json(history) : c.json({ error: "Note not found" }, 404);
+		} catch (error) {
+			log.error("kb history failed", { error: String(error) });
+			return c.json({ error: "Could not read Git history" }, 500);
+		}
+	});
+
 	// Mutations require a server-bound agent capability, never owner-cookie or claimed project.
 	app.put("/kb/file", c => c.json({ error: "Use an authenticated project agent's kb_write tool" }, 403));
 	app.post("/kb/file", c => c.json({ error: "Use an authenticated project agent's kb_write tool" }, 403));

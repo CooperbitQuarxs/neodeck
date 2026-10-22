@@ -73,28 +73,6 @@ export const PREVIEW_SPEND: readonly SpendPoint[] = Array.from({ length: 14 }, (
 	usd: [3.1, 4.4, 2.2, 6.8, 5.1, 0.4, 0.2, 7.9, 6.3, 5.5, 8.2, 4.1, 3.6, 4.9][i]!,
 }));
 
-/* ---------------------------------------------------------------- classifier */
-
-export type Destination = { kind: "card"; project: string; column: string } | { kind: "issue"; repo: string } | { kind: "thread"; agent: string } | { kind: "note"; path: string };
-
-export interface Proposal {
-	itemId: string;
-	kind: "ticket" | "idea" | "decision" | "investigation" | "capture" | "email";
-	destination: Destination;
-	confidence: number;
-	reason: string;
-}
-
-/** Deterministic proposal for any inbox item, keyed by title words. */
-export function proposalFor(item: { id: string; title: string; kind: string }): Proposal {
-	const t = item.title.toLowerCase();
-	if (/^why|investigat|find out|look into/.test(t)) return { itemId: item.id, kind: "investigation", destination: { kind: "thread", agent: "Worker" }, confidence: 0.69, reason: "Open question with no fix named; a worker thread can find the cause." };
-	if (/flaky|fail|broken|404|bug|error|slow/.test(t)) return { itemId: item.id, kind: "ticket", destination: { kind: "issue", repo: "atlas" }, confidence: 0.86, reason: "Reads as a defect in atlas; the repository has a matching open test failure." };
-	if (/decid|keep|choose|should we/.test(t)) return { itemId: item.id, kind: "decision", destination: { kind: "note", path: "decisions/" }, confidence: 0.74, reason: "A choice with a rationale belongs in the decisions log." };
-	if (/idea|maybe|could|try/.test(t)) return { itemId: item.id, kind: "idea", destination: { kind: "card", project: "atlas", column: "backlog" }, confidence: 0.62, reason: "Proposal without a deadline; parks on the board until someone picks it." };
-	return { itemId: item.id, kind: "capture", destination: { kind: "card", project: "atlas", column: "backlog" }, confidence: 0.55, reason: "No stronger signal; the backlog is the safe default." };
-}
-
 /* ---------------------------------------------------------------- agents */
 
 export type AgentState = "needs-you" | "working" | "parked" | "idle" | "done";
@@ -157,15 +135,6 @@ export interface JudgeEvent {
 	where: string;
 	text: string;
 }
-
-export const PREVIEW_JUDGE: readonly JudgeEvent[] = [
-	{ id: "j1", at: minutesAgo(4), tone: "warn", agent: "Worker", where: "T-6 Dark theme toggle", text: "No tool call for 9 minutes after 'running the tests'; probably waiting on a lock. Not stuck yet." },
-	{ id: "j2", at: minutesAgo(17), tone: "bad", agent: "Worker", where: "T-5 Fix anchor links", text: "Spawned 6 workers to 'check each page'. Not sanctioned by the card; stopped 5, kept 1." },
-	{ id: "j3", at: minutesAgo(41), tone: "info", agent: "Main", where: "Fix the broken anchor links", text: "Ended its turn with a question for you: whether the link checker should fail the build." },
-	{ id: "j4", at: minutesAgo(95), tone: "ok", agent: "Worker", where: "T-10 Cache the first render pass", text: "Done with evidence: build 9.3s, 64 tests pass, PR #212 opened." },
-	{ id: "j5", at: minutesAgo(160), tone: "info", agent: "Chronicler", where: "Draft 0.5 release notes", text: "Wrote decisions/0004-release-cadence.md from the thread." },
-	{ id: "j6", at: minutesAgo(400), tone: "warn", agent: "nightly-docs-build", where: "routine", text: "link_check reported 3 broken links; filed a ticket in the inbox." },
-];
 
 /* ---------------------------------------------------------------- github */
 

@@ -20,8 +20,8 @@ const SECTIONS=[['engine','Engine'],['providers','Providers'],['models','Models'
 export function SettingsPage(){const account=useAccount();const location=useLocation();const column=useRef<HTMLDivElement>(null);const [active,setActive]=useState("engine");const item=NAV_ITEMS.find(i=>i.to==="/settings")!;
 useEffect(()=>{const root=column.current;if(!root)return;const observer=new IntersectionObserver(entries=>{const visible=entries.filter(e=>e.isIntersecting).sort((a,b)=>a.boundingClientRect.top-b.boundingClientRect.top);if(visible[0])setActive(visible[0].target.id);},{root,rootMargin:"0px 0px -65% 0px",threshold:0});for(const [id] of SECTIONS){const el=document.getElementById(id);if(el)observer.observe(el);}return()=>observer.disconnect();},[]);
 useEffect(()=>{
- const id=decodeURIComponent(location.hash.slice(1));const root=column.current;
- if(!id||!root)return;
+ const id=location.hash.slice(1);const root=column.current;
+ if(!SECTIONS.some(([sectionId])=>sectionId===id)||!root)return;
  let anchored=true;
  const align=()=>{if(!anchored)return;document.getElementById(id)?.scrollIntoView({block:"start",behavior:"instant"});setActive(id);};
  const release=()=>{anchored=false;};

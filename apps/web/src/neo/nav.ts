@@ -1,7 +1,7 @@
-import { BookOpen, Bot, Gauge, GitBranch, Inbox, KanbanSquare, type LucideIcon, MessagesSquare, Settings, Sparkles, Workflow } from "lucide-react";
+import { BookOpen, Bot, Gauge, GitBranch, Inbox, KanbanSquare, type LucideIcon, MessagesSquare, Settings, SlidersHorizontal, Sparkles, Workflow } from "lucide-react";
 
 /**
- * The deck's places. Nine, grouped by what a person does there, read top to
+ * The deck's places, grouped by what a person does there, read top to
  * bottom: the office's work, the agents that do it, what the office knows,
  * and the engine underneath. See docs/design/neodeck-architecture.md §2.
  * Hotkeys are `G` then the letter, as in NeoPi's `/stats`.
@@ -48,6 +48,7 @@ export const NAV: readonly NavGroup[] = [
 		items: [
 			{ to: "/github", label: "GitHub", icon: GitBranch, hotkey: "g", blurb: "Repositories, issues and pull requests; the wheel that turns ideas into merges." },
 			{ to: "/usage", label: "Usage", icon: Gauge, hotkey: "y", blurb: "Your share of the pools, and what you spent." },
+			{ to: "/models", label: "Models", icon: SlidersHorizontal, hotkey: "m", blurb: "Model roles, effort rules and inference providers." },
 			{ to: "/settings", label: "Settings", icon: Settings, hotkey: ",", blurb: "The engine, accounts, integrations and appearance." },
 		],
 	},

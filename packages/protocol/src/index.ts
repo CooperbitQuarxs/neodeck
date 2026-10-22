@@ -1,3 +1,5 @@
+export type { ModelSelectorFacts, ModelSelectorItem, ModelSelectorResult } from "./model-selector.ts";
+
 /**
  * Shared transport types between npi-deck server and web.
  *
@@ -16,10 +18,14 @@
 export { compileStructuredOutputSchema, validateRoutineSpec } from "./validate";
 export type { ValidationError, ValidationResult } from "./validate";
 export * from "./graph";
+export type { AgentTemplate, AgentTemplateInput, AgentInstance, AgentCapabilities } from "./agents";
 export { isGraphValue, validateRoutineGraph } from "./graph-validation";
 import type { RoutineGraph } from "./graph";
 // MIXTURES.toml document, validation report and mixture trace projections (#80).
 export * from "./mixtures";
+export * from "./studio";
+export * from "./studio-vocab";
+export * from "./studio-toml";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // REST shapes
@@ -313,6 +319,8 @@ export interface NpiConfigPatchRequest {
 	value?: unknown;
 	unset?: boolean;
 	entries?: Record<string, unknown>;
+	/** Reject stale non-secret edits when the global value no longer matches this read snapshot. */
+	expectedValue?: unknown;
 }
 
 /** What one live chat's settings resolve for the patched key after the reload. */
@@ -761,6 +769,23 @@ export interface UpgradePluginResponse {
 // Skills (enumeration across every omp skill provider)
 // ─────────────────────────────────────────────────────────────────────────────
 
+/** Discoverable extension code or a manifest bundle. Discovery does not prove a session loaded it. */
+export interface ExtensionSummary {
+	id: string;
+	name: string;
+	path: string;
+	kind: "module" | "bundle";
+	description?: string;
+	provider: string;
+	providerLabel: string;
+	level: string;
+}
+
+export interface ListExtensionsResponse {
+	extensions: ExtensionSummary[];
+	warnings: string[];
+}
+
 /**
  * Parsed SKILL.md frontmatter. `name` falls back to the directory name when
  * the file omits an explicit `name:` field, matching the omp SDK's loader.
@@ -788,7 +813,7 @@ export type SkillProvider =
 	| "windsurf"
 	| "cline"
 	| "gemini"
-	| "agents"           // skills nested under subagent dirs
+	| "agents"           // shared .agent/skills and .agents/skills directories
 	| "custom"           // custom directories from runtime config
 	| (string & {});     // forward-compat
 
@@ -1115,6 +1140,8 @@ export interface SessionSnapshot {
 	sessionName?: string;
 	cwd: string;
 	model?: ModelRef;
+	/** Opaque policy selector, when the model was selected through a native role. */
+	modelSelector?: string;
 	thinkingLevel?: string;
 	/** Current NeoPi configuration warnings; refreshed by `config_warnings_changed`. */
 	configWarnings?: string[];
@@ -1594,6 +1621,8 @@ export interface Task {
 	archivedAt?: string;
 	/** Latest persisted assignment and outcome, independent of card front matter. */
 	run?: CardRun;
+	/** Latest durable activity note, state change, or assignment result. */
+	evidence?: { text: string; at: string };
 }
 
 export interface CreateTaskRequest {
@@ -1701,6 +1730,45 @@ export interface UpdateInboxItemRequest {
 
 export interface ListInboxResponse {
 	items: InboxItem[];
+}
+
+export type InboxDestination =
+	| { kind: "card"; project: string; column: string }
+	| { kind: "issue"; repo: string }
+	| { kind: "thread"; agent: string }
+	| { kind: "note"; path: string };
+
+export interface InboxProposal {
+	itemId: string;
+	kind: InboxKind;
+	destination: InboxDestination;
+	confidence: number;
+	reason: string;
+	/** A manual default is not a model classification. */
+	classifier: "manual";
+}
+
+export interface InboxReceipt {
+	kind: InboxDestination["kind"];
+	ref: string;
+	url: string;
+	label: string;
+}
+
+export interface InboxHistoryEvent {
+	at: string;
+	actor: string;
+	text: string;
+	url?: string;
+	receipt?: InboxReceipt;
+}
+
+export interface InboxRouting {
+	classifier: { kind: "manual"; name: string; description: string };
+	flows: { id: string; name: string; enabled: boolean; sourceNodeId: string; url: string }[];
+	columns: { id: string; name: string }[];
+	defaultColumn: string;
+	destinations: { kind: InboxDestination["kind"]; available: boolean; reason?: string }[];
 }
 
 /**

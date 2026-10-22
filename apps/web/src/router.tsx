@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { createBrowserRouter, Navigate, Outlet, RouterProvider, useLocation, useNavigate } from "react-router-dom";
+import { createBrowserRouter, Navigate, Outlet, RouterProvider, useLocation, useNavigate, type RouteObject } from "react-router-dom";
 import { ChatView } from "./views/ChatView";
 import { TasksView } from "./views/TasksView";
 import { RoutinesView } from "./views/RoutinesView";
@@ -29,7 +29,9 @@ import { SkillsPage } from "./neo/pages/SkillsPage";
 import { GitHubPage } from "./neo/pages/GitHubPage";
 import { UsagePage } from "./neo/pages/UsagePage";
 import { SettingsPage } from "./neo/pages/SettingsPage";
+import { ModelsPage } from "./neo/pages/ModelsPage";
 import { NAV_ITEMS } from "./neo/nav";
+import { RouteErrorPage } from "./neo/pages/RouteErrorPage";
 
 /**
  * First-paint redirect: if the server reports `needsOnboarding`, route
@@ -88,9 +90,19 @@ const PLACE_PAGES: Record<string, JSX.Element> = {
 	"/github": <GitHubPage />,
 	"/usage": <UsagePage />,
 	"/settings": <SettingsPage />,
+	"/models": <ModelsPage />,
 };
 
-const router = createBrowserRouter([
+/** Guard every leaf and layout, including failures above the authenticated shell. */
+function withRouteErrors(routes: RouteObject[]): RouteObject[] {
+	for (const route of routes) {
+		route.errorElement = <RouteErrorPage />;
+		if (route.children) withRouteErrors(route.children);
+	}
+	return routes;
+}
+
+const router = createBrowserRouter(withRouteErrors([
 	{ path: "/login", element: <LoginPage /> },
 	{
 		element: <RequireAuth />,
@@ -128,7 +140,8 @@ const router = createBrowserRouter([
 			{ path: "/legacy/onboarding", element: <OnboardingView /> },
 		],
 	},
-]);
+	{ path: "*", element: <RouteErrorPage notFound /> },
+]));
 
 export function AppRouter() {
 	return <RouterProvider router={router} />;

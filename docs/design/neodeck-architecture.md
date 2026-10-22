@@ -39,6 +39,7 @@ Library     Knowledge (k)  the wiki, with the map one keystroke away
             Skills (s)     installed skills and the marketplace, one page
 Engine      GitHub (g)     repos, issues, PRs, the implementation wheel
             Usage (y)      your quota, your pools, what you spent
+            Models (m)     effort rules, roles and inference providers
             Settings (,)   engine, accounts, integrations, appearance
 ```
 
@@ -50,17 +51,19 @@ new one covers every feature it had (Settings › Legacy deck).
 
 ## 3. The shell
 
-Unchanged chassis from the design language: 52 px glass topbar with the
-`NeoPi / deck / Page` lockup, naked grouped sidebar (224 px), one inset
-panel. Two changes:
+The chassis follows NeoProxy: a 52 px glass topbar with the
+`NeoPi / deck / Page` lockup, grouped sidebar at 224 px with 32 px rows,
+and one inset panel. The hamburger hides the entire sidebar on desktop;
+the choice persists in this browser. Below 900 px it opens a navigation
+overlay instead, with Escape, keyboard focus containment and focus return.
+Opening the mobile menu does not change the saved desktop choice.
 
-- The topbar's right side is the **presence row**: the engine chip, the
-  signed-in account (avatar + name, opens Usage), dictation, theme. Nothing
-  else. View-local toggles are gone; a page that needs a side column has it
-  inside the panel, always.
-- The sidebar foot shows **who is live**: the number of agents working and
-  the number of threads that need you, as two small dots, so the state of the
-  office is visible from every page.
+- The topbar's right side holds engine status, dictation, theme and the
+  signed-in account menu. Status and identity are quiet inline controls,
+  not a row of pills. View-local controls stay inside each page.
+- The sidebar footer teaches navigation with `G` then a letter and a few
+  examples. Presence counts belong to the pages that explain them, rather
+  than repeating preview counts throughout the shell.
 
 Pages are one of three shapes, never a fourth:
 
@@ -213,14 +216,19 @@ with inline edit and a restart marker. Advanced is demoted, not exiled.
 
 ## 5. Model selection
 
-No model list. The picker is a 340 px sheet anchored to a mono chip, with
-rows of chips: **Recent**, **Roles** (what the admin mapped for you),
-**Virtual models** you may use, and **Providers** as collapsible groups,
-each group listing only the models exposed to you, with one search that
-filters across all of them. Everything is named `neoproxy/<provider>/<model>`
-or `neoproxy/<name>`; the current pick is printed in the composer bar in
-mono. Hidden providers (admin's choice) stay served and leave the picker for
-members.
+The quick switcher follows NeoPi's `/switch`, separate from the full `/models`
+configuration page. It opens at conversation width above the composer, with a
+provider rail and rows for native `@role` policies and concrete `provider/model`
+selectors. Each row has intelligence, TTFT, tokens/s, effective context and
+input/output cost per million. Missing facts say Unknown. A role names a policy
+and shows its current resolution without replacing its identity.
+
+Search goes through NeoPi's native `query_model_selector` engine. Older backends
+without it show a live catalogue with search explicitly unavailable; Deck never
+copies native matching or regex rules. Hidden providers leave every Deck picker,
+including admins' pickers, without disabling inference. Opening and searching
+never choose a model. Effort is applied only when a row is chosen. Escape closes
+the portaled switcher and restores focus; arrows and Enter operate its results.
 
 The composer is a fixed 116 px region: three lines that scroll, then one
 bar with the target agent (`ctrl+]` / `ctrl+[` cycle, "All" broadcasts),
@@ -260,7 +268,7 @@ for are specified in `docs/design/backend-contracts.md`.
 3. The three-column shell with toggles is gone; detail opens in a drawer
    or a fixed detail column.
 4. The composer is a fixed 3-line region; long messages scroll inside it.
-5. Model picker is chips in a popover, never a scrolling list.
+5. Model selection uses one wide, keyboard-operated native switcher everywhere.
 6. Legacy deck stays mounted at `/legacy` until parity.
 7. Environment variables and raw NeoPi config live under Settings ›
    Advanced, admin only, as key/value tables rather than forms.

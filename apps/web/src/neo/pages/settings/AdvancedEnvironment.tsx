@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Eye, EyeOff, Pencil, RotateCcw } from "lucide-react";
 import type { EnvEntry, ListEnvSettingsResponse } from "@npi-deck/protocol";
-import { Empty, KeyValue, NeoBadge, NeoButton, Notice, SearchInput, Table, type Column } from "@/components/neo";
+import { Empty, KeyValue, NeoBadge, NeoButton, Notice, SearchInput, Table, type Column, NeoInput, NeoCombobox } from "@/components/neo";
 import { settings } from "../../client/settings";
 import { AdvancedNotice, advancedError, useAdvancedNotice } from "./AdvancedNotice";
 
@@ -67,10 +67,10 @@ export function AdvancedEnvironment() {
 
 function EnvInlineEditor({ entry, busy, onSave, onCancel }: { entry: EnvEntry; busy: boolean; onSave: (value: string | null) => void; onCancel: () => void }) {
 	const [value, setValue] = useState(entry.sensitive || entry.source === "unset" ? "" : entry.masked);
-	const list = entry.options ? `neo-env-options-${entry.key}` : undefined;
 	return <div className="neo-settings-advanced-editor">
-		<input className="neo-input neo-settings-advanced-input" aria-label={`New value for ${entry.key}`} type={entry.sensitive ? "password" : "text"} autoComplete="off" value={value} list={list} disabled={busy} placeholder={entry.sensitive ? "Paste replacement" : entry.defaultValue ?? "Unset"} onChange={event => setValue(event.target.value)} onKeyDown={event => { if (event.key === "Escape") { event.preventDefault(); onCancel(); } if (event.key === "Enter" && !busy) { event.preventDefault(); onSave(value); } }} autoFocus />
-		{list && <datalist id={list}>{entry.options?.map(option => <option key={option} value={option} />)}</datalist>}
+		{entry.options && !entry.sensitive
+			? <NeoCombobox aria-label={`New value for ${entry.key}`} value={value ?? ""} onValueChange={setValue} options={entry.options.map(option => ({value: option, label: option}))} disabled={busy} allowCustom autoFocus onKeyDown={event => { if (event.currentTarget.getAttribute("aria-expanded") === "true") return; if (event.key === "Escape") { event.preventDefault(); onCancel(); } if (event.key === "Enter" && !busy) { event.preventDefault(); onSave(value); } }} />
+			: <NeoInput className="neo-settings-advanced-input" aria-label={`New value for ${entry.key}`} type={entry.sensitive ? "password" : "text"} autoComplete="off" value={value} disabled={busy} placeholder={entry.sensitive ? "Paste replacement" : entry.defaultValue ?? "Unset"} onChange={event => setValue(event.target.value)} onKeyDown={event => { if (event.key === "Escape") { event.preventDefault(); onCancel(); } if (event.key === "Enter" && !busy) { event.preventDefault(); onSave(value); } }} autoFocus />}
 		{entry.source === "process-env" && <p className="neo-settings-advanced-warning">The launching process still overrides this managed value, including after a server restart.</p>}
 		{entry.options && <p className="neo-settings-description">Allowed: {entry.options.join(", ")}</p>}
 		<div className="neo-settings-actions"><NeoButton size="sm" variant="primary" disabled={busy} onClick={() => onSave(value)}>Save</NeoButton><NeoButton size="sm" variant="ghost" disabled={busy} onClick={onCancel}>Cancel</NeoButton><NeoButton size="sm" variant="danger" disabled={busy} onClick={() => onSave(null)}>Unset</NeoButton></div>

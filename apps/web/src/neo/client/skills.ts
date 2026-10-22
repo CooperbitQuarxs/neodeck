@@ -1,6 +1,7 @@
-import type { CreateSkillRequest, ListMarketplaceResponse, ListSkillsResponse, MarketplaceCatalogEntry, MarketplaceUpdatesResponse, SkillDetailResponse, SkillSummary, UpdateSkillRequest } from "@npi-deck/protocol";
+import type { CreateSkillRequest, ListExtensionsResponse, ListMarketplaceResponse, ListSkillsResponse, MarketplaceCatalogEntry, MarketplaceUpdatesResponse, SkillDetailResponse, SkillSummary, UpdateSkillRequest } from "@npi-deck/protocol";
 import { marketplaceApi } from "@/lib/marketplace-api";
 import { skillsApi } from "@/lib/skills-api";
+import { api } from "@/lib/api";
 import { SOURCES } from "./source";
 
 /** GET /api/skills/usage: usage per opaque skill id. Preview until telemetry lands. */
@@ -55,6 +56,15 @@ const preview: SkillsClient = {
 	async refreshSource(name) { market.sources = market.sources.map((s) => s.name === name ? { ...s, updatedAt: new Date().toISOString() } : s); },
 };
 export const skills: SkillsClient = SOURCES.skills === "live" ? live : preview;
+
+/** Commands are the server's executable slash-command inventory, not skills. */
+export const listCommands = () => api.listSlashCommands();
+/** Discoverable extensions, without importing or executing their code. */
+export async function listExtensions(): Promise<ListExtensionsResponse> {
+	const response = await fetch("/api/skills/extensions");
+	if (!response.ok) throw new Error(`Could not load extensions. HTTP ${response.status}.`);
+	return response.json() as Promise<ListExtensionsResponse>;
+}
 
 const usage = new Map<string, SkillUsage>();
 /** Preview usage is stable per id across refetches, and never reaches the live backend. */

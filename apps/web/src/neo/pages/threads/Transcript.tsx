@@ -53,7 +53,7 @@ export function Transcript({ messages, agents, toolCalls, everything, session }:
 	return <div ref={scroll} className="neo-threads-transcript" aria-label="Thread transcript" onScroll={() => { const el = scroll.current; if (!el || settling.current) return; sticky.current = nearBottom(el); if (!sticky.current && !anchor?.id && shown[0]) setAnchor({ id: shown[0].id, fromEnd: list.length - start, count: end - start }); else if (sticky.current && anchor?.id && newer === 0) setAnchor({ fromEnd: end - start, count: end - start }); }}><div className="neo-threads-turns">
 		{start > 0 || (session?.readOnly?.earlier ?? 0) > 0 ? <NeoButton variant="ghost" size="sm" disabled={loading} onClick={() => void earlier()}>{loading ? "Loading earlier messages…" : start > 0 ? `Show ${Math.min(MESSAGE_PAGE, start)} earlier messages` : "Load earlier messages"}</NeoButton> : null}
 		{error ? <p role="alert" className="neo-threads-error">{error}</p> : null}
-		{list.length === 0 ? <Empty title="The thread is open" hint="Send Main a message to begin. Your conversation stays here." /> : null}
+		{list.length === 0 ? <Empty title="The thread is open" hint="Say something below. Address one member, or @all for everyone." /> : null}
 		{shown.map((msg) => <div key={msg.id} data-message-id={msg.id}><Turn msg={msg} agents={agents} toolCalls={toolCalls} everything={everything} live={live === msg.id} /></div>)}
 		{newer > 0 ? <NeoButton variant="ghost" onClick={() => { sticky.current = true; setAnchor(undefined); }}>{newer} newer messages · Jump to latest</NeoButton> : null}
 		{session?.queuedPrompts.map((q) => <QueuedMessage key={q.id} msg={q} />)}
@@ -62,15 +62,16 @@ export function Transcript({ messages, agents, toolCalls, everything, session }:
 }
 function Turn({ msg, agents, toolCalls, everything, live }: { msg: ThreadMessage; agents: readonly ThreadAgent[]; toolCalls: Record<string, ToolCallStream>; everything: boolean; live: boolean }) {
 	if (msg.role === "user") return <article className="neo-threads-user-turn"><div className="neo-threads-turn-label">you{msg.addressedTo ? ` to ${msg.addressedTo.join(", ")}` : ""}{msg.timestamp ? ` · ${formatShortRelative(msg.timestamp)}` : ""}</div><div className="neo-thread-user">{msg.images?.length ? <div className="neo-threads-images">{msg.images.map((image, i) => <a key={i} href={`data:${image.mimeType};base64,${image.data}`} target="_blank" rel="noreferrer"><img src={`data:${image.mimeType};base64,${image.data}`} alt={`Attachment ${i + 1}`} /></a>)}</div> : null}<Markdown>{msg.text}</Markdown></div></article>;
-	if (msg.role === "assistant") { const agent = agents.find((a) => a.id === (msg.agentId ?? "main")) ?? agents[0]; if (!agent) return null; return <AgentTurn msg={msg} agent={agent} toolCalls={toolCalls} everything={everything} live={live} />; }
+	if (msg.role === "assistant") { const agent = agents.find((a) => a.id === (msg.agentId ?? "main")) ?? agents[0]; if (!agent) return null; const starter = agent.spawnedBy ? agents.find((a) => a.id === agent.spawnedBy)?.name ?? "another agent" : undefined; return <AgentTurn msg={msg} agent={agent} starter={starter} toolCalls={toolCalls} everything={everything} live={live} />; }
 	return <div className="neo-thread-aside">{msg.role === "notice" ? <Notice msg={msg} /> : msg.role === "compaction" ? <CompactionLine msg={msg} /> : msg.role === "irc" ? <IrcLine msg={msg} /> : msg.role === "ttsr" ? <TtsrLine msg={msg} /> : msg.role === "mixtureTrace" ? <MixtureTraceLine msg={msg} /> : null}</div>;
 }
-function AgentTurn({ msg, agent, toolCalls, everything, live }: { msg: AssistantMsg; agent: ThreadAgent; toolCalls: Record<string, ToolCallStream>; everything: boolean; live: boolean }) {
+/** Every member's turn renders the same way; who started an agent is a note, not a different style. */
+function AgentTurn({ msg, agent, starter, toolCalls, everything, live }: { msg: AssistantMsg; agent: ThreadAgent; starter?: string; toolCalls: Record<string, ToolCallStream>; everything: boolean; live: boolean }) {
 	const reasoning = reasoningBlockViews(msg);
 	const unreported = unreportedReasoningView(msg);
 	const lastText = msg.blocks.findLastIndex((b) => b.type === "text");
-	return <article className="neo-threads-agent-turn" data-spawned={Boolean(agent.spawnedBy)} style={{ "--agent": agentColor(agent.hue) } as CSSProperties}>
-		<div className="neo-threads-turn-label"><strong>{agent.name}</strong><span className="neo-mono">{msg.model ?? agent.model}</span>{msg.usage?.totalTokens ? <span>{formatTokens(msg.usage.totalTokens)} tok</span> : null}{msg.durationMs ? <span>{formatDurationMs(msg.durationMs)}</span> : null}{msg.isStreaming ? <span className="neo-threads-streaming">streaming</span> : null}{agent.spawnedBy ? <span>spawned</span> : null}</div>
+	return <article className="neo-threads-agent-turn" style={{ "--agent": agentColor(agent.hue) } as CSSProperties}>
+		<div className="neo-threads-turn-label"><strong>{agent.name}</strong><span className="neo-mono">{msg.model ?? agent.model}</span>{msg.usage?.totalTokens ? <span>{formatTokens(msg.usage.totalTokens)} tok</span> : null}{msg.durationMs ? <span>{formatDurationMs(msg.durationMs)}</span> : null}{msg.isStreaming ? <span className="neo-threads-streaming">streaming</span> : null}{starter ? <span>started by {starter}</span> : null}</div>
 		{msg.errorMessage ? <p className="neo-threads-error" role="alert">{msg.errorMessage}</p> : null}
 		{!msg.blocks.length && msg.isStreaming ? <p className="neo-dim">Thinking…</p> : null}
 		<div className="neo-threads-blocks">{unreported ? <ReasoningBlock view={unreported} /> : null}{msg.blocks.map((block, i) => {

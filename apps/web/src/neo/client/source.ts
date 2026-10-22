@@ -12,6 +12,7 @@ export type Domain =
 	| "accounts"
 	| "inbox"
 	| "classifier"
+	| "classifierInference"
 	| "board"
 	| "boardEvidence"
 	| "threads"
@@ -19,9 +20,14 @@ export type Domain =
 	| "models"
 	| "dictation"
 	| "agents"
+	| "agentTemplates"
+	| "agentInstances"
+	| "agentDefinitions"
+	| "agentSpawn"
 	| "judge"
 	| "studio"
 	| "studioGraphs"
+	| "studioRouters"
 	| "knowledge"
 	| "knowledgeHistory"
 	| "skills"
@@ -38,29 +44,43 @@ export const SOURCES: Readonly<Record<Domain, Source>> = {
 	auth: "preview",
 	accounts: "preview",
 	inbox: "live",
-	classifier: "preview",
+	/** Manual proposal, durable board filing, routing and delivery history. Model inference is unavailable. */
+	classifier: "live",
+	/** Model-backed suggestions need a native tool-free structured-inference adapter. */
+	classifierInference: "preview",
 	/** Cards, columns, moves, assignment: the deck's tasks API. */
 	board: "live",
-	/** The evidence timeline, origin and flow chip on a card. */
-	boardEvidence: "preview",
+	/** Durable card receipts, frontmatter provenance and linked work. */
+	boardEvidence: "live",
 	/** Sessions and transcripts: the deck's websocket store. */
 	threads: "live",
-	/** Several agents in one thread, their colours, the composer target. */
+	/** Equal-participant creation and broadcast wait for NeoPi's hierarchy design. */
 	threadAgents: "preview",
 	/** The model catalogue behind the picker: `/api/models` plus role mapping. */
 	models: "live",
 	dictation: "preview",
 	agents: "preview",
+	/** Deck-authored definitions only; native definition discovery is unavailable. */
+	agentTemplates: "live",
+	/** Native identities and permitted actions, without preview instances. */
+	agentInstances: "live",
+	/** NeoPi's own definitions (.omp/agents, WATCHDOG.yml, Chronicler): needs `list_agent_definitions`. */
+	agentDefinitions: "preview",
+	/** Starting an instance from a template: needs the neopi#11 flat agent model. */
+	agentSpawn: "preview",
 	judge: "preview",
 	/** Flows are routines: `/api/routines` and the native graph. */
 	studio: "live",
-	/** Pipelines, routers, classifiers, board flows. */
-	studioGraphs: "preview",
+	/** Authored pipelines, classifiers and board flows: `/api/graphs`. */
+	studioGraphs: "live",
+	/** Router designs stay browser-local until NeoProxy owns their save API. */
+	studioRouters: "preview",
 	knowledge: "live",
-	knowledgeHistory: "preview",
+	knowledgeHistory: "live",
 	skills: "live",
 	skillsUsage: "preview",
-	github: "preview",
+	/** Read-only GitHub CLI queries; GitHub App installation remains preview. */
+	github: "live",
 	usage: "preview",
 	providers: "preview",
 	/** Engine, workspaces, notifications, appearance: existing settings endpoints. */

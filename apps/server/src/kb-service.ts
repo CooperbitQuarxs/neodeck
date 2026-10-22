@@ -23,6 +23,8 @@
  * fresh data after `rebuildIndex()` is called by the watcher.
  */
 
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { createReadStream, existsSync, readFileSync, statSync } from "node:fs";
 import { link, mkdir, readdir, readFile, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
 import * as os from "node:os";
@@ -402,6 +404,25 @@ export class KbService {
 		};
 		if (frontmatterError) resp.frontmatterError = frontmatterError;
 		return resp;
+	}
+
+	/** Git records authorship without inventing agent activity for untracked notes. */
+	async getHistory(subpath: string) {
+		const file = await this.getFile(subpath);
+		if (!file) return undefined;
+		const git = promisify(execFile);
+		try {
+			await git("git", ["-C", this.root, "rev-parse", "--show-toplevel"], { timeout: 5000 });
+		} catch {
+			return { available: false, entries: [] };
+		}
+		const { stdout } = await git("git", ["--literal-pathspecs", "-C", this.root, "log", "--follow", "-n", "40", "--format=%H%x00%aI%x00%an%x00%s%x00", "--", file.path], { timeout: 5000, maxBuffer: 1024 * 1024 });
+		const fields = stdout.split("\0");
+		const entries = [];
+		for (let i = 0; i + 3 < fields.length; i += 4) {
+			entries.push({ id: fields[i]!.trim(), at: fields[i + 1]!, actor: fields[i + 2]!, kind: "committed" as const, text: fields[i + 3]! });
+		}
+		return { available: true, entries };
 	}
 
 	/**
