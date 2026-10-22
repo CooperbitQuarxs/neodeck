@@ -22,15 +22,22 @@ state before this work is in `screenshots/deck-before-*.png`.
 
 ## 1. The one sentence
 
-**A pure-black chassis, one inset panel, hairline edges, and a single
+**A purple-black chassis, one inset panel, hairline edges, and a single
 cyan → pink accent.** Everything else is restraint: grey ink ramps, 13 px
 controls, 12 px radii, and motion measured in hundreds of milliseconds.
 
 What the owner calls "purple" is the stretch of that accent between cyan and
 pink: the NeoPi mark's magenta → iris → cyan gradient, the iris `#945ff9` used
-for keywords and thinking, and the purple-tinted black (`#0f0b14`) the share
-export sits on. The deck's default theme is named **Neo** and reproduces the
-`/stats` palette exactly; **Neo light** is its white-paper twin.
+for keywords and thinking, and the purple-tinted black the share export sits
+on. The deck's default theme is named **Neo**; **Neo light** is its
+white-paper twin.
+
+The deck first reproduced `/stats`'s pure-black palette. NeoProxy took the
+`/share` chassis instead (purple-tinted black, warmer ink), and the owner
+named NeoProxy's dashboard the reference for every Neo product, so the deck
+now uses NeoProxy's values token for token
+(`NeoProxy/internal/neoui/static/styles.css`). The structure, radii, type and
+accent were already shared; only the chassis hue and the ink ramp changed.
 
 ![NeoPi stats overview](screenshots/neopi-stats-overview.png)
 
@@ -68,10 +75,10 @@ popovers, and Escape dismisses only the topmost overlay.
 
 | Token | Neo | Neo light | Role |
 | --- | --- | --- | --- |
-| `--paper` / `--neo-bg` | `#000000` | `#f2f2f3` | page |
-| `--paper-code` / `--neo-panel` | `#09090a` | `#ffffff` | the one inset panel |
-| `--paper-2` / `--neo-card` | `#0e0e10` | `#ffffff` | cards, inputs, table heads |
-| `--paper-3` / `--neo-raised` | `#17171a` | `#f6f6f7` | buttons, badges, hover surfaces |
+| `--paper` / `--neo-bg` | `#0b0810` | `#f3f1f5` | page |
+| `--paper-code` / `--neo-panel` | `#100c16` | `#ffffff` | the one inset panel |
+| `--paper-2` / `--neo-card` | `#16111d` | `#ffffff` | cards, inputs, table heads |
+| `--paper-3` / `--neo-raised` | `#1e1826` | `#f7f5f9` | buttons, badges, hover surfaces |
 | `--neo-hover` / `--neo-selected` | white 3.5 % / 7.5 % | black 3 % / 6 % | row hover, active nav |
 
 ### Hairlines (alpha, so one value reads on every step)
@@ -83,9 +90,10 @@ reference cards their faint lit upper edge.
 
 ### Ink
 
-`--ink` `#ededef` · `--ink-2` `#a0a0a8` · `--ink-3` `#6c6c74` · `--ink-4`
-`#46464c` (dark). Body copy is `ink`, descriptions `ink-2`, labels and table
-heads `ink-3`, dividers in text `ink-4`.
+`--ink` `#ededef` · `--ink-2` `#a49faa` · `--ink-3` `#6e6974` · `--ink-4`
+`#48444e` (dark), NeoProxy's ramp with a faint violet cast. Body copy is
+`ink`, descriptions `ink-2`, labels and table heads `ink-3`, dividers in text
+`ink-4`.
 
 ### Accent and status
 
@@ -95,7 +103,7 @@ heads `ink-3`, dividers in text `ink-4`.
   for text and strokes.
 - `--success` `#3ecf8e` (also `--neo-live`, reserved for real-time presence),
   `--warn` `#f5a524`, `--danger` `#ff6166`, each with a 13 % `-soft` fill.
-- `--thinking` `#945ff9` iris: thinking levels, keywords, the "NeoPi" side of
+- `--thinking` `#945ff9` violet (`#7a3fe4` in Neo light): thinking levels, keywords, the "NeoPi" side of
   anything that needs to say "engine".
 
 ### Type
