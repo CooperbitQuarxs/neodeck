@@ -1,71 +1,120 @@
+/**
+ * Agents: templates and the instances made from them.
+ *
+ * A template is a definition (model, tools, prompt, provenance) and never has
+ * a status. An instance is a running agent with its own conversation; Main is
+ * one of them. There is no subagent or advisor kind here: who started an
+ * instance is a relationship shown on it, not a type. See
+ * ~/.cache/npi-canary/neodeck-pool/philosophy.md §1.
+ */
 import "./agents.css";
-import { Bot, KanbanSquare, MessageSquare, Plus, Workflow } from "lucide-react";
+import { Plus } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
-import { AsyncView, Card, Check, Empty, ErrorState, formatCompact, formatShortRelative, NeoButton, NeoSelect, PageHeader, SearchInput, SectionLabel, Stat, StatGrid, Table, Toolbar, type Column } from "@/components/neo";
+import { useSearchParams } from "react-router-dom";
+import { Dot, ErrorState, NeoButton, PageHeader, Segmented, Table, type Column } from "@/components/neo";
 import { useStore } from "@/lib/store";
-import { agents, agentLink, formatCost, subscribeAgents, type AgentRecord, type SpawnAgentInput, type WhereOption } from "../client/agents";
-import { useAccount } from "../client/auth";
-import { PREVIEW_ACCOUNTS, type AgentState, type AgentTemplate, type JudgeEvent } from "../client/preview-data";
-import { AgentSwatch } from "../components/AgentSwatch";
-import { Avatar } from "../components/Avatar";
+import { judgeClient } from "../client/agents";
+import { agentCatalog, provenance, useAgentsRevision, type AgentCatalog, type AgentInstance, type AgentTemplate } from "../client/agentDefinitions";
 import { PreviewChip } from "../components/PreviewChip";
-import { SpawnAgentDrawer } from "../components/SpawnAgentDrawer";
 import { NAV_ITEMS } from "../nav";
-import { AgentDrawer, StateBadge } from "./agents/AgentDrawer";
-import { JudgeFeed } from "./agents/JudgeFeed";
-import { RestrictionChips } from "./agents/Restrictions";
-import { TemplateDrawer } from "./agents/TemplateDrawer";
-const STATES: AgentState[] = ["needs-you", "working", "parked", "idle", "done"];
-const item = NAV_ITEMS.find(i => i.to === "/agents")!;
+import { InstanceInspector } from "./agents/InstanceInspector";
+import { AgentSection, InstanceTable } from "./agents/parts";
+import { TemplatePage } from "./agents/TemplatePage";
+
+type Origin = "all" | "deck" | "neopi";
+type Scope = "active" | "all";
+
 export function AgentsPage() {
- const [roster, setRoster] = useState<AgentRecord[] | null>(null);
- const [templates, setTemplates] = useState<AgentTemplate[]>([]);
- const [events, setEvents] = useState<JudgeEvent[]>([]);
- const [where, setWhere] = useState<WhereOption[]>([]);
- const [error, setError] = useState<string | null>(null);
- const [search, setSearch] = useState("");
- const [state, setState] = useState("all");
- const [template, setTemplate] = useState("all");
- const [mine, setMine] = useState(false);
- const [selected, setSelected] = useState<string | null>(null);
- const [highlight, setHighlight] = useState<string | null>(null);
- const [spawning, setSpawning] = useState<string | null>(null);
- const [editing, setEditing] = useState<{ template: AgentTemplate; isNew: boolean } | null>(null);
- const account = useAccount();
- const runtime = useStore(s => Object.values(s.sessionsById).map(v => `${v.sessionId}:${v.status}:${v.turnCount}:${v.advisorActivity}`).join("|"));
- const workers = useStore(s => s.subagentsBySession);
- const tasksCounter = useStore(s => s.tasksChangeCounter);
- const request = useRef(0);
- const refresh = useCallback(async () => {
-  const epoch = ++request.current;
-  try { const [rows, t, j, w] = await Promise.all([agents.roster(), agents.templates(), agents.judge({}), agents.destinations()]); if (epoch !== request.current) return; setRoster(rows); setTemplates(t); setEvents(j); setWhere(w); setError(null); } catch(e) { if (epoch === request.current) setError(`Could not load the agents. ${String(e)}`); }
- }, []);
- useEffect(() => { void refresh(); }, [refresh, runtime, workers, tasksCounter]);
- useEffect(() => subscribeAgents(() => { void refresh(); }), [refresh]);
- useEffect(() => { if (!highlight) return; const timer = window.setTimeout(() => setHighlight(null), 3000); return () => window.clearTimeout(timer); }, [highlight]);
- const visible = useMemo(() => { const needle = search.trim().toLowerCase(); return (roster ?? []).filter(a => (state === "all" || a.state === state) && (template === "all" || a.template === template) && (!mine || a.owner === account?.handle) && (!needle || `${a.name} ${a.template} ${a.model} ${a.where.label} ${a.owner} ${a.restrictions.map(r => r.label).join(" ")}`.toLowerCase().includes(needle))); }, [roster, state, template, mine, account?.handle, search]);
- const columns: Column<AgentRecord>[] = [
-  { key: "agent", header: "Agent", render: a => <div className="neo-agents-identity"><AgentSwatch name={a.name} hue={a.hue}/><div className="neo-agents-template-line"><span className="neo-agents-template-name">{a.template}{a.id.startsWith("live:") ? " · live" : ""}</span><div className="neo-agents-row-restrictions"><RestrictionChips value={a.restrictions}/></div></div></div> },
-  { key: "model", header: "Model", render: a => <span className="neo-mono neo-agents-model" title={a.model}>{a.model}</span> },
-  { key: "where", header: "Where", render: a => { const Icon = a.where.kind === "thread" ? MessageSquare : a.where.kind === "card" ? KanbanSquare : Workflow; return <Link className="neo-agents-where" to={agentLink(a.where)} title={a.where.label} onClick={e => e.stopPropagation()}><Icon size={12}/><span>{a.where.label}</span></Link>; } },
-  { key: "state", header: "State", sort: a => STATES.indexOf(a.state), render: a => <StateBadge state={a.state}/> },
-  { key: "owner", header: "Owner", render: a => <span className="neo-agents-owner"><Avatar size={17} account={PREVIEW_ACCOUNTS.find(u => u.handle === a.owner) ?? { name: a.owner, hue: 190 }}/>{a.owner}</span> },
-  { key: "tokens", header: "Tokens", align: "right", render: a => <span className="neo-num">{formatCompact(a.tokens)}</span> },
-  { key: "cost", header: "Cost", align: "right", sort: a => a.costUsd, render: a => <span className="neo-num">{formatCost(a.costUsd)}</span> },
-  { key: "since", header: "Since", sort: a => a.since, render: a => <span className="neo-num neo-agents-note" title={new Date(a.since).toLocaleString()}>{formatShortRelative(a.since)}</span> },
- ];
- async function spawn(input: SpawnAgentInput) { const created = await agents.spawn(input); setState("all"); setTemplate("all"); setSearch(""); setMine(false); await refresh(); setHighlight(created.id); }
- return <div className="neo-fill"><PageHeader title={item.label} description={item.blurb} badge={<PreviewChip domains={["agents","judge"]}/>} actions={<NeoButton variant="primary" onClick={() => setSpawning("worker")}><Plus size={14}/>Spawn agent</NeoButton>}/>
-  <div className="neo-agents neo-fill-body"><div className="neo-agents-left">
-   <StatGrid><Stat label="Working" value={roster?.filter(a => a.state === "working").length ?? "–"} foot="across threads and cards"/><Stat label="Needs you" value={roster?.filter(a => a.state === "needs-you").length ?? "–"} foot="ready for your answer"/><Stat label="Parked" value={roster?.filter(a => a.state === "parked").length ?? "–"} foot="waiting to be dismissed"/><Stat label="Spent today" value={roster ? formatCost(roster.reduce((sum,a) => sum + a.costUsd, 0)) : "–"} foot="all agents on the deck"/></StatGrid>
-   <Toolbar className="neo-agents-toolbar"><SearchInput value={search} onChange={setSearch} placeholder="Search agents" aria-label="Search agents"/><NeoSelect aria-label="Filter by state" value={state} onChange={e => setState(e.target.value)}><option value="all">State: All</option>{STATES.map(s => <option value={s} key={s}>{s === "needs-you" ? "Needs you" : s[0]!.toUpperCase()+s.slice(1)}</option>)}</NeoSelect><NeoSelect aria-label="Filter by template" value={template} onChange={e => setTemplate(e.target.value)}><option value="all">Template: All</option>{templates.map(t => <option value={t.id} key={t.id}>{t.name}</option>)}</NeoSelect><Check checked={mine} onChange={setMine}>Mine</Check></Toolbar>
-   <Card flush className="neo-agents-roster"><AsyncView data={roster} error={error} onRetry={() => void refresh()}>{() => <Table columns={columns} rows={visible} rowKey={a => a.id} initialSort={{ key:"state", dir:"asc" }} selectedKey={highlight ?? selected} onRowClick={a => setSelected(a.id)} empty={<Empty icon={Bot} title="No agents match" hint="Clear the filters, or spawn an agent to start work." action={<NeoButton variant="ghost" onClick={() => { setSearch(""); setState("all"); setTemplate("all"); setMine(false); }}>Clear filters</NeoButton>}/>}/>}</AsyncView></Card>
-   <section className="neo-agents-templates"><SectionLabel actions={<NeoButton variant="ghost" size="sm" onClick={() => setEditing({ isNew:true, template:{id:`template_${crypto.randomUUID()}`,name:"",blurb:"",model:"neoproxy/default",restrictions:[]} })}><Plus size={12}/>New template</NeoButton>}>Templates</SectionLabel><div className="neo-grid-3">{templates.map(t => <Card key={t.id} title={t.name} description={t.blurb} className="neo-agents-template-card" footer={<><NeoButton variant="ghost" size="sm" onClick={() => setSpawning(t.id)}>Spawn from this</NeoButton><NeoButton variant="ghost" size="sm" onClick={() => setEditing({template:t,isNew:false})}>Edit</NeoButton></>}><span className="neo-mono neo-agents-template-model">{t.model}</span>{t.restrictions.length ? <RestrictionChips value={t.restrictions}/> : <p className="neo-agents-note">No restrictions. Same prompt, same tools, same everything as you.</p>}</Card>)}</div><Link className="neo-agents-studio" to="/studio"><Workflow size={13}/>Mixtures are built in Studio</Link></section>
-  </div><JudgeFeed events={events} watching={(roster ?? []).filter(a => a.state !== "done").length} onChanged={refresh}/></div>
-  {error && roster && <ErrorState error={error} onRetry={() => void refresh()}/>}
-  <AgentDrawer key={selected} agent={roster?.find(a => a.id === selected) ?? null} onClose={() => setSelected(null)} onChanged={refresh}/>
-  <SpawnAgentDrawer open={spawning !== null} initialTemplate={spawning ?? "worker"} onClose={() => setSpawning(null)} where={where.length ? where : undefined} onSpawn={spawn}/>
-  {editing && <TemplateDrawer key={editing.template.id} template={editing.template} isNew={editing.isNew} onClose={() => setEditing(null)} onChanged={refresh}/>}
- </div>;
+	const item = NAV_ITEMS.find((i) => i.to === "/agents")!;
+	const [params, setParams] = useSearchParams();
+	const templateParam = params.get("template");
+	const selected = params.get("instance");
+	const [catalog, setCatalog] = useState<AgentCatalog | null>(null);
+	const [error, setError] = useState<string | null>(null);
+	const [origin, setOrigin] = useState<Origin>("all");
+	const [scope, setScope] = useState<Scope>("active");
+	const [judge, setJudge] = useState<string | null>(null);
+	const revision = useAgentsRevision();
+	const sessions = useStore((s) => s.sessionsById);
+	const workers = useStore((s) => s.subagentsBySession);
+	const request = useRef(0);
+
+	const refresh = useCallback(async () => {
+		const epoch = ++request.current;
+		try {
+			const next = await agentCatalog.load();
+			if (epoch === request.current) { setCatalog(next); setError(null); }
+		} catch (e) { if (epoch === request.current) setError(e instanceof Error ? e.message : String(e)); }
+	}, []);
+	useEffect(() => { void refresh(); }, [refresh, revision, sessions, workers]);
+	useEffect(() => { judgeClient.status().then((s) => setJudge(s.reason), (e: unknown) => setJudge(e instanceof Error ? e.message : String(e))); }, []);
+
+	const patch = useCallback((next: Record<string, string | null>) => setParams((prev) => {
+		const p = new URLSearchParams(prev);
+		for (const [k, v] of Object.entries(next)) if (v === null) p.delete(k); else p.set(k, v);
+		return p;
+	}), [setParams]);
+	const select = useCallback((i: AgentInstance | null) => patch({ instance: i?.id ?? null }), [patch]);
+
+	const templates = catalog?.templates ?? [];
+	const instances = catalog?.instances ?? [];
+	const instance = instances.find((i) => i.id === selected) ?? null;
+	const shownTemplates = useMemo(() => templates.filter((t) => origin === "all" || (origin === "deck" ? t.source.format === "deck" : t.source.format !== "deck")), [templates, origin]);
+	const shownInstances = useMemo(() => instances.filter((i) => scope === "all" || i.status === "running" || i.status === "idle"), [instances, scope]);
+
+	const templateColumns: Column<AgentTemplate>[] = [
+		{ key: "name", header: "Template", sort: (t) => t.name.toLowerCase(), render: (t) => <span className="neo-agents-tname"><strong>{t.name}</strong>{t.description ? <span className="neo-dim">{t.description}</span> : null}</span>, wrap: true },
+		{ key: "from", header: "Defined in", sort: (t) => provenance(t), render: (t) => <span className="neo-dim">{provenance(t)}</span> },
+		{ key: "model", header: "Model", render: (t) => <span className="neo-mono neo-agents-model">{t.model ?? "inherits"}</span> },
+		{ key: "tools", header: "Tools", align: "right", sort: (t) => t.tools?.length ?? 0, render: (t) => <span className="neo-num neo-dim">{t.tools?.length ? t.tools.length : "default"}</span> },
+		{ key: "running", header: "Instances", align: "right", sort: (t) => t.instanceCount, render: (t) => <span className="neo-num">{t.instanceCount ? `${t.instanceCount} running` : <span className="neo-dim">none running</span>}</span> },
+	];
+
+	const isNew = templateParam === "new";
+	const template = templateParam && !isNew ? (templates.find((t) => t.id === templateParam) ?? null) : null;
+	const detail = templateParam !== null;
+
+	return (
+		<div className="neo-agents-page" data-inspector={instance ? "open" : undefined}>
+			<main className="neo-agents-main">
+				{detail ? (
+					catalog && !isNew && !template ? (
+						<ErrorState error="That template isn't in the catalogue any more." onRetry={() => patch({ template: null })} />
+					) : (
+						<TemplatePage key={templateParam} template={template} isNew={isNew} instances={instances} templates={templates} selected={selected} onSelect={select} onBack={() => patch({ template: null })} onChanged={refresh} onSaved={(id) => patch({ template: id })} />
+					)
+				) : (
+					<>
+						<PageHeader
+							title={item.label}
+							description="An agent is a template; what runs is an instance of it. Main is an instance too."
+							badge={<PreviewChip domains={["agentDefinitions", "agentSpawn"]} what="NeoPi's own definitions and starting agents from templates" />}
+							actions={<NeoButton variant="primary" onClick={() => patch({ template: "new" })}><Plus size={14} /> New template</NeoButton>}
+						/>
+						{error ? <ErrorState error={error} onRetry={() => void refresh()} /> : null}
+						<AgentSection
+							title="Templates"
+							how="Definitions: a model, tools and a prompt, and the file or place each comes from. A template never runs; open one to start an instance."
+							actions={<Segmented label="Defined in" options={[{ value: "all", label: "All" }, { value: "deck", label: "Deck" }, { value: "neopi", label: "NeoPi" }]} value={origin} onChange={setOrigin} />}
+							legend={catalog?.errors.templates ? <span className="neo-dim">Deck templates unavailable: {catalog.errors.templates}</span> : agentCatalog.nativeDefinitionsPreview ? <span className="neo-dim">NeoPi's own definitions are preview data until NeoPi can list them (list_agent_definitions).</span> : null}
+						>
+							<Table columns={templateColumns} rows={shownTemplates} rowKey={(t) => t.id} onRowClick={(t) => patch({ template: t.id })} initialSort={{ key: "running", dir: "desc" }} dense empty={<span className="neo-dim">{origin === "deck" ? "No template written in the deck yet. New template makes one." : "No templates."}</span>} />
+						</AgentSection>
+						<AgentSection
+							title="Instances"
+							how="Agents that are running or ran, in every thread. Started by you means depth zero; otherwise it names the agent that started it."
+							actions={<Segmented label="Show" options={[{ value: "active", label: "Active" }, { value: "all", label: "All" }]} value={scope} onChange={setScope} />}
+							legend={<><span className="neo-agents-legend-item"><Dot tone="live" /> running</span><span className="neo-agents-legend-item"><Dot tone="ok" /> idle</span><span className="neo-agents-legend-item"><Dot /> done or cancelled</span><span className="neo-agents-legend-hint">{catalog?.errors.instances ? `Instances unavailable: ${catalog.errors.instances}` : "Select a row to inspect it"}</span></>}
+						>
+							<InstanceTable rows={shownInstances} all={instances} templates={templates} selected={selected} onSelect={select} empty={<span className="neo-dim">{scope === "active" ? "Nothing is running. Open a thread, or start an instance from a template." : "No instances yet."}</span>} />
+						</AgentSection>
+						<AgentSection title="Judge" how="One watcher over every session that flags stuck work and stops what wasn't sanctioned.">
+							<p className="neo-dim neo-agents-judge-line">{judge ? `Not available: ${judge}` : "Checking…"}</p>
+						</AgentSection>
+					</>
+				)}
+			</main>
+			{instance ? <InstanceInspector instance={instance} all={instances} templates={templates} onClose={() => select(null)} onChanged={refresh} /> : null}
+		</div>
+	);
 }

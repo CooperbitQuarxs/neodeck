@@ -1,6 +1,13 @@
 import type { CSSProperties } from "react";
 import { cn } from "@/lib/utils";
 
+/** A stable hue per agent name, so Main is the same colour on every page. */
+export function hueFor(name: string): number {
+	let h = 0;
+	for (const ch of name.toLowerCase()) h = (h * 31 + ch.charCodeAt(0)) % 360;
+	return h;
+}
+
 /** The colour an agent speaks in. One hue per agent, used for its swatch, its rule in a transcript and its chip. */
 export function agentColor(hue: number): string {
 	return `oklch(0.78 0.13 ${hue})`;

@@ -9,16 +9,8 @@
 .neo-threads-head-meta { display: flex; align-items: center; gap: 10px; color: rgb(var(--ink-3)); white-space: nowrap; font-size: 11.5px; }
 .neo-threads-rename { display: flex; flex: 1; gap: 4px; min-width: 0; }
 .neo-threads-rename input { width: 100%; }
-.neo-threads-menu-anchor { position: relative; }
-.neo-threads-menu-scrim { position: fixed; inset: 0; z-index: 80; cursor: default; }
-.neo-threads-danger { color: rgb(var(--danger)); }
-.neo-threads-agent-strip { flex: none; min-height: 40px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 6px 14px; border-bottom: 1px solid var(--neo-line-2); }
-.neo-threads-agent-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
-.neo-threads-agent-chip { display: inline-flex; align-items: center; gap: 6px; min-height: 26px; }
-.neo-threads-agent-model { color: rgb(var(--ink-3)); font-size: 11px; max-width: 100px; overflow: hidden; text-overflow: ellipsis; }
 .neo-threads-view-controls { display: flex; align-items: center; gap: 8px; margin-left: auto; }
 .neo-threads-view-controls .neo-segmented-option { font-size: 11.5px; padding-inline: 8px; }
-.neo-threads-depth-label { font-size: 11px; color: rgb(var(--ink-3)); }
 .neo-threads-list-notice .neo-notice { padding: 6px; font-size: 11.5px; }
 .neo-threads-list-notice .neo-notice > span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .neo-threads-transcript { min-height: 0; flex: 1; overflow-y: auto; overscroll-behavior: contain; }
@@ -29,7 +21,6 @@
 .neo-threads-turn-label .neo-mono { font-size: 11.5px; }
 .neo-thread-user { max-width: 72ch; padding: 10px 14px; background: var(--neo-card); border: 1px solid var(--neo-line-2); border-radius: 10px; color: rgb(var(--ink)); }
 .neo-threads-agent-turn { border-left: 3px solid var(--agent); padding: 0 0 0 16px; max-width: 80ch; }
-.neo-threads-agent-turn[data-spawned="true"] { margin-left: 24px; opacity: .7; }
 .neo-threads-blocks { display: flex; flex-direction: column; gap: 10px; }
 .neo-threads-blocks .markdown { font-size: 13.5px; line-height: 1.6; }
 .neo-threads-streaming { color: rgb(var(--success)); }
@@ -49,29 +40,53 @@
 .neo-threads-images img { width: 96px; height: 96px; object-fit: cover; border-radius: var(--r-control); }
 .neo-threads-image { max-height: 280px; border-radius: var(--r-control); }
 .neo-threads-empty { flex: 1; display: grid; place-items: center; }
-.neo-threads-new { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; width: min(420px, 100%); margin: auto; padding: 32px; }
-.neo-threads-new > svg { color: rgb(var(--ink-4)); }
-.neo-threads-new h2 { font-size: 18px; font-weight: 550; }
-.neo-threads-new p { color: rgb(var(--ink-3)); font-size: 13px; }
-.neo-threads-new select { width: 100%; }
-.neo-threads-spawn { display: flex; flex-direction: column; gap: 18px; }
-.neo-threads-templates { display: flex; flex-direction: column; gap: 8px; }
-.neo-threads-template { border: 1px solid var(--neo-line-2); border-radius: var(--r-control); padding: 10px 12px; background: var(--neo-card); }
-.neo-threads-template[data-active="true"] { border-color: var(--neo-line-4); background: var(--neo-selected); }
-.neo-threads-template-choice { display: flex; width: 100%; gap: 10px; align-items: flex-start; text-align: left; }
-.neo-threads-template-choice strong { font-size: 13px; font-weight: 550; color: rgb(var(--ink)); }
-.neo-threads-radio { width: 14px; height: 14px; margin-top: 3px; border: 1px solid var(--neo-line-4); border-radius: 50%; flex: none; display: grid; place-items: center; color: rgb(var(--ink)); }
-.neo-threads-template[data-active="true"] .neo-threads-radio { border-color: rgb(var(--accent)); color: rgb(var(--accent)); }
-.neo-threads-template-blurb { display: block; font-size: 12.5px; line-height: 1.5; color: rgb(var(--ink-2)); margin-top: 2px; }
-.neo-threads-template-model { display: block; font-size: 11.5px; color: rgb(var(--ink-3)); margin-top: 5px; }
-.neo-threads-restrictions { display: flex; flex-wrap: wrap; gap: 5px; margin: 8px 0 0 24px; }
-.neo-threads-restrictions .neo-chip-btn { font-size: 11px; padding: 2px 6px; min-height: 22px; color: rgb(var(--ink-2)); }
-.neo-threads-unrestricted { margin: 8px 0 0 24px; color: rgb(var(--ink-3)); font-size: 11.5px; }
-.neo-threads-field { display: flex; flex-direction: column; gap: 8px; }
-.neo-threads-colours { display: flex; gap: 8px; }
-.neo-threads-colour { display: flex; gap: 5px; align-items: center; padding: 6px; min-width: 42px; border: 1px solid transparent; border-radius: var(--r-control); }
-.neo-threads-colour[data-active="true"] { border-color: var(--neo-line-4); background: var(--neo-selected); }
-.neo-threads-spawn-footer { display: flex; flex-direction: column; gap: 10px; width: 100%; }
-.neo-threads-spawn-footer .neo-preview { white-space: normal; line-height: 1.5; font-size: 11.5px; }
-@media (max-width: 1200px) { .neo-threads-head-meta > span:not(.neo-badge) { display: none; } .neo-threads-view-controls { margin-left: 0; } }
-@media (max-width: 900px) { .neo-threads .neo-split { grid-template-rows: minmax(160px, 30%) minmax(0, 1fr); } .neo-threads .neo-split-list { max-height: none; } .neo-threads-turns { padding: 20px 18px; } .neo-threads-head { padding-inline: 12px; } .neo-threads-title { font-size: 13px; } .neo-threads-agent-strip { padding-inline: 10px; } }
+
+/* Members: everyone in the thread, one chip style for all. */
+.neo-threads-members { flex: none; min-height: 42px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 6px 14px; border-bottom: 1px solid var(--neo-line-2); }
+.neo-threads-members-label { font-size: 11.5px; color: rgb(var(--ink-3)); }
+.neo-threads-member-list { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.neo-threads-member { display: inline-flex; align-items: center; gap: 8px; min-height: 28px; padding: 3px 10px 3px 8px; border: 1px solid var(--neo-line-2); border-radius: var(--r-control); background: var(--neo-card); font-size: 12px; color: rgb(var(--ink-2)); cursor: pointer; }
+.neo-threads-member:hover { border-color: var(--neo-line-3); }
+.neo-threads-member[data-on] { border-color: var(--neo-line-4); background: var(--neo-selected); color: rgb(var(--ink)); }
+.neo-threads-member:focus-visible { outline: none; box-shadow: 0 0 0 2px color-mix(in srgb, var(--neo-focus) 55%, transparent); }
+.neo-threads-member-model { color: rgb(var(--ink-3)); font-size: 11px; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.neo-threads-member-by { color: rgb(var(--ink-3)); font-size: 11px; }
+.neo-threads-member-state { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: rgb(var(--ink-3)); }
+.neo-threads-add { padding: 6px; display: flex; flex-direction: column; gap: 2px; }
+.neo-threads-add-how { margin: 4px 6px 6px; font-size: 12px; line-height: 1.45; color: rgb(var(--ink-3)); }
+.neo-threads-add-row { display: grid; grid-template-columns: 10px minmax(0, 1fr) auto; gap: 10px; align-items: center; width: 100%; padding: 7px 8px; border-radius: var(--r-control); text-align: left; }
+.neo-threads-add-row:hover, .neo-threads-add-row:focus-visible { background: var(--neo-hover); outline: none; }
+.neo-threads-add-row > i { width: 9px; height: 9px; border-radius: 3px; background: var(--agent); }
+.neo-threads-add-row strong { display: block; font-size: 13px; font-weight: 500; color: rgb(var(--ink)); }
+.neo-threads-add-row small { display: block; font-size: 11.5px; color: rgb(var(--ink-3)); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.neo-threads-add-row .neo-mono { font-size: 11px; color: rgb(var(--ink-3)); }
+
+/* New thread: where, who, first message, on one page. */
+.neo-newthread { flex: 1; min-height: 0; overflow-y: auto; width: min(720px, 100%); margin-inline: auto; padding: 26px 28px 32px; display: flex; flex-direction: column; gap: 22px; }
+.neo-newthread-head h2 { margin: 0; font-size: 18px; font-weight: 600; color: rgb(var(--ink)); }
+.neo-newthread-head p { margin: 4px 0 0; font-size: 13px; line-height: 1.5; color: rgb(var(--ink-2)); }
+.neo-newthread-section { display: flex; flex-direction: column; gap: 8px; }
+.neo-newthread-section h3 { margin: 0; font-size: 13px; font-weight: 600; color: rgb(var(--ink)); }
+.neo-newthread-section h3 small { font-weight: 400; color: rgb(var(--ink-3)); margin-left: 6px; }
+.neo-newthread-how { margin: 0; font-size: 12.5px; line-height: 1.5; color: rgb(var(--ink-2)); }
+.neo-newthread-locations { display: flex; flex-direction: column; gap: 2px; max-height: 244px; overflow-y: auto; border: 1px solid var(--neo-line-2); border-radius: var(--r-control); background: var(--neo-card); padding: 4px; }
+.neo-newthread-none { margin: 8px; font-size: 12.5px; }
+.neo-newthread-location { display: grid; grid-template-columns: 14px auto minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 7px 10px; border-radius: var(--r-control); text-align: left; color: rgb(var(--ink-3)); }
+.neo-newthread-location[data-active] { background: var(--neo-hover); }
+.neo-newthread-location[aria-selected="true"] { background: var(--neo-selected); color: rgb(var(--ink)); }
+.neo-newthread-location-label { font-size: 13px; font-weight: 500; color: rgb(var(--ink)); white-space: nowrap; }
+.neo-newthread-location-path { font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.neo-newthread-location-note { font-size: 11px; color: rgb(var(--ink-3)); white-space: nowrap; }
+.neo-newthread-chosen { margin: 0; font-size: 12px; color: rgb(var(--ink-3)); }
+.neo-newthread-chosen .neo-mono { color: rgb(var(--ink)); }
+.neo-newthread-members { display: flex; flex-wrap: wrap; gap: 6px; }
+.neo-newthread-member { display: inline-flex; align-items: center; gap: 7px; min-height: 28px; padding: 3px 10px 3px 8px; border: 1px solid var(--neo-line-2); border-radius: var(--r-control); background: var(--neo-card); font-size: 12.5px; color: rgb(var(--ink-3)); }
+.neo-newthread-member > i { width: 9px; height: 9px; border-radius: 3px; background: var(--agent); opacity: .5; }
+.neo-newthread-member[data-on] { border-color: var(--neo-line-4); background: var(--neo-selected); color: rgb(var(--ink)); }
+.neo-newthread-member[data-on] > i { opacity: 1; }
+button.neo-newthread-member:focus-visible { outline: none; box-shadow: 0 0 0 2px color-mix(in srgb, var(--neo-focus) 55%, transparent); }
+.neo-newthread-message { resize: vertical; min-height: 88px; }
+.neo-newthread-foot { display: flex; justify-content: flex-end; gap: 8px; }
+
+@media (max-width: 1200px) { .neo-threads-head-meta > span:not(:first-child) { display: none; } .neo-threads-view-controls { margin-left: 0; } }
+@media (max-width: 900px) { .neo-threads .neo-split { grid-template-rows: minmax(160px, 30%) minmax(0, 1fr); } .neo-threads .neo-split-list { max-height: none; } .neo-threads-turns { padding: 20px 18px; } .neo-threads-head { padding-inline: 12px; } .neo-threads-title { font-size: 13px; } .neo-threads-members { padding-inline: 10px; } }

@@ -8,6 +8,8 @@ All notable changes to NPI deck (a fork of bjb2/omp-deck; entries before the for
 ### Changed
 
 - The Neo themes now use NeoProxy's chassis: purple-tinted black surfaces (`#0b0810` page, `#100c16` panel, `#16111d` card) and NeoProxy's ink ramp, so NeoDeck and NeoProxy read as one family. Neo light moves to the matching lilac-grey page. Claude Opus 5.5.
+- Agents is rebuilt around templates and instances. Templates are definitions with their model, tools, prompt and where they come from, and never show a status; instances are what runs, Main included, with who started them shown as a relationship rather than a kind of agent. Deck-written templates are created, edited and deleted from a full-width template page, and selecting an instance opens a docked inspector with its session, journal, model and the actions NeoPi allows. NeoPi's own definitions and starting an instance from a template stay preview until NeoPi can list and start them. Claude Opus 5.5.
+- Threads treats everyone in a thread as an equal member: Main renders and is addressed like any other agent, the composer's To list (or `@name` / `@all` typed at the start of a draft) picks one member or everyone, and a facts row under the composer shows model, effort, speed, cache hit, context and thread cost. Starting a thread is one page with a searchable location list that takes typed paths, member templates and a first message. The thread menu uses the shared keyboard menu. Claude Opus 5.5.
 
 ### Added
 - The shell follows NeoProxy's compact chrome, with quieter status controls and a sidebar that can be hidden from the hamburger. Desktop visibility persists in this browser; mobile navigation supports Escape and returns keyboard focus. By GPT-6.1 Sol.
