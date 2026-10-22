@@ -43,10 +43,13 @@ export const models = {
 				roleError = error instanceof Error ? error.message : String(error); return null;
 			}),
 		]);
+		const chatRole = roleConfig?.roles.find(role => role.id === "default" && role.section === "chat");
+		const chatPool = chatRole ? roleConfig?.pools?.[chatRole.pool] : undefined;
+		const chatModels = chatPool ? new Set(chatPool.models) : null;
 		const items: PickerModel[] = list.models.map(model => ({
 			selector: `${model.provider}/${model.id}`, provider: model.provider, id: model.id, name: model.label || model.id,
 			resolvedSelector: `${model.provider}/${model.id}`, facts: { ...unknownFacts, contextWindow: model.contextWindow ?? null },
-			available: model.isAvailable, role: false,
+			available: model.isAvailable && (!chatModels || chatModels.has(`${model.provider}/${model.id}`) || (model.isMixture === true && chatPool?.mixtures === true)), role: false,
 		}));
 		const roleItems: PickerModel[] = (roleConfig?.roles ?? []).filter(role => role.section === "chat" && !role.hidden).map(role => ({
 			selector: `@${role.id}`, provider: role.resolved?.provider ?? "", id: role.id, name: role.name,

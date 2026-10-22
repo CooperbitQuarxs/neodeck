@@ -7,7 +7,7 @@ All notable changes to NPI deck (a fork of bjb2/omp-deck; entries before the for
 
 ### Changed
 
-- Native model selections now keep `@role` policy and effort through session updates instead of rewriting roles as NeoProxy model names. A native `/switch` query endpoint preserves NeoPi's ranking and nullable facts, and reports unsupported older backends without copying their search grammar.
+- Model selection now uses one wide provider-grouped switcher across composers, agents, assignments, Studio and settings. It keeps `@role` policy and effort, shows nullable native facts, supports keyboard navigation, and hides providers for admins as well as members. Native search delegates to NeoPi and explicitly reports an unsupported older backend rather than copying its grammar. By GPT-6.1 Sol ([#267](https://github.com/PsychedelicShayna/neodeck/pull/267)).
 - The Neo themes now use NeoProxy's chassis: purple-tinted black surfaces (`#0b0810` page, `#100c16` panel, `#16111d` card) and NeoProxy's ink ramp, so NeoDeck and NeoProxy read as one family. Neo light moves to the matching lilac-grey page. Claude Opus 5.5.
 
 ### Added

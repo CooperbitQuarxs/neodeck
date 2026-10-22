@@ -75,7 +75,7 @@ function PickerSheet({ value, catalog, error, target, excludeRole, onClose, onPi
 	const selectable = useMemo(() => rows.map((row, index) => row.available ? index : -1).filter(index => index >= 0), [rows]);
 	const start = Math.max(0, Math.floor(scrollTop / 54) - 5);
 	const visible = rows.slice(start, start + 24);
-	useEffect(() => { setActive(rows.findIndex(row => row.available && row.selector === initial.selector)); }, [query, group, native.result, native.unavailable, initial.selector]);
+	useEffect(() => { setActive(rows.findIndex(row => row.available && row.selector === initial.selector)); }, [rows, initial.selector]);
 	useEffect(() => {
 		const element = list.current;
 		if (!element || active < 0) return;
@@ -83,7 +83,7 @@ function PickerSheet({ value, catalog, error, target, excludeRole, onClose, onPi
 		if (top < element.scrollTop) element.scrollTop = top;
 		else if (top + 54 > element.scrollTop + element.clientHeight) element.scrollTop = top + 54 - element.clientHeight;
 	}, [active, rows]);
-	useEffect(() => { if (list.current) list.current.scrollTop = 0; setScrollTop(0); }, [query, group]);
+	useEffect(() => { if (list.current) list.current.scrollTop = 0; setScrollTop(0); }, [rows]);
 	const current = inventory.find(item => item.selector === initial.selector);
 	const activeRow = rows[active];
 	function pick(item: PickerModel) { if (item.available) onPick(`${item.selector}${selectedEffort ? `:${selectedEffort}` : ""}`); }

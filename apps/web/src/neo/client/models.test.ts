@@ -46,3 +46,12 @@ test("role discovery failure stays visible without hiding the live model catalog
 	expect(catalog.roleError).toBe("Role capability unavailable");
 	expect(catalog.items.map(item => item.selector)).toEqual(["local/chat"]);
 });
+
+test("fallback selection uses NeoPi's chat pool instead of offering speech models", async () => {
+	globalThis.fetch = (async input => Response.json(String(input).includes("model-roles") ? {
+		roles: [{ id: "default", name: "Default", section: "chat", hidden: false, pool: 0 }],
+		pools: [{ models: ["local/chat"], mixtures: false }], thinkingLevels: [],
+	} : { models: [{ provider: "local", id: "chat", isAvailable: true }, { provider: "local", id: "speech", isAvailable: true }] })) as typeof fetch;
+	const catalog = await models.catalog();
+	expect(catalog.items.filter(item => !item.role && item.available).map(item => item.selector)).toEqual(["local/chat"]);
+});
