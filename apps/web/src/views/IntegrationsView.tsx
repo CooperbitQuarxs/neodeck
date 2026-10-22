@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { integrationsApi } from "@/lib/integrations-api";
 
-const SETTINGS_MCP = "/settings?section=mcp";
+const SETTINGS_MCP = "/legacy/settings?section=mcp";
 
 /**
  * /integrations — the MCP servers a routine's `mcp` step can call, and their

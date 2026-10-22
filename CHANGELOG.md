@@ -13,6 +13,7 @@ All notable changes to NPI deck (a fork of bjb2/omp-deck; entries before the for
 
 - Knowledge now separates a wide note reader from a full-size searchable map, with collection filters, keyboard-accessible map results and live Git history. Project agents remain the only note authors. Implemented by GPT-6 Astra for PsychedelicShayna.
 - Shared layer tokens keep page chrome, menus, modal drawers and nested pickers on one stacking scale. The design guide documents portal and nested-overlay rules. GPT-6.1 Sol.
+- Engine status opens Engine settings instead of a missing route. Every route now has a themed recovery page, including unknown URLs, and legacy settings, advisor, marketplace and run-detail links point to their registered pages. Removed unconfigured NeoProxy links instead of sending them to nonexistent Deck routes. By GPT-6.1 Sol.
 - Studio now edits pipelines, virtual-model routers, classifiers and board flows beside live routines and the knowledge map, with typed connections, a node inspector, editable TOML and per-node run timelines.
 - Knowledge now has a searchable note tree, a linked Markdown reader, and a map toggled with M. Follow backlinks, browse recent notes, or ask an agent to change a note in a prefilled thread.
 - Threads now groups conversations by attention, opens real session transcripts, and keeps each agent's colour and message target visible. Preview threads support several primary agents, removable spawn restrictions, folded tools and spawned-agent depth, and remain available when live sessions cannot load.
