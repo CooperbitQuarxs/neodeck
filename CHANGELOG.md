@@ -7,7 +7,7 @@ All notable changes to NPI deck (a fork of bjb2/omp-deck; entries before the for
 
 ### Added
 
-- Board is now an evidence-first view of agent-managed work, with Inbox capture, attention filtering, related cards, persisted activity notes, all assignment attempts and real linked evidence. Per-assignment model/role choices reach NeoPi without rewriting a card's configuration. Implemented by GPT-6.1 Sol.
+- Board is now an evidence-first view of agent-managed work, with Inbox capture, attention filtering, related cards, persisted activity notes, all assignment attempts and real linked evidence. Per-assignment model/role choices reach NeoPi without rewriting a card's configuration ([#270](https://github.com/PsychedelicShayna/neodeck/pull/270), GPT-6.1 Sol).
 
 - Studio now edits pipelines, virtual-model routers, classifiers and board flows beside live routines and the knowledge map, with typed connections, a node inspector, editable TOML and per-node run timelines.
 - Knowledge now has a searchable note tree, a linked Markdown reader, and a map toggled with M. Follow backlinks, browse recent notes, or ask an agent to change a note in a prefilled thread.
