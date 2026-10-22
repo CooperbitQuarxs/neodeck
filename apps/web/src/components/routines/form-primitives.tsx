@@ -1,5 +1,8 @@
 import { CircleAlert } from "lucide-react";
-import type { ReactNode } from "react";
+import { createContext, useContext, type ReactNode } from "react";
+import { NeoSelect } from "@/components/neo";
+
+const FieldLabel = createContext<string | undefined>(undefined);
 
 /**
  * A labelled control. Sentence-case label, optional `optional` tag, help text
@@ -25,7 +28,7 @@ export function Field({
 				<span>{label}</span>
 				{optional ? <small>optional</small> : null}
 			</div>
-			{children}
+			<FieldLabel.Provider value={typeof label === "string" ? label : undefined}>{children}</FieldLabel.Provider>
 			{error ? (
 				<div className="neo-field-error" role="alert">
 					<CircleAlert size={12} />
@@ -178,11 +181,12 @@ export function Select<T extends string>({
 	options: ReadonlyArray<{ value: T; label: string }>;
 	ariaLabel?: string;
 }) {
+	const fieldLabel = useContext(FieldLabel);
 	return (
-		<select
+		<NeoSelect
 			value={value}
 			onChange={(e) => onChange(e.target.value as T)}
-			aria-label={ariaLabel}
+			aria-label={ariaLabel ?? fieldLabel}
 			className="neo-input w-full"
 		>
 			{options.map((o) => (
@@ -190,7 +194,7 @@ export function Select<T extends string>({
 					{o.label}
 				</option>
 			))}
-		</select>
+		</NeoSelect>
 	);
 }
 

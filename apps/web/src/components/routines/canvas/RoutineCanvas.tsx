@@ -34,6 +34,7 @@ import {
 } from "@xyflow/react";
 import { CircleAlert } from "lucide-react";
 import { GraphCanvasSurface } from "@/components/graph/GraphCanvasSurface";
+import { NeoSelect } from "@/components/neo";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type {
@@ -595,11 +596,7 @@ export function applyPositionCommits(
 	return { ...spec, layout };
 }
 
-/**
- * Floating last-run picker. Top-right of the viewport so it doesn't fight
- * the AddStepPalette (top-left). A `<select>` keeps the surface tiny and
- * keyboard-native without pulling in a popover library.
- */
+/** Run evidence stays on the canvas; its chooser uses the shared portal layer. */
 function RunOverlayPicker({
 	runs,
 	selectedRunId,
@@ -612,12 +609,12 @@ function RunOverlayPicker({
 	return (
 		<div className="pointer-events-auto absolute right-3 top-3 z-20 flex items-center gap-2">
 			<span className="text-[12px] text-ink-3">Showing run</span>
-			<select
+			<NeoSelect
 				value={selectedRunId ?? ""}
 				onChange={(e) => onSelect(e.target.value || null)}
 				className="neo-input max-w-[220px] truncate"
-				data-size="sm"
-				data-mono="true"
+				size="sm"
+				mono
 				aria-label="Select run to overlay"
 			>
 				{runs.map((r) => (
@@ -625,7 +622,7 @@ function RunOverlayPicker({
 						{formatRunLabel(r)}
 					</option>
 				))}
-			</select>
+			</NeoSelect>
 		</div>
 	);
 }
