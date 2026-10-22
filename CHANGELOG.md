@@ -10,6 +10,7 @@ All notable changes to NPI deck (a fork of bjb2/omp-deck; entries before the for
 - The Neo themes now use NeoProxy's chassis: purple-tinted black surfaces (`#0b0810` page, `#100c16` panel, `#16111d` card) and NeoProxy's ink ramp, so NeoDeck and NeoProxy read as one family. Neo light moves to the matching lilac-grey page. Claude Opus 5.5.
 
 ### Added
+- The shell follows NeoProxy's compact chrome, with quieter status controls and a sidebar that can be hidden from the hamburger. Desktop visibility persists in this browser; mobile navigation supports Escape and returns keyboard focus. By GPT-6.1 Sol.
 
 - Knowledge now separates a wide note reader from a full-size searchable map, with collection filters, keyboard-accessible map results and live Git history. Project agents remain the only note authors. Implemented by GPT-6 Astra for PsychedelicShayna.
 - Shared layer tokens keep page chrome, menus, modal drawers and nested pickers on one stacking scale. The design guide documents portal and nested-overlay rules. GPT-6.1 Sol.
