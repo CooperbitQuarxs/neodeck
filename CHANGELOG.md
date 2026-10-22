@@ -7,7 +7,7 @@ All notable changes to NPI deck (a fork of bjb2/omp-deck; entries before the for
 
 ### Added
 
-- Telegram setup now lives in Integrations, with masked bot credentials, one-use account pairing, per-chat thread and intake choices, polling status, and opt-in needs-you notifications. Streaming replies and inbox capture use the existing live bridge; plan proposals are no longer automatically rejected.
+- Telegram setup now lives in Integrations, with masked bot credentials, one-use account pairing, per-chat thread and intake choices, polling status, and opt-in needs-you notifications. Streaming replies and inbox capture use the existing live bridge; plan proposals are no longer automatically rejected. Bridge restarts retain the replacement process when an older exit callback arrives late ([#282](https://github.com/PsychedelicShayna/neodeck/pull/282), GPT-6 Astra on behalf of PsychedelicShayna).
 - Shared Neo controls now use styled portal menus and listboxes instead of native select popups. Dialogs and drawers share nested Escape handling, focus trapping and restoration, with keyboard navigation and type-ahead in pickers.
 - Studio now edits pipelines, virtual-model routers, classifiers and board flows beside live routines and the knowledge map, with typed connections, a node inspector, editable TOML and per-node run timelines.
 - Knowledge now has a searchable note tree, a linked Markdown reader, and a map toggled with M. Follow backlinks, browse recent notes, or ask an agent to change a note in a prefilled thread.
