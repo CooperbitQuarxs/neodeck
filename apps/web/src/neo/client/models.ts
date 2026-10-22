@@ -104,7 +104,8 @@ export function useCatalog(target: ModelTarget = {}, enabled = true) {
 		error: snapshot?.key === key ? snapshot.error : null,
 	};
 }
-export function useModelQuery(target: ModelTarget, query: string) {
+export interface ModelQueryState { pending: boolean; result?: ModelSelectorResult; unavailable?: boolean; error?: string }
+export function useModelQuery(target: ModelTarget, query: string): ModelQueryState {
 	const key = JSON.stringify([target.sessionId, target.cwd, query]);
 	const [snapshot, setSnapshot] = useState<{ key: string; result?: ModelSelectorResult; unavailable?: boolean; error?: string }>();
 	useEffect(() => {
@@ -119,7 +120,7 @@ export function useModelQuery(target: ModelTarget, query: string) {
 		}).catch(error => { if (!controller.signal.aborted) setSnapshot({ key, error: String(error) }); });
 		return () => controller.abort();
 	}, [key]);
-	return snapshot?.key === key ? { ...snapshot, pending: false } : { pending: true };
+	return snapshot?.key === key ? { result: snapshot.result, unavailable: snapshot.unavailable, error: snapshot.error, pending: false } : { pending: true };
 }
 /** Only native effort suffixes are separated; provider IDs and model IDs stay intact. */
 export function splitPick(value: string, efforts: readonly string[]): { selector: string; effort: string } {

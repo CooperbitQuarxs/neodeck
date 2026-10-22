@@ -16,9 +16,9 @@ afterEach(() => { closeDb(); rmSync(directory, { recursive: true, force: true })
 const json = (method: string, value: unknown): RequestInit => ({ method, headers: { "content-type": "application/json" }, body: JSON.stringify(value) });
 const node = (id: string, type: string, config: Record<string, unknown> = {}): StudioNode => ({ id, type, config, position: { x: 0, y: 0 } });
 const edge = (from: string, port: string, to: string, input = "input") => ({ id: `${from}-${to}`, from: { node: from, port }, to: { node: to, port: input } });
-async function create(kind = "pipeline"): Promise<StudioGraph> { const response = await app.request("/graphs", json("POST", { kind, name: "Graph" })); expect(response.status).toBe(201); return response.json(); }
-async function save(graph: StudioGraph): Promise<StudioGraph> { const response = await app.request(`/graphs/${graph.id}`, json("PUT", graph)); expect(response.status).toBe(200); return response.json(); }
-async function run(graph: StudioGraph, body?: unknown): Promise<StudioRun> { const response = await app.request(`/graphs/${graph.id}/run`, body ? json("POST", body) : { method: "POST" }); expect(response.status).toBe(201); return response.json(); }
+async function create(kind = "pipeline"): Promise<StudioGraph> { const response = await app.request("/graphs", json("POST", { kind, name: "Graph" })); expect(response.status).toBe(201); return response.json() as Promise<StudioGraph>; }
+async function save(graph: StudioGraph): Promise<StudioGraph> { const response = await app.request(`/graphs/${graph.id}`, json("PUT", graph)); expect(response.status).toBe(200); return response.json() as Promise<StudioGraph>; }
+async function run(graph: StudioGraph, body?: unknown): Promise<StudioRun> { const response = await app.request(`/graphs/${graph.id}/run`, body ? json("POST", body) : { method: "POST" }); expect(response.status).toBe(201); return response.json() as Promise<StudioRun>; }
 
 describe("Studio graph HTTP documents", () => {
  test("persists CRUD and TOML across reopening the database", async () => {
@@ -27,18 +27,18 @@ describe("Studio graph HTTP documents", () => {
   const updated = await app.request(`/graphs/${graph.id}`, { method: "PUT", headers: { "content-type": "text/toml; charset=utf-8" }, body: source.replace('name = "Graph"', 'name = "Persisted"') }); expect(updated.status).toBe(200);
   closeDb(); openDb({ path: join(directory, "deck.db") }); app = buildGraphsRouter();
   const loaded = await (await app.request(`/graphs/${graph.id}`)).json() as StudioGraph; expect(loaded.name).toBe("Persisted"); expect(loaded.settings).toEqual(graph.settings);
-  const list = await (await app.request("/graphs")).json() as { graphs: StudioGraph[] }; expect(list.graphs.filter(graph => graph.kind === "pipeline")).toHaveLength(1); expect(list.graphs.some(graph => graph.kind === "map")).toBe(true);
+  const list = await (await app.request("/graphs")).json() as { graphs: { kind: string }[] }; expect(list.graphs.filter(graph => graph.kind === "pipeline")).toHaveLength(1); expect(list.graphs.some(graph => graph.kind === "map")).toBe(true);
   expect((await app.request(`/graphs/${graph.id}`, { method: "DELETE" })).status).toBe(200); expect((await app.request(`/graphs/${graph.id}`)).status).toBe(404);
  });
  test("accepts complete browser documents without changing their ids or overwriting existing graphs", async () => {
   const graph = { ...await create(), id: "old-browser-graph", nodes: [node("start", "event.manual")] };
   expect((await app.request("/graphs", json("POST", graph))).status).toBe(201);
   expect((await app.request("/graphs", json("POST", { ...graph, name: "Overwrite" }))).status).toBe(409);
-  expect((await (await app.request(`/graphs/${graph.id}`)).json()).name).toBe("Graph");
+  expect(((await (await app.request(`/graphs/${graph.id}`)).json()) as StudioGraph).name).toBe("Graph");
  });
  test("refuses router policy persistence and flow duplication", async () => {
   for (const kind of ["router", "flow", "map"]) expect((await app.request("/graphs", json("POST", { kind, name: "Pinned" }))).status).toBe(400);
-  expect((await (await app.request("/graphs")).json()).graphs.map((graph: { kind: string }) => graph.kind)).toEqual(["map"]);
+  expect(((await (await app.request("/graphs")).json()) as { graphs: { kind: string }[] }).graphs.map(graph => graph.kind)).toEqual(["map"]);
  });
  test("mirrors routines and the map without inventing a successful last run", async () => {
   const routine = createRoutine({ name: "An existing flow", cron: "0 0 * * *", actionKind: "bash", actionBody: "exit 0", enabled: false });
@@ -58,7 +58,7 @@ describe("Studio graph HTTP documents", () => {
   const nodes = [node("a", "transform.pick"), node("b", "transform.pick")];
   expect((await app.request(`/graphs/${graph.id}`, json("PUT", { ...graph, nodes, edges: [edge("a", "output", "b"), edge("b", "output", "a")] }))).status).toBe(400);
   expect((await app.request(`/graphs/${graph.id}`, json("PUT", { ...graph, settings: { lost: null } }))).status).toBe(400);
-  expect((await (await app.request(`/graphs/${graph.id}`)).json()).nodes).toHaveLength(0);
+  expect(((await (await app.request(`/graphs/${graph.id}`)).json()) as StudioGraph).nodes).toHaveLength(0);
  });
  test("accepts full server TOML syntax and rejects immutable id edits", async () => {
   const graph = await create(); const source = graphToToml(graph).replace('description = ""', 'description = """\nMultiple lines\nare valid TOML\n"""');
@@ -72,7 +72,7 @@ describe("Studio graph runs", () => {
   const graph = await create(); graph.nodes = [node("start", "event.manual", { sample: "input" }), node("infer", "infer.request", { model: "@default" }), node("out", "out.create_card")]; graph.edges = [edge("start", "event", "infer"), edge("infer", "text", "out")]; await save(graph);
   const count = listTasks().length, result = await run(graph);
   expect(listTasks()).toHaveLength(count); expect(result.mode).toBe("preview"); expect(result.costUsd).toBeUndefined(); expect(result.nodes.find(node => node.nodeId === "infer")?.status).toBe("skipped"); expect(result.nodes.find(node => node.nodeId === "out")?.status).toBe("skipped");
-  expect((await (await app.request(`/graphs/${graph.id}`)).json()).lastRun).toEqual({ at: result.startedAt, ok: true });
+  expect(((await (await app.request(`/graphs/${graph.id}`)).json()) as StudioGraph).lastRun).toEqual({ at: result.startedAt, ok: true });
  });
  test("previews disconnected draft nodes as skipped without dispatching work", async () => {
   const graph = await create(); graph.nodes = [node("start", "event.manual"), node("out", "out.create_card", { name: "File a card" }), node("infer", "infer.request", { name: "Review" })]; await save(graph);

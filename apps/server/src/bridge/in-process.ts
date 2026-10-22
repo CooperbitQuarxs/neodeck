@@ -637,7 +637,7 @@ export class InProcessAgentBridge implements AgentBridge {
 			const rootId = session.getAgentId();
 			const model = session.model;
 			rows.push({
-				id: rootId, templateId: null, sessionId, threadId: sessionId, sessionFile: handle.sessionFile,
+				id: rootId ?? sessionId, templateId: null, sessionId, threadId: sessionId, sessionFile: handle.sessionFile,
 				parentInstanceId: null, label: session.sessionName || "Main",
 				status: turnInFlight || session.isStreaming ? "running" : "idle",
 				model: model ? `${model.provider}/${model.id}` : undefined,

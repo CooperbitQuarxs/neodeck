@@ -31,14 +31,14 @@ const json = (method: string, body: unknown) => ({ method, headers: { "content-t
 describe("agent templates", () => {
 	test("persists authored configuration across database reopen without seeding native definitions", async () => {
 		const { app } = boot();
-		expect((await (await app.request("/agents/templates")).json()).templates).toEqual([]);
+		expect(((await (await app.request("/agents/templates")).json()) as { templates: unknown[] }).templates).toEqual([]);
 		const body = { id: "research", name: "Research", model: "@default:high", preset: "advisor", tools: ["read"], systemPrompt: "Read the source.", source: { format: "agent-md", path: "/invented" } };
 		const created = await app.request("/agents/templates", json("POST", body));
 		expect(created.status).toBe(201);
 		expect(await created.json()).toMatchObject({ id: "research", source: { format: "deck" }, instanceCount: 0, model: "@default:high" });
 		expect((await app.request("/agents/templates", json("POST", body))).status).toBe(409);
 		closeDb(); openDb({ path: path.join(dir!, "deck.db") });
-		const saved = await (await app.request("/agents/templates/research")).json();
+		const saved = (await (await app.request("/agents/templates/research")).json()) as Record<string, unknown>;
 		expect(saved.tools).toEqual(["read"]); expect(saved.systemPrompt).toBe("Read the source.");
 		expect(saved.status).toBeUndefined();
 		expect((await app.request("/agents/templates/research", json("PUT", { name: "Renamed", tools: 5 }))).status).toBe(400);
@@ -52,14 +52,14 @@ describe("agent templates", () => {
 			expect((await app.request("/agents/templates", json("POST", body))).status).toBe(400);
 		}
 		expect((await app.request("/agents/templates", { method: "POST", body: "{" })).status).toBe(400);
-		expect((await (await app.request("/agents/templates")).json()).templates).toEqual([]);
+		expect(((await (await app.request("/agents/templates")).json()) as { templates: unknown[] }).templates).toEqual([]);
 	});
 });
 describe("native instances", () => {
 	test("lists all live roots but scopes thread actions to their owner", async () => {
 		const { app, actions } = boot();
-		expect((await (await app.request("/agents/instances")).json()).instances).toHaveLength(3);
-		expect((await (await app.request("/threads/thread-a/agents")).json()).agents.map((a: AgentInstance) => a.id)).toEqual(["root", "child"]);
+		expect(((await (await app.request("/agents/instances")).json()) as { instances: AgentInstance[] }).instances).toHaveLength(3);
+		expect(((await (await app.request("/threads/thread-a/agents")).json()) as { agents: AgentInstance[] }).agents.map(a => a.id)).toEqual(["root", "child"]);
 		expect((await app.request("/threads/thread-a/agents/foreign", { method: "DELETE" })).status).toBe(404);
 		expect(actions).toEqual([]);
 		expect((await app.request("/threads/thread-a/agents/child", { method: "DELETE" })).status).toBe(200);

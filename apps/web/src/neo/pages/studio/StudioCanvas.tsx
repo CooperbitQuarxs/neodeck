@@ -95,7 +95,7 @@ function Canvas({ graph, selected, onSelect, onChange, run }: CanvasProps) {
  }, [selected, flow]);
  useEffect(() => {
   if (!palette) return;
-  const outside = (event: MouseEvent) => { const target = event.target as Node; if (!paletteRoot.current?.contains(target) && !addButton.current?.contains(target)) closePalette(false); };
+  const outside = (event: MouseEvent) => { const target = event.target as globalThis.Node | null; if (!paletteRoot.current?.contains(target) && !addButton.current?.contains(target)) closePalette(false); };
   document.addEventListener("mousedown", outside); return () => document.removeEventListener("mousedown", outside);
  }, [palette]);
  function closePalette(restore = true): void { setPalette(false); setSearch(""); if (restore) addButton.current?.focus(); }
