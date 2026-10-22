@@ -118,11 +118,12 @@ test("issue preview makes no external writes, reservations or processing changes
 
 test("issue filing reuses provider receipts after restart without a second write", async () => {
 	const app = boot();
-	const transport = spyOn(githubIssueTransport, "execute").mockResolvedValue({
+	const transport = spyOn(githubIssueTransport, "execute").mockImplementation(async command => ({
 		exitCode: 0, stderr: "", stdout: `HTTP/2.0 201 Created\r\nContent-Type: application/json\r\n\r\n${JSON.stringify({
 			id: 17, number: 17, html_url: "https://github.com/owner/repo/issues/17", repository_url: "https://api.github.com/repos/owner/repo",
+			body: (JSON.parse(command.input!) as { body: string }).body,
 		})}`,
-	});
+	}));
 	const item = createInbox({ title: "Simulated provider only", kind: "ticket" });
 	const destination = { kind: "issue", repo: "owner/repo" };
 	const first = await app.request(`/inbox/${item.id}/file`, json({ destination }));
