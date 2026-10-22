@@ -173,7 +173,7 @@ export class TelegramBridgeStore {
 		this.db.query("INSERT INTO telegram_conversations VALUES (?, ?) ON CONFLICT(id) DO UPDATE SET value = excluded.value").run(value.id, JSON.stringify(value));
 	}
 
-	runtime(): { username?: string; polledAt?: string; error?: string } {
+	runtime(): { username?: string; polledAt?: string; error?: string; configFingerprint?: string } {
 		const row = this.db.query<{ value: string }, []>("SELECT value FROM telegram_runtime WHERE id = 1").get();
 		return row ? JSON.parse(row.value) : {};
 	}

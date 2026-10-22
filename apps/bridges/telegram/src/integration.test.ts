@@ -18,7 +18,7 @@ async function until(predicate: () => boolean | Promise<boolean>, timeout = 6000
 	while (!await predicate()) { if (Date.now() > end) throw new Error("Fixture condition timed out"); await Bun.sleep(20); }
 }
 
-test("pairing invitations are single-use, replaceable, cancellable and persisted without plaintext", () => {
+test("pairing invitations are single-use, replaceable and cancellable", () => {
 	const store = new TelegramBridgeStore(":memory:");
 	try {
 		const first = store.createPairing("fixture_bot");
@@ -51,7 +51,7 @@ test("setup, pairing, chat routing, streaming, capture and attention use only fa
 	const session = { id: "thread-a", path: "/fixture/thread-a.jsonl", cwd: "/fixture", title: "Release review", createdAt: "2026-01-01", updatedAt: "2026-01-02", messageCount: 2 };
 	const supervisor = { get: () => ({ name: "telegram", label: "Telegram", status: "running", crashCount: 0, requiredEnv: ["TELEGRAM_BOT_TOKEN"], missingEnv: [] }) } as unknown as BridgeSupervisor;
 	const router = new Hono().route("/api", buildTelegramRouter({ listSessions: async () => [session] } as unknown as AgentBridge, supervisor));
-	const fixture = Bun.serve({
+	const fixture = Bun.serve<undefined>({
 		hostname: "127.0.0.1", port: 0,
 		async fetch(request, server) {
 			const url = new URL(request.url);

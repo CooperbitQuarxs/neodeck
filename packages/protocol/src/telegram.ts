@@ -24,6 +24,7 @@ export interface TelegramPairing {
 export interface TelegramSetup {
 	bridge: BridgeInfo;
 	configured: boolean;
+	restartRequired: boolean;
 	allowedUsers: string;
 	allowedGroups: string;
 	requireMention: boolean;

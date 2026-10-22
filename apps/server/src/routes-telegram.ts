@@ -3,7 +3,7 @@ import * as path from "node:path";
 import type { TelegramSetup } from "@npi-deck/protocol";
 import { TelegramBridgeStore, nowIso } from "../../bridges/telegram/src/store.ts";
 import { TelegramApi } from "../../bridges/telegram/src/telegram.ts";
-import { parseAllowedChats } from "../../bridges/telegram/src/config.ts";
+import { parseAllowedChats, telegramConfigFingerprint } from "../../bridges/telegram/src/config.ts";
 import { appendEnvAudit, commitManagedEnvUpdates, getDataDir, MANAGED_ENV_KEYS_LOADED } from "./env-store.ts";
 import type { AgentBridge } from "./bridge/types.ts";
 import type { BridgeSupervisor } from "./bridge-supervisor.ts";
@@ -14,13 +14,19 @@ const locked = (key: string) => process.env[key] !== undefined && !MANAGED_ENV_K
 export function buildTelegramRouter(bridge: AgentBridge, supervisor: BridgeSupervisor): Hono {
 	const app = new Hono();
 	const store = () => new TelegramBridgeStore(process.env.TELEGRAM_BRIDGE_DB_PATH?.trim() || path.join(getDataDir(), "telegram-bridge.db"));
-	const setup = (db: TelegramBridgeStore): TelegramSetup => ({
-		bridge: supervisor.get("telegram"), configured: !!process.env.TELEGRAM_BOT_TOKEN?.trim(),
-		allowedUsers: process.env.TELEGRAM_ALLOWED_USERS ?? "", allowedGroups: process.env.TELEGRAM_GROUP_ALLOWED_CHATS ?? "",
-		requireMention: !["0", "false", "no", "off"].includes(process.env.TELEGRAM_REQUIRE_MENTION?.trim().toLowerCase() ?? ""),
-		lockedFields: Object.entries(fields).filter(([, key]) => locked(key)).map(([field]) => field),
-		pairedUsers: db.pairedUsers(), conversations: db.conversations(), runtime: db.runtime(),
-	});
+	const restartRequired = (db: TelegramBridgeStore) => supervisor.get("telegram").status === "running"
+		&& !!db.runtime().configFingerprint && db.runtime().configFingerprint !== telegramConfigFingerprint();
+	const setup = (db: TelegramBridgeStore): TelegramSetup => {
+		const { configFingerprint: _fingerprint, ...runtime } = db.runtime();
+		return {
+			bridge: supervisor.get("telegram"), configured: !!process.env.TELEGRAM_BOT_TOKEN?.trim(),
+			restartRequired: restartRequired(db),
+			allowedUsers: process.env.TELEGRAM_ALLOWED_USERS ?? "", allowedGroups: process.env.TELEGRAM_GROUP_ALLOWED_CHATS ?? "",
+			requireMention: !["0", "false", "no", "off"].includes(process.env.TELEGRAM_REQUIRE_MENTION?.trim().toLowerCase() ?? ""),
+			lockedFields: Object.entries(fields).filter(([, key]) => locked(key)).map(([field]) => field),
+			pairedUsers: db.pairedUsers(), conversations: db.conversations(), runtime,
+		};
+	};
 	app.onError((err, c) => c.json({ error: err.message.replaceAll(process.env.TELEGRAM_BOT_TOKEN || "\0", "[redacted]") }, 400));
 	app.get("/telegram", c => { const db = store(); try { return c.json(setup(db)); } finally { db.close(); } });
 	app.put("/telegram/config", async c => {
@@ -44,7 +50,7 @@ export function buildTelegramRouter(bridge: AgentBridge, supervisor: BridgeSuper
 		await appendEnvAudit("telegram-settings", Object.keys(updates));
 		const db = store();
 		try {
-			if (updates.TELEGRAM_BOT_TOKEN !== undefined) { db.cancelPairing(); db.setRuntime({}); }
+			if (updates.TELEGRAM_BOT_TOKEN !== undefined) { db.cancelPairing(); db.setRuntime({ ...db.runtime(), username: undefined }); }
 			return c.json(setup(db));
 		} finally { db.close(); }
 	});
@@ -58,7 +64,10 @@ export function buildTelegramRouter(bridge: AgentBridge, supervisor: BridgeSuper
 	app.post("/telegram/pairing", c => {
 		if (!process.env.TELEGRAM_BOT_TOKEN?.trim()) throw new Error("Save a bot token first.");
 		const db = store();
-		try { return c.json(db.createPairing(db.runtime().username)); } finally { db.close(); }
+		try {
+			if (restartRequired(db)) return c.json({ error: "Restart the bridge to apply the saved connection before pairing." }, 409);
+			return c.json(db.createPairing(db.runtime().username));
+		} finally { db.close(); }
 	});
 	app.delete("/telegram/pairing", c => { const db = store(); try { db.cancelPairing(); return c.json({ ok: true }); } finally { db.close(); } });
 	app.delete("/telegram/users/:id", c => { const db = store(); try { db.unpair(c.req.param("id")); return c.json(setup(db)); } finally { db.close(); } });

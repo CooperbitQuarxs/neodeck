@@ -1,4 +1,5 @@
 import * as path from "node:path";
+import { createHash } from "node:crypto";
 
 import { loadConfig, parseInt10 } from "../../../server/src/config.ts";
 import { getDataDir, loadManagedEnvIntoProcess } from "../../../server/src/env-store.ts";
@@ -20,6 +21,7 @@ export interface TelegramBridgeConfig {
 	pollTimeoutSeconds: number;
 	editIntervalMs: number;
 	apiOrigin?: string;
+	configFingerprint?: string;
 }
 
 export function loadTelegramBridgeConfig(): TelegramBridgeConfig {
@@ -51,7 +53,13 @@ export function loadTelegramBridgeConfig(): TelegramBridgeConfig {
 		pollTimeoutSeconds: clamp(parseInt10(process.env.TELEGRAM_POLL_TIMEOUT_SECONDS, 30), 1, 50),
 		editIntervalMs: clamp(parseInt10(process.env.TELEGRAM_EDIT_INTERVAL_MS, 700), 250, 5000),
 		apiOrigin: process.env.TELEGRAM_API_ORIGIN,
+		configFingerprint: telegramConfigFingerprint(),
 	};
+}
+
+export function telegramConfigFingerprint(): string {
+	const keys = ["TELEGRAM_BOT_TOKEN", "TELEGRAM_ALLOWED_USERS", "TELEGRAM_GROUP_ALLOWED_CHATS", "TELEGRAM_REQUIRE_MENTION"];
+	return createHash("sha256").update(JSON.stringify(keys.map(key => process.env[key] ?? ""))).digest("hex");
 }
 
 function parseAllowedUsers(raw: string | undefined): Set<string> {

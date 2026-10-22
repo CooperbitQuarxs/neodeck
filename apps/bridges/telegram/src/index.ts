@@ -20,7 +20,6 @@ export class TelegramBridge {
 	private stopping = false;
 	private bot: BotIdentity | undefined;
 	private stopAttention?: () => void;
-	private readonly notifications = new Set<string>();
 	private attentionDelivery: Promise<void> = Promise.resolve();
 
 	constructor(private readonly config: TelegramBridgeConfig, services?: { telegram?: TelegramApi; deck?: DeckClient; store?: TelegramBridgeStore; identity?: BotIdentity }) {
@@ -32,7 +31,7 @@ export class TelegramBridge {
 
 	async run(): Promise<void> {
 		this.bot = await this.telegram.getMe();
-		this.store.setRuntime({ username: this.bot.username });
+		this.store.setRuntime({ username: this.bot.username, configFingerprint: this.config.configFingerprint });
 		this.stopAttention = this.deck.watchAttention(
 			() => this.store.conversations().filter(row => row.notify && this.canNotify(row)).flatMap(row => row.sessionId ? [row.sessionId] : []),
 			frame => {
@@ -48,7 +47,7 @@ export class TelegramBridge {
 		while (!this.stopping) {
 			try {
 				const updates = await this.telegram.getUpdates(this.offset, this.config.pollTimeoutSeconds);
-				this.store.setRuntime({ username: this.bot.username, polledAt: nowIso() });
+				this.store.setRuntime({ username: this.bot.username, polledAt: nowIso(), configFingerprint: this.config.configFingerprint });
 				for (const update of updates) void this.dispatch(update);
 			} catch (err) {
 				if (!this.stopping) {
@@ -159,8 +158,7 @@ export class TelegramBridge {
 		for (const row of this.store.conversations()) {
 			if (!row.notify || row.sessionId !== frame.sessionId || !this.canNotify(row)) continue;
 			const id = `${row.id}:${frame.sessionId}:${eventId}`;
-			if (this.notifications.has(id) || this.store.notificationSent(id)) continue;
-			this.notifications.add(id);
+			if (this.store.notificationSent(id)) continue;
 			try {
 				const title = frame.type === "plan_proposed" ? "A plan is ready for review." : frame.title || "Your agent has a question.";
 				await this.telegram.sendMessage(row.chatId, `Needs you: ${title.slice(0, 2500)}\nOpen this thread in NeoDeck to respond.\nThread ${frame.sessionId}`, undefined,
@@ -169,8 +167,8 @@ export class TelegramBridge {
 				this.store.saveConversation({ ...this.store.conversation(row.id)!, lastNotificationAt: nowIso(), lastError: undefined });
 			} catch (err) {
 				this.store.saveConversation({ ...this.store.conversation(row.id)!, lastError: this.safeError(err) });
-				throw err;
-			} finally { this.notifications.delete(id); }
+				console.error("telegram attention notification failed", this.safeError(err));
+			}
 		}
 	}
 
