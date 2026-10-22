@@ -234,6 +234,7 @@ export interface SessionUi {
 	sessionFile?: string;
 	sessionName?: string;
 	model?: ModelRef;
+	modelSelector?: string;
 	thinkingLevel?: string;
 	/** Current SDK configuration warnings, updated without restarting the session. */
 	configWarnings?: string[];

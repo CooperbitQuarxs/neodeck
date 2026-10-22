@@ -9,15 +9,16 @@ interface Props {
 	children: string;
 	className?: string;
 	streaming?: boolean;
+	relativeLinks?: "unavailable";
 }
 
-export const Markdown = memo(function Markdown({ children, className, streaming }: Props) {
+export const Markdown = memo(function Markdown({ children, className, streaming, relativeLinks }: Props) {
 	return (
 		<div className={cn("markdown text-sm", streaming && "cursor-blink", className)}>
 			<ReactMarkdown
 				remarkPlugins={[remarkGfm]}
 				rehypePlugins={[[rehypeHighlight, { detect: true, ignoreMissing: true }]]}
-				components={{ pre: CopyablePre, a: ExternalAnchor }}
+				components={{ pre: CopyablePre, a: relativeLinks === "unavailable" ? DocumentAnchor : ExternalAnchor }}
 			>
 				{children}
 			</ReactMarkdown>
@@ -41,6 +42,14 @@ function CopyablePre({ children, ...rest }: HTMLAttributes<HTMLPreElement> & { c
 			<CopyButton />
 		</div>
 	);
+}
+
+function DocumentAnchor(props: AnchorHTMLAttributes<HTMLAnchorElement>) {
+	const href = props.href ?? "";
+	if (!/^(https?:|mailto:|#)/i.test(href)) {
+		return <span className="underline decoration-dotted" title={`Local reference: ${href}. Open this file in the skill's source directory; browser file reading is unavailable.`}>{props.children} <span className="text-muted-foreground text-xs">[local file]</span></span>;
+	}
+	return <ExternalAnchor {...props} />;
 }
 
 /**

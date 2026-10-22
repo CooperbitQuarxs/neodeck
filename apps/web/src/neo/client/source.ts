@@ -26,6 +26,7 @@ export type Domain =
 	| "judge"
 	| "studio"
 	| "studioGraphs"
+	| "studioRouters"
 	| "knowledge"
 	| "knowledgeHistory"
 	| "skills"
@@ -45,8 +46,8 @@ export const SOURCES: Readonly<Record<Domain, Source>> = {
 	classifier: "preview",
 	/** Cards, columns, moves, assignment: the deck's tasks API. */
 	board: "live",
-	/** The evidence timeline, origin and flow chip on a card. */
-	boardEvidence: "preview",
+	/** Durable card receipts, frontmatter provenance and linked work. */
+	boardEvidence: "live",
 	/** Sessions and transcripts: the deck's websocket store. */
 	threads: "live",
 	/** Equal-participant creation and broadcast wait for NeoPi's hierarchy design. */
@@ -66,13 +67,16 @@ export const SOURCES: Readonly<Record<Domain, Source>> = {
 	judge: "preview",
 	/** Flows are routines: `/api/routines` and the native graph. */
 	studio: "live",
-	/** Pipelines, routers, classifiers, board flows. */
-	studioGraphs: "preview",
+	/** Authored pipelines, classifiers and board flows: `/api/graphs`. */
+	studioGraphs: "live",
+	/** Router designs stay browser-local until NeoProxy owns their save API. */
+	studioRouters: "preview",
 	knowledge: "live",
 	knowledgeHistory: "live",
 	skills: "live",
 	skillsUsage: "preview",
-	github: "preview",
+	/** Read-only GitHub CLI queries; GitHub App installation remains preview. */
+	github: "live",
 	usage: "preview",
 	providers: "preview",
 	/** Engine, workspaces, notifications, appearance: existing settings endpoints. */

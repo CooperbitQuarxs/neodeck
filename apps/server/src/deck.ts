@@ -292,6 +292,9 @@ export async function startDeck(opts: StartDeckOptions = {}): Promise<DeckHandle
 
 			if (url.pathname.startsWith("/api/")) {
 				const endpoint = url.pathname.slice(4) || "/";
+				// GitHub refreshes use four workers and a 45s overall deadline,
+				// so retain a finite request ceiling above that deadline.
+				if (endpoint === "/github/snapshot" && req.method === "GET") srv.timeout(req, 60);
 				if (endpoint === "/backend" && req.method === "GET") {
 					try { return Response.json(status()); } catch (err) { return Response.json({ error: String(err) }, { status: 500 }); }
 				}

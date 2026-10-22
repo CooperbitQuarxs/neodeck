@@ -1,31 +1,38 @@
-import { Trash2, SlidersHorizontal, Unplug } from "lucide-react";
-import { Check, NeoBadge, NeoButton, NeoSelect, SectionLabel } from "@/components/neo";
+import { Trash2, SlidersHorizontal, Workflow } from "lucide-react";
+import { Check, NeoButton, NeoSelect, SectionLabel } from "@/components/neo";
 import { ModelPicker } from "../../components/ModelPicker";
 import type { StudioGraph, StudioNode } from "../../client/studio";
-import { KIND_LABELS, nodePorts, nodeType, type Field } from "./vocab";
+import { KIND_LABELS, nodePorts, nodeType, studioNodeExecution, type Field } from "./vocab";
 import { nodeTitle } from "./StudioCanvas";
+import { StudioPanel } from "./StudioPanel";
 
-export function NodeInspector({ graph, node, onChange, onDelete, onDeleteGraph }: { graph: StudioGraph; node?: StudioNode; onChange: (graph: StudioGraph) => void; onDelete: (id: string) => void; onDeleteGraph: () => void }) {
+const SUPPORT = { local: "Runs inside the deck when executed.", action: "Acts outside the canvas when executed.", preview: "No executor yet: preview runs skip it and Execute refuses the graph." } as const;
+
+/** Graph settings: what the whole graph is called, what it listens to, where it is kept. */
+export function GraphSettings({ graph, stored, onChange, onDeleteGraph, onClose }: { graph: StudioGraph; stored: string; onChange: (graph: StudioGraph) => void; onDeleteGraph: () => void; onClose: () => void }) {
  function settingChanged(key: string, value: unknown): void {
   const type = key === "virtualModel" ? "router.entry" : key === "message" ? "router.terminal" : key === "question" ? "cls.ask" : undefined;
   onChange({ ...graph, settings: { ...graph.settings, [key]: value }, nodes: type ? graph.nodes.map(item => item.type === type ? { ...item, config: { ...item.config, [key]: value } } : item) : graph.nodes });
  }
- if (!node) return <div className="neo-studio-inspector"><header className="neo-studio-inspector-head"><SlidersHorizontal size={14} /><h2>Graph settings</h2></header><div className="neo-studio-inspector-body">
- <NeoBadge>{KIND_LABELS[graph.kind]}</NeoBadge>
- <label className="neo-field">Name<input className="neo-input" value={graph.name} onChange={e => onChange({ ...graph, name: e.target.value })} /></label>
- <label className="neo-field">Description<textarea className="neo-input" rows={3} value={graph.description} onChange={e => onChange({ ...graph, description: e.target.value })} /></label>
- {settingsFields(graph).map(field => <ConfigField key={field.key} field={field} value={graph.settings[field.key]} onChange={value => settingChanged(field.key, value)} />)}
- <div className="neo-studio-inspector-hint"><Unplug size={15} /><p>Select a node to edit its fields and inspect its ports. Drag between handles to connect nodes.</p></div>
- <SectionLabel>Connections</SectionLabel><p className="neo-studio-help">Ports connect when their types match. An any port accepts every type.</p>
- <dl className="neo-studio-facts"><div><dt>Nodes</dt><dd>{graph.nodes.length}</dd></div><div><dt>Connections</dt><dd>{graph.edges.length}</dd></div><div><dt>Execution</dt><dd>Preview</dd></div></dl>
- </div><footer><NeoButton variant="ghost" className="neo-studio-danger" onClick={onDeleteGraph}><Trash2 size={13} />Delete graph</NeoButton></footer></div>;
+ return <StudioPanel title="Graph settings" subtitle={KIND_LABELS[graph.kind]} icon={<SlidersHorizontal size={14} />} onClose={onClose} footer={<NeoButton variant="ghost" className="neo-studio-danger" onClick={onDeleteGraph}><Trash2 size={13} />Delete graph</NeoButton>}>
+  <label className="neo-field">Name<input className="neo-input" value={graph.name} onChange={e => onChange({ ...graph, name: e.target.value })} /></label>
+  <label className="neo-field">Description<textarea className="neo-input" rows={3} value={graph.description} onChange={e => onChange({ ...graph, description: e.target.value })} /></label>
+  {settingsFields(graph).map(field => <ConfigField key={field.key} field={field} value={graph.settings[field.key]} onChange={value => settingChanged(field.key, value)} />)}
+  <dl className="neo-studio-facts"><div><dt>Nodes</dt><dd>{graph.nodes.length}</dd></div><div><dt>Connections</dt><dd>{graph.edges.length}</dd></div><div><dt>Kept in</dt><dd>{stored}</dd></div></dl>
+  <SectionLabel>On the canvas</SectionLabel>
+  <ul className="neo-studio-keys"><li><kbd>Add node</kbd> or drag from a port to build</li><li><kbd>Delete</kbd> removes the selected node or connection</li><li><kbd>Esc</kbd> closes this panel</li><li>Ports connect when their types match; an any port takes every type</li></ul>
+ </StudioPanel>;
+}
+
+export function NodeInspector({ graph, node, onChange, onDelete, onClose }: { graph: StudioGraph; node: StudioNode; onChange: (graph: StudioGraph) => void; onDelete: (id: string) => void; onClose: () => void }) {
  const type = nodeType(node.type); const ports = nodePorts(node);
- function update(key: string, value: unknown): void { onChange({ ...graph, nodes: graph.nodes.map(n => n.id === node!.id ? { ...n, config: { ...n.config, [key]: value } } : n) }); }
- return <div className="neo-studio-inspector"><header className="neo-studio-inspector-head"><h2>{nodeTitle(node)}</h2><NeoBadge>{type?.label ?? node.type}</NeoBadge></header><div className="neo-studio-inspector-body">
- <label className="neo-field">Node title<input className="neo-input" value={String(node.config.name ?? "")} onChange={e => update("name", e.target.value)} /></label>
- {type?.fields.map(field => <ConfigField key={field.key} field={field} value={node.config[field.key]} onChange={value => update(field.key, value)} />)}
- <section className="neo-studio-ports"><SectionLabel>Ports</SectionLabel>{(["inputs", "outputs"] as const).map(direction => <div key={direction}><h3>{direction === "inputs" ? "Inputs" : "Outputs"}</h3>{ports[direction].length === 0 ? <p className="neo-studio-help">None</p> : ports[direction].map(port => <div className="neo-studio-port" key={port.id}><span><i />{port.label}</span><code>{port.type}</code></div>)}</div>)}</section>
- </div><footer><NeoButton variant="ghost" className="neo-studio-danger" onClick={() => onDelete(node.id)}><Trash2 size={13} />Delete node</NeoButton></footer></div>;
+ function update(key: string, value: unknown): void { onChange({ ...graph, nodes: graph.nodes.map(n => n.id === node.id ? { ...n, config: { ...n.config, [key]: value } } : n) }); }
+ return <StudioPanel title={nodeTitle(node)} subtitle={type ? `${type.label}. ${type.blurb}` : node.type} icon={<Workflow size={14} />} onClose={onClose} footer={<NeoButton variant="ghost" className="neo-studio-danger" onClick={() => onDelete(node.id)} title="Delete node (Delete key on the canvas)"><Trash2 size={13} />Delete node</NeoButton>}>
+  <p className="neo-studio-support" data-support={studioNodeExecution(node.type)}><i />{SUPPORT[studioNodeExecution(node.type)]}</p>
+  <label className="neo-field">Node title<input className="neo-input" value={String(node.config.name ?? "")} onChange={e => update("name", e.target.value)} /></label>
+  {type?.fields.map(field => <ConfigField key={field.key} field={field} value={node.config[field.key]} onChange={value => update(field.key, value)} />)}
+  <section className="neo-studio-ports"><SectionLabel>Ports</SectionLabel>{(["inputs", "outputs"] as const).map(direction => <div key={direction}><h3>{direction === "inputs" ? "Inputs" : "Outputs"}</h3>{ports[direction].length === 0 ? <p className="neo-studio-help">None</p> : ports[direction].map(port => <div className="neo-studio-port" key={port.id}><span><i />{port.label}</span><code>{port.type}</code></div>)}</div>)}</section>
+ </StudioPanel>;
 }
 function settingsFields(graph: StudioGraph): Field[] {
  switch (graph.kind) {

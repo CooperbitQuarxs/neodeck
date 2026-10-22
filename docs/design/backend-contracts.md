@@ -57,24 +57,34 @@ The native instance is the unit of identity. Main is an ordinary depth-zero inst
 
 ## 6. Board evidence (`boardEvidence`)
 
-Cards and columns are live (`/api/tasks`, `/api/task-states`). The contract adds what a card knows about itself:
+Cards, columns and evidence are live (`/api/tasks`, `/api/task-states`).
 
-- `GET /api/tasks/:id/events` → `{ events: BoardEvent[] }`; `BoardEvent { id, at, actor, text, tone? }` (captured, assigned, run started/finished, PR opened, review, merged).
-- `GET /api/tasks/:id/links` → `{ issue?: { repo, number, url }, pr?: { repo, number, url }, thread?: { id }, flow?: { id, name } }`.
-- Card properties the deck reads from the card's front matter: `origin: inbox|github|thread|routine|manual`, `origin_ref`, `holder: { kind: "person", handle } | { kind: "agent", id }`.
-- `POST /api/tasks/:id/assign` accepts `{ model? }` (today it takes no body).
+- `GET /api/tasks/:id/events` → `{ events: BoardEvent[] }`; `BoardEvent { id, at, actor, text, tone? }`. Notes and card edits/moves are durable SQLite receipts. Assignment, start and result receipts come from every persisted run, including previous attempts. Older cards have a creation receipt; historical moves before this journal existed are not invented.
+- `POST /api/tasks/:id/events` `{ text, actor? }` appends a note or agent handoff, then notifies open boards. Text is required and capped at 20,000 characters. It does not trigger inference or change the card's state.
+- `GET /api/tasks/:id/links` → `{ issue?: { repo, number, url }, pr?: { repo, number, url }, thread?: { id }, flow?: { id, name } }`. Frontmatter `links` is authoritative for explicit references. GitHub URLs in instructions, notes and run output supply additional evidence. A URL is not proof of checks, review or merge.
+- Card properties remain in frontmatter: `origin: inbox|github|thread|routine|manual`, `origin_ref`, `holder: { kind: "person", handle, name?, hue? } | { kind: "agent", id, name?, model?, hue? }`, `links`, and optional `parent` pointing to a task id or `T-N`. Related cards describe decomposition, not execution dependencies. They do not silently gate or launch one another.
+- Task responses include `evidence?: { text, at }`, the latest stored activity. The UI uses persisted run identities, not a fictional worker roster.
+- `POST /api/tasks/:id/assign` accepts `{ model? }`. A concrete selector or `@role:effort` overrides only this run; omission inherits the card/deck configuration. The selector is carried through to NeoPi, without resolving policy in the browser or rewriting YAML.
+- Board is an agent-managed content queue. Inbox is its capture door; people inspect assignments, linked work and receipts. Direct card creation, manual state changes and column editing remain explicit secondary controls. Automatic decomposition and native template spawning are not claimed.
+
+Logic reference: [Nous Research Hermes Agent](https://github.com/NousResearch/hermes-agent), MIT, especially its durable card/run/event separation and profile-based orchestration. No Hermes source code is copied into this implementation.
 
 ## 7. Studio graphs (`studioGraphs`)
 
-Flows are today's routines (`/api/routines`). The other kinds share one document:
+Flows remain routines under `/api/routines`; the knowledge map is virtual. The
+graph backend persists pipelines, classifiers and board flows as canonical TOML
+in the deck database. The Studio client combines those lists without seeding the
+server with example graphs. Existing browser-authored documents import once,
+preserving their ids and leaving the browser copy intact.
 
-- `GET /api/graphs` → `{ graphs: GraphSummary[] }` for kinds `pipeline | router | classifier | boardflow` (+ `flow` mirrored from routines, `map` virtual).
-- `GET/PUT/DELETE /api/graphs/:id` → `StudioGraph { id, kind, name, description, enabled, nodes: { id, type, config, position }[], edges: { id, from: { node, port }, to: { node, port } }[], settings, lastRun?, updatedAt }`; `POST /api/graphs` `{ kind, name }`.
-- `GET /api/graphs/node-types?kind=` → the node vocabulary (`apps/web/src/neo/pages/studio/vocab.ts` is the reference data: types, ports with types, fields with controls).
-- `POST /api/graphs/:id/run` → `StudioRun`; `GET /api/graphs/:id/runs` → `{ runs: StudioRun[] }`; `StudioRun { id, graphId, startedAt, endedAt?, ok, trigger, costUsd?, nodes: { nodeId, startedAt, endedAt?, status, note? }[] }`.
-- A router graph is the visual form of a NeoProxy virtual model's chain; saving one writes the virtual model (`PUT /neoproxy/api/virtual-models/:name`).
-- Pipeline, router, classifier and board-flow previews save documents in the browser's local storage; preview runs stay in memory and never send inference requests or output actions.
-- Source is TOML (`text/toml`) on `GET /api/graphs/:id?format=toml` and `PUT` with the same type; flows stay YAML until routines migrate.
+- `GET /api/graphs` → `{ graphs: GraphSummary[] }` for persisted `pipeline | classifier | boardflow` documents, mirrored `flow` summaries and the virtual knowledge `map`. Router previews are combined by the browser adapter.
+- `GET/PUT/DELETE /api/graphs/:id` → `StudioGraph { id, kind, name, description, enabled, nodes: { id, type, config, position }[], edges: { id, from: { node, port }, to: { node, port } }[], settings, lastRun?, updatedAt }`; `POST /api/graphs` accepts `{ kind, name }` or a complete browser-authored document. An existing id is never overwritten by POST. Drafts may be empty; connections must have compatible ports and cannot form cycles.
+- `GET /api/graphs/node-types?kind=` → `{ nodeTypes: NodeType[] }`. The server and canvas share `packages/protocol/src/studio-vocab.ts`, exposed to the canvas by `apps/web/src/neo/pages/studio/vocab.ts`. Entries include typed ports, editable fields and `execution: "local" | "action" | "preview"`.
+- `POST /api/graphs/:id/run` accepts `{ mode?: "preview" | "execute", input?: JSON }`. Missing mode always means preview. `GET /api/graphs/:id/runs` returns `{ runs: StudioRun[] }`, newest first, up to 100. `StudioRun { id, graphId, startedAt, endedAt?, ok, trigger, mode, costUsd?, nodes: { nodeId, startedAt, endedAt?, status, note?, output? }[] }`. Definition snapshots and node results survive edits and server restarts.
+- Preview runs evaluate local text/JSON transforms and deterministic branches, then skip inference and output actions. Skipped work does not activate downstream branches. Timings are measured, not simulated; absent cost stays absent. Explicit execution supports local nodes, card creation/movement, inbox completion, notifications and GitHub issue filing through the existing action adapters. A graph containing any unsupported node is rejected before any action is sent.
+- Agent lifecycle, inference, approvals, retry plans and the remaining output adapters are visibly planned nodes, not fake executions. Enabling a document stores its intent but never subscribes it to events or starts automatic work. Automatic triggers remain the routine runner's responsibility. Conditions use the bounded routine sandbox and must return a literal boolean using `context.input`; board gates require literal boolean evidence on the supplied card.
+- Routers use the separate `studioRouters: preview` adapter and stay browser-local. They are editors of NeoProxy-owned virtual models, never a second routing-policy store. NeoProxy's save API is not available in this pin. Its eventual adapter must preserve opaque ids, expected-value writes and layout metadata, and convert percentages to fractions once. Passthrough terminals name their target model.
+- Source is TOML with `text/toml` on `GET /api/graphs/:id?format=toml` and `PUT` with the same type. Server source writes accept full TOML syntax; the browser editor reads the canonical subset it writes. Null is not a TOML value and is rejected rather than silently discarded. Legacy flows stay YAML and cannot be previewed safely; native V2 routines use `?dryRun=true`. Running a legacy flow requires explicit execution.
 
 ## 8. Dictation (`dictation`)
 
@@ -89,17 +99,31 @@ Notes are read live through `/api/kb/*`. Humans request edits through a project 
 - A directory outside Git returns `available: false` with no entries; an uncommitted note in a Git repository returns `available: true` with no entries. Missing, excluded and escaping paths return 404. Git failures after repository discovery return 500 rather than fabricated history.
 - Agent activity events remain unavailable. Git history is labeled separately and does not imply a thread link or capture receipt.
 
-## 10. Skills usage
+## 10. Skills, commands, extensions and usage
+
+Skills and marketplace operations are live. `GET /api/slash-commands` lists NeoPi built-ins, Deck commands and saved user/project prompts. `GET /api/skills/extensions?cwd=` lists discoverable code modules and manifest bundles through NeoPi's capability loader without executing extension code. It returns `{ extensions: ExtensionSummary[], warnings: string[] }`; the protocol owns the row shape. Discovery does not claim an extension is active in a particular session.
+
+The skill discovery source `agents` means shared `.agent/skills` and `.agents/skills` directories. It does not mean running agents, agent templates or inference providers. Marketplace plugins may separately bundle agent templates.
+
+Usage remains an explicitly enabled preview, hidden by default:
 
 - `GET /api/skills/usage` → `{ [skillId]: { lastUsedAt, uses7d } }`.
+- NeoPi must supply persisted per-skill invocation events with resolved path identity and coverage before this can become live. An available skill or arbitrary file read does not prove invocation. Unknown history must remain unknown.
 
 ## 11. GitHub (`github`)
 
-- `GET /api/github/repos` → `{ repos: Repo[] }`; `Repo { id, name, defaultBranch, integrationBranch, openIssues, openPrs, lastNightly }`.
-- `GET /api/github/wheel?repo=` → `{ items: WheelItem[] }` (stages `ready → implementing → pr → review → merged → nightly`); `POST /api/github/wheel/:id/advance` `{ to, model? }`.
-- `GET /api/github/issues?repo=&state=` → `{ issues }`; `GET /api/github/prs?repo=` → `{ prs }` with checks and review state; `GET /api/github/items/:id` → the item with its timeline and comments.
-- `POST /api/github/issues` `{ repo, title, body, labels, card?: boolean }` → `{ number, url, cardId? }`.
-- `POST /api/integrations/github` installs the app; `GET` reports the connection.
+The GitHub page is live and read-only through the server's authenticated
+`gh api graphql`. Queries name the configured repository explicitly, never a
+fork's upstream. No GitHub mutations are exposed by this adapter.
+
+- `GET /api/github/repos` → `{ repos: string[] }`, tracked `owner/repo` addresses.
+- `PUT /api/github/repos` `{ repos: string[] }` saves only the local watchlist in `$NPI_DECK_HOME/github-repos.json`, up to 20 repositories. An empty list tracks nothing. Before the first save, `NPI_DECK_GITHUB_REPOS` supplies comma/space-separated addresses, or the server discovers GitHub `origin` remotes from configured workspaces.
+- `GET /api/github/snapshot` → `{ repos, issues, pulls, wheel, viewer, configuredRepos, errors, fetchedAt, limit: 100 }`. One query per repository retrieves the 100 most recently updated issues and PRs, repository-wide open counts, PR checks/review decisions and the last 20 conversation comments. `viewer` is the server CLI's GitHub login and supports the PR author filter, not Deck account identity. Inline reviews and full history stay on GitHub. Results are cached for 30 seconds with single-flight refreshes. Four workers share a 45-second deadline; each CLI call also has a 30-second limit. Timed-out or failed repositories report errors without hiding successful repositories. The HTTP request has a finite 60-second ceiling.
+- Ready follows `ready`, `agent: pending` or `state: ready`; Implementing follows `implementing`, `agent: started`, `human: started` or `state: implementing`. Open PRs enter PR open, then Review when GitHub reports a review decision or review label. Merged is GitHub's merged state. Nightly requires an explicit `nightly`, `state: nightly` or `status: nightly` label, never an inferred deployment. Wheel timestamps are last updates, not claimed transition history.
+
+The GitHub App installation in Settings remains preview. App-backed writes,
+issue filing, wheel advancement, agent assignment and full event timelines
+are not implemented by the CLI adapter.
 
 ## 12. Usage and providers (`usage`, `providers`)
 
@@ -109,3 +133,10 @@ Notes are read live through `/api/kb/*`. Humans request edits through a project 
 ## 13. Settings
 
 Env (`/api/settings/env`), NeoPi config (`/api/npi-config`), models (`/api/models-config`), MCP (`/api/mcp-servers`), bridges (`/api/bridges`), workspaces and notifications are live. The contract adds accounts (§1), dictation (§8), the GitHub app (§11), and a deck-config read: `GET /api/state` already serves it.
+
+## 14. Native model selection
+
+- `GET /api/models?sessionId=&cwd=` reads the live catalogue within the session or workspace.
+- `GET /api/models/selector?q=&sessionId=&cwd=` delegates search and ranking to NeoPi's native `query_model_selector` implementation. Returns `{ items, roles, error }`, preserving each opaque `selector`, `resolvedSelector` and nullable facts. A backend without the optional native selector feature returns `501`; the GUI can browse its live catalogue but does not emulate search.
+- `PATCH /api/sessions/:id` accepts `{ selector: string }`. Native resolution retains `@role` policy and effort suffixes, and snapshots expose `modelSelector` separately from the resolved concrete `model`. Existing `{ model: { provider, id } }` clients remain supported.
+- Provider visibility is Deck-local picker state, not NeoProxy exposure or an inference permission. Hidden providers are omitted for every account, including admins, and cannot return through search results or old recent selections.
