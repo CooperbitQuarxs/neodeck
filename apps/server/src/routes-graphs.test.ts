@@ -74,6 +74,25 @@ describe("Studio graph runs", () => {
   expect(listTasks()).toHaveLength(count); expect(result.mode).toBe("preview"); expect(result.costUsd).toBeUndefined(); expect(result.nodes.find(node => node.nodeId === "infer")?.status).toBe("skipped"); expect(result.nodes.find(node => node.nodeId === "out")?.status).toBe("skipped");
   expect((await (await app.request(`/graphs/${graph.id}`)).json()).lastRun).toEqual({ at: result.startedAt, ok: true });
  });
+ test("previews disconnected draft nodes as skipped without dispatching work", async () => {
+  const graph = await create(); graph.nodes = [node("start", "event.manual"), node("out", "out.create_card", { name: "File a card" }), node("infer", "infer.request", { name: "Review" })]; await save(graph);
+  const count = listTasks().length, result = await run(graph);
+  expect(result.ok).toBe(true); expect(result.nodes).toHaveLength(3); expect(result.nodes.find(node => node.nodeId === "start")?.status).toBe("ok");
+  for (const id of ["out", "infer"]) { const record = result.nodes.find(node => node.nodeId === id); expect(record?.status).toBe("skipped"); expect(record?.note).toBeDefined(); expect(record?.output).toBeUndefined(); }
+  expect(listTasks()).toHaveLength(count);
+ });
+ test("previews a source-free draft without treating an unconnected action as a trigger", async () => {
+  const graph = await create(); graph.nodes = [node("out", "out.create_card")]; await save(graph);
+  const count = listTasks().length, result = await run(graph);
+  expect(result.ok).toBe(true); expect(result.nodes[0]?.status).toBe("skipped"); expect(listTasks()).toHaveLength(count);
+ });
+ test("returns node-addressed execution problems before connected actions run", async () => {
+  const graph = await create(); graph.nodes = [node("start", "event.manual"), node("out", "out.create_card"), node("loose", "transform.template", { name: "Detached formatter" })]; graph.edges = [edge("start", "event", "out")]; await save(graph);
+  const count = listTasks().length;
+  const response = await app.request(`/graphs/${graph.id}/run`, json("POST", { mode: "execute", input: { title: "Must not be filed" } }));
+  expect(response.status).toBe(400); const body = await response.json() as { problems: { nodeId: string; message: string }[] };
+  expect(body.problems.map(problem => problem.nodeId)).toEqual(["loose"]); expect(body.problems[0]?.message).toContain("Detached formatter"); expect(listTasks()).toHaveLength(count);
+ });
  test("executes real local transforms and respects absent branches", async () => {
   const graph = await create(); graph.nodes = [node("start", "event.manual"), node("pick", "route.switch", { labels: "yes,no", path: "decision" }), node("yes", "transform.template", { template: "Approved {{input.name}}" }), node("no", "transform.template", { template: "Rejected" })]; graph.edges = [edge("start", "event", "pick"), edge("pick", "yes", "yes"), edge("pick", "no", "no")]; await save(graph);
   const result = await run(graph, { input: { decision: "yes", name: "Captain" } });

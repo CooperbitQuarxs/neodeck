@@ -9,6 +9,7 @@ All notable changes to NPI deck (a fork of bjb2/omp-deck; entries before the for
 
 - Board is now an evidence-first view of agent-managed work, with Inbox capture, attention filtering, related cards, persisted activity notes, all assignment attempts and real linked evidence. Per-assignment model/role choices reach NeoPi without rewriting a card's configuration ([#270](https://github.com/PsychedelicShayna/neodeck/pull/270), GPT-6.1 Sol).
 - Studio is a list page and a full-width canvas. `/studio` lists every graph by kind with a sentence on what each kind models; opening one goes to `/studio/<id>`, where the canvas takes the whole panel and the inspector docks to the right only while a node, the graph's settings or its runs are open. Delete and Backspace remove the selected node or connection on Studio and flow canvases. Picking a run paints each node's outcome on the canvas. The New graph menu that rendered under the map's search field is gone; old `/studio?graph=` links redirect. Claude Opus 5.5.
+- Studio preview runs now skip disconnected draft nodes instead of rejecting the whole graph through the routine validator. Execution errors identify the affected node by its title and id so the canvas can point to it. GPT-6.1 Sol.
 
 - Skills & tools separates live skills, slash commands, extension discovery, marketplace plugins and sources. Shared `.agent` directories are no longer mislabeled as subagents; usage examples are opt-in rather than mixed into the installed inventory. GPT-6.1 Sol on behalf of PsychedelicShayna.
 
