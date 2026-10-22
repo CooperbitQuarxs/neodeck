@@ -61,6 +61,10 @@ export function buildSkillsRouter(service: SkillsService): Hono {
 		}
 	});
 
+	app.get("/skills/extensions", (c) =>
+		respond(c, "listExtensions", async () => c.json(await service.listExtensions(c.req.query("cwd")))),
+	);
+
 	app.get("/skills/:id", async (c) => {
 		const id = c.req.param("id");
 		const cwd = c.req.query("cwd");

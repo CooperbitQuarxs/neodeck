@@ -8,8 +8,8 @@ const WARN_MS = 20_000;
 /**
  * Topbar status chip: one glance answers "is the deck alive, and is NeoPi
  * attached". The dot is the server heartbeat (green within 10 s, amber to
- * 20 s, red after); the word is the engine. Clicking opens the NeoPi page,
- * which is where both are explained and fixed.
+ * 20 s, red after); the word is the engine. Clicking opens Engine settings,
+ * where the connection is explained and the backend can be switched.
  */
 export function EngineChip() {
 	const heartbeat = useStore((s) => s.heartbeat);
@@ -30,10 +30,11 @@ export function EngineChip() {
 	].join("\n");
 
 	return (
-		<Link to="/neopi" className="neo-chip" title={title} aria-label={`${word} ${detail}`}>
+		<Link to="/settings#engine" className="neo-chip" title={title} aria-label={`${word} ${detail}`}>
 			<span className="neo-dot" data-tone={tone} data-pulse={tone === "live" ? "true" : undefined} />
 			<span>{word}</span>
 			{detail ? <span className="neo-chip-detail">{detail}</span> : null}
+			<span className="neo-engine-location" title="Deck connection">{window.location.host}</span>
 		</Link>
 	);
 }

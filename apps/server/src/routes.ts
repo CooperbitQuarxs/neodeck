@@ -21,6 +21,7 @@ const log = logger("routes");
 import { buildTasksRouter } from "./routes-tasks.ts";
 import { buildSettingsRouter } from "./routes-settings.ts";
 import { buildRoutinesRouter } from "./routes-routines.ts";
+import { buildGraphsRouter } from "./routes-graphs.ts";
 import { buildHooksRouter } from "./routes-hooks.ts";
 import { buildInboxRouter } from "./routes-inbox.ts";
 import { buildUtilityRouter } from "./routes-cron.ts";
@@ -36,12 +37,14 @@ import { buildAuthOAuthRouter } from "./routes-auth-oauth.ts";
 import { buildOnboardingRouter } from "./routes-onboarding.ts";
 import { buildSubagentsRouter } from "./routes-subagents.ts";
 import { buildAdvisorsRouter } from "./routes-advisors.ts";
+import { buildAgentsRouter } from "./routes-agents.ts";
 import { buildModelsConfigRouter } from "./routes-models-config.ts";
 import { buildNpiConfigRouter } from "./routes-npi-config.ts";
 import { buildIntegrationsRouter } from "./routes-integrations.ts";
 import { buildMcpServersRouter } from "./routes-mcp-servers.ts";
 import { buildMixturesRouter } from "./routes-mixtures.ts";
 import { buildFallbackChainRouter } from "./routes-fallback-chain.ts";
+import { buildGithubRouter } from "./routes-github.ts";
 import type { RoutinesRunner } from "./routines-runner.ts";
 import type { BridgeSupervisor } from "./bridge-supervisor.ts";
 import type { MarketplaceService } from "./marketplace-service.ts";
@@ -271,6 +274,7 @@ export function buildRouter(
 	app.route("/", buildTasksRouter(opts.cardAgents));
 	app.route("/", buildUploadsRouter({ uploadsRoot: config.uploadsRoot }));
 	app.route("/", buildRoutinesRouter(runner));
+	app.route("/", buildGraphsRouter());
 	app.route("/", buildHooksRouter(runner));
 	app.route("/", buildInboxRouter());
 	app.route("/", buildUtilityRouter());
@@ -286,12 +290,14 @@ export function buildRouter(
 	app.route("/onboarding", buildOnboardingRouter());
 	app.route("/subagents", buildSubagentsRouter(bridge));
 	app.route("/", buildAdvisorsRouter(bridge, config));
+	app.route("/", buildAgentsRouter(bridge));
 	app.route("/", buildModelsConfigRouter());
 	app.route("/", buildNpiConfigRouter(bridge, config));
 	app.route("/", buildMcpServersRouter(bridge, config));
 	app.route("/", buildIntegrationsRouter(config));
 	app.route("/", buildMixturesRouter(bridge, config));
 	app.route("/", buildFallbackChainRouter(bridge));
+	app.route("/", buildGithubRouter({ workspaces: [config.defaultCwd, ...config.extraWorkspaces] }));
 
 	return app;
 }

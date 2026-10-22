@@ -97,8 +97,8 @@ export function FlowsView() {
 				]}
 			/>
 			<div className="flex gap-2">
-				<NeoLinkButton to="/routines">Open the routines canvas</NeoLinkButton>
-				<NeoLinkButton to="/tasks">Open the board</NeoLinkButton>
+				<NeoLinkButton to="/legacy/routines">Open the routines canvas</NeoLinkButton>
+				<NeoLinkButton to="/legacy/tasks">Open the board</NeoLinkButton>
 			</div>
 		</Planned>
 	);
@@ -125,7 +125,7 @@ export function TelegramView() {
 						<PageHeader
 							title="Telegram"
 							description="Talk to the deck from your phone: today a chat bridge, tomorrow an intake channel and group chat."
-							actions={<NeoLinkButton to="/settings?section=messaging">Bridge settings</NeoLinkButton>}
+							actions={<NeoLinkButton to="/legacy/settings?section=messaging">Bridge settings</NeoLinkButton>}
 						/>
 						<Card
 							title="Bridge"
@@ -147,7 +147,7 @@ export function TelegramView() {
 								/>
 							) : (
 								<p className="text-[13px] text-ink-2">
-									No bridge is set up. Add a bot token under <Link className="text-accent underline underline-offset-2" to="/settings?section=messaging">Settings → Messaging</Link> and
+									No bridge is set up. Add a bot token under <Link className="text-accent underline underline-offset-2" to="/legacy/settings?section=messaging">Settings → Messaging</Link> and
 									start it there.
 								</p>
 							)}
@@ -178,7 +178,7 @@ export function NeoPiView() {
 						<PageHeader
 							title={<span className="neo-gradient-text">NeoPi</span>}
 							description="The engine. Auth, credentials, models and inference all come from NeoPi; the deck is one of its surfaces."
-							actions={<NeoLinkButton to="/settings?section=backend">Backend settings</NeoLinkButton>}
+							actions={<NeoLinkButton to="/legacy/settings?section=backend">Backend settings</NeoLinkButton>}
 						/>
 						<div className="neo-grid neo-grid-2">
 							<Card title="Attached engine" tone="accent" actions={<NeoBadge tone={backend ? "ok" : "warn"}>{backend ? "attached" : "none"}</NeoBadge>} index={1}>
@@ -194,7 +194,7 @@ export function NeoPiView() {
 								) : (
 									<p className="text-[13px] text-ink-2">
 										No NeoPi source tree is loaded. Threads and agent steps need one; inbox, board and routines work without it. Choose a tree under{" "}
-										<Link className="text-accent underline underline-offset-2" to="/settings?section=backend">Settings → Backend</Link>.
+										<Link className="text-accent underline underline-offset-2" to="/legacy/settings?section=backend">Settings → Backend</Link>.
 									</p>
 								)}
 							</Card>

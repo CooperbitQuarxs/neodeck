@@ -36,6 +36,7 @@ import {
 	updateState,
 	updateTask,
 } from "./db/tasks.ts";
+import { appendTaskNote, taskEvents, taskLinks } from "./db/task-evidence.ts";
 
 const log = logger("routes:tasks");
 
@@ -89,10 +90,34 @@ export function buildTasksRouter(cardAgents?: CardAgentRunner): Hono {
 		return c.json(task);
 	});
 
-	app.post("/tasks/:id/assign", (c) => {
+	app.get("/tasks/:id/events", (c) => {
+		const task = getTask(c.req.param("id"));
+		return task ? c.json({ events: taskEvents(task) }) : c.json({ error: "not found" }, 404);
+	});
+
+	app.post("/tasks/:id/events", async (c) => {
+		const task = getTask(c.req.param("id"));
+		if (!task) return c.json({ error: "not found" }, 404);
+		let body: { text?: unknown; actor?: unknown };
+		try { body = await c.req.json(); } catch { return c.json({ error: "invalid json" }, 400); }
+		if (!body || typeof body.text !== "string" || !body.text.trim() || body.text.length > 20_000) return c.json({ error: "text must contain 1 to 20000 characters" }, 400);
+		if (body.actor !== undefined && (typeof body.actor !== "string" || body.actor.length > 200)) return c.json({ error: "actor must be a string up to 200 characters" }, 400);
+		return c.json(appendTaskNote(task.id, body.text.trim(), typeof body.actor === "string" ? body.actor : ""), 201);
+	});
+
+	app.get("/tasks/:id/links", (c) => {
+		const task = getTask(c.req.param("id"));
+		return task ? c.json(taskLinks(task)) : c.json({ error: "not found" }, 404);
+	});
+
+	app.post("/tasks/:id/assign", async (c) => {
 		if (!cardAgents) return c.json({ error: "Card agent runner unavailable" }, 503);
 		if (!getTask(c.req.param("id"))) return c.json({ error: "not found" }, 404);
-		try { return c.json(cardAgents.assign(c.req.param("id")), 202); }
+		let body: { model?: unknown } = {};
+		try { const text = await c.req.text(); if (text.trim()) body = JSON.parse(text); }
+		catch { return c.json({ error: "invalid json" }, 400); }
+		if (!body || typeof body !== "object" || Array.isArray(body) || body.model !== undefined && (typeof body.model !== "string" || !body.model.trim())) return c.json({ error: "model must be a nonempty selector" }, 400);
+		try { return c.json(cardAgents.assign(c.req.param("id"), body.model as string | undefined), 202); }
 		catch (error) { return c.json({ error: String(error) }, 400); }
 	});
 

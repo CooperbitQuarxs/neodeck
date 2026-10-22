@@ -113,7 +113,12 @@ export const KnowledgeMap = memo(function KnowledgeMap({ graph, focus, hops = 0,
 	}, [graph, focus, hops, query, hideOrphans, onlyDir]);
 
 	useEffect(() => {
-		const id = setTimeout(() => fgRef.current?.zoomToFit(400, 40), 500);
+		const id = setTimeout(() => {
+			const map = fgRef.current;
+			if (!map) return;
+			map.zoomToFit(0, 40);
+			map.zoom(Math.min(map.zoom(), 2.5), 0);
+		}, 500);
 		return () => clearTimeout(id);
 	}, [data.nodes.length, focus]);
 
@@ -139,9 +144,9 @@ export const KnowledgeMap = memo(function KnowledgeMap({ graph, focus, hops = 0,
 				ctx.lineWidth = 1.5 / scale;
 				ctx.stroke();
 			}
-			const showLabel = isFocus || node.path === hover || (lit?.has(node.path) ?? false) || scale > 1.6 || node.inbound >= 3;
+			const showLabel = data.nodes.length <= 80 || isFocus || node.path === hover || (lit?.has(node.path) ?? false) || scale > 1.6 || node.inbound >= 3;
 			if (showLabel) {
-				const fontSize = Math.max(10 / scale, 3);
+				const fontSize = 11 / scale;
 				ctx.font = `${isFocus ? 600 : 500} ${fontSize}px Inter, system-ui, sans-serif`;
 				ctx.textAlign = "center";
 				ctx.textBaseline = "top";
@@ -149,11 +154,11 @@ export const KnowledgeMap = memo(function KnowledgeMap({ graph, focus, hops = 0,
 				ctx.fillText(node.title, x, y + r + 2 / scale);
 			}
 		},
-		[focus, hover, lit, ink, accent],
+		[focus, hover, lit, ink, accent, data.nodes.length],
 	);
 
 	return (
-		<div ref={containerRef} className={className} style={{ position: "relative", width: "100%", height: "100%", minHeight: 0 }}>
+		<div ref={containerRef} className={className} style={{ position: "relative", isolation: "isolate", overflow: "hidden", width: "100%", height: "100%", minHeight: 0 }}>
 			<ForceGraph2D<MapNode, MapLink>
 				ref={fgRef}
 				graphData={data}

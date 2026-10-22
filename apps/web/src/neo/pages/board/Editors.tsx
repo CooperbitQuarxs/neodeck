@@ -19,7 +19,7 @@ export function NewCardDrawer({ columns, projects, initialProject, onClose, onCr
 		catch (err) { setError(`Could not create the card. ${String(err)}`); }
 		finally { setBusy(false); }
 	}
-	return <Drawer open width={560} onClose={onClose} title="New card" subtitle="Give the work a title and a place to start." footer={<><NeoButton variant="ghost" onClick={onClose}>Cancel</NeoButton><NeoButton variant="primary" type="submit" form="neo-board-create" disabled={busy || !title.trim() || !columnId}>{busy ? "Creating…" : "Create card"}</NeoButton></>}>
+	return <Drawer open width={560} onClose={onClose} title="Add a card directly" subtitle="Usually work arrives through Inbox. This bypasses intake without starting an assignment." footer={<><NeoButton variant="ghost" onClick={onClose}>Cancel</NeoButton><NeoButton variant="primary" type="submit" form="neo-board-create" disabled={busy || !title.trim() || !columnId}>{busy ? "Creating…" : "Create card"}</NeoButton></>}>
 		<form id="neo-board-create" className="neo-board-form" onSubmit={(e) => void create(e)}>
 			{error && <ErrorState error={error} />}
 			<label>Title<input className="neo-input" aria-label="New card title" placeholder="What needs to happen?" value={title} onChange={(e) => setTitle(e.target.value)} autoFocus required /></label>
