@@ -66,7 +66,8 @@ export const SOURCES: Readonly<Record<Domain, Source>> = {
 	knowledgeHistory: "live",
 	skills: "live",
 	skillsUsage: "preview",
-	github: "preview",
+	/** Read-only GitHub CLI queries; GitHub App installation remains preview. */
+	github: "live",
 	usage: "preview",
 	providers: "preview",
 	/** Engine, workspaces, notifications, appearance: existing settings endpoints. */

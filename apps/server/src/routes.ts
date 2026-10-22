@@ -43,6 +43,7 @@ import { buildIntegrationsRouter } from "./routes-integrations.ts";
 import { buildMcpServersRouter } from "./routes-mcp-servers.ts";
 import { buildMixturesRouter } from "./routes-mixtures.ts";
 import { buildFallbackChainRouter } from "./routes-fallback-chain.ts";
+import { buildGithubRouter } from "./routes-github.ts";
 import type { RoutinesRunner } from "./routines-runner.ts";
 import type { BridgeSupervisor } from "./bridge-supervisor.ts";
 import type { MarketplaceService } from "./marketplace-service.ts";
@@ -294,6 +295,7 @@ export function buildRouter(
 	app.route("/", buildIntegrationsRouter(config));
 	app.route("/", buildMixturesRouter(bridge, config));
 	app.route("/", buildFallbackChainRouter(bridge));
+	app.route("/", buildGithubRouter({ workspaces: [config.defaultCwd, ...config.extraWorkspaces] }));
 
 	return app;
 }

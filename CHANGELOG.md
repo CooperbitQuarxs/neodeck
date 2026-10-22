@@ -24,7 +24,7 @@ All notable changes to NPI deck (a fork of bjb2/omp-deck; entries before the for
 - Usage shows each account's virtual-model budgets, demotion stages, spend history and searchable requests, with shared provider visibility controls.
 - Settings has a fixed section index, live engine/provider/model controls, account drawers and an admin-only Advanced editor for environment variables, NeoPi settings and diagnostics.
 - Skills brings installed skills, marketplace plugins and sources into one page, with SKILL.md drawers, editing, authoring and plugin update checks. Last-used timestamps are marked as preview data.
-- GitHub adds a preview implementation wheel, repository issues and pull requests, review comments, worker assignment and issue filing with an optional live board card.
+- GitHub now reads tracked repositories' real issues, PRs, checks and review comments through the server's authenticated `gh` CLI. The office watchlist replaces project setup, and the six-stage wheel follows labels and GitHub facts without modifying GitHub or starting workers. GitHub App setup stays preview. Implemented by GPT-6.1 Sol.
 - Agents now has a searchable roster, editable restriction templates, spawn and detail drawers, and a judge log with reversible stops. Preview agents sit beside live sessions and their workers.
 - Shared Neo controls now use styled portal menus and listboxes instead of native select popups. Dialogs and drawers share nested Escape handling, focus trapping and restoration, with keyboard navigation and type-ahead in pickers. GPT-6.1 Sol.
 - A new deck, designed from scratch: sign in at `/login`, land in the Inbox with the Today strip, and jump between nine places with `G` + a letter; the old deck stays reachable at `/legacy`.
