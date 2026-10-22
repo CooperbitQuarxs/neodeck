@@ -8,7 +8,7 @@ import { RoutineBuilder, type RoutineBuilderHandle, type RoutineBuilderState } f
 import { kbApi } from "@/lib/kb-api";
 import { routinesApi } from "@/lib/routines-api";
 import { useStore } from "@/lib/store";
-import { studio, graphProblems, type GraphKind, type GraphSummary, type StudioGraph, type StudioRun } from "../client/studio";
+import { studio, graphProblems, StudioRequestError, type GraphKind, type GraphSummary, type StudioGraph, type StudioRun } from "../client/studio";
 import { SOURCES } from "../client/source";
 import { KnowledgeMap, mapLegend } from "../components/KnowledgeMap";
 import { PreviewChip } from "../components/PreviewChip";
@@ -110,7 +110,14 @@ function StudioEditor({ requested }: { requested: string }) {
  }
  async function startRun(): Promise<void> {
   setBusy(true); setError("");
-  try { await studio.run(id); setNotice(flow ? "Run started. Its steps appear in Runs as the runner records them." : "Preview run finished. Nothing was sent outside the deck."); setRunRevision(value => value + 1); setSelected(null); setPanel("runs"); await refresh(); } catch (reason) { setError(String(reason)); } finally { setBusy(false); }
+  try { await studio.run(id); setNotice(flow ? "Run started. Its steps appear in Runs as the runner records them." : "Preview run finished. Nothing was sent outside the deck."); setRunRevision(value => value + 1); setSelected(null); setPanel("runs"); await refresh(); }
+  catch (reason) {
+   if (reason instanceof StudioRequestError && reason.problems.length) {
+    const nodeId = reason.problems.find(problem => problem.nodeId)?.nodeId;
+    if (nodeId) { setSelected(nodeId); setPanel(null); }
+    setError(reason.problems.map(problem => problem.message).join("; "));
+   } else setError(reason instanceof Error ? reason.message : String(reason));
+  } finally { setBusy(false); }
  }
  async function remove(): Promise<void> { try { await studio.remove(id); setPanel(null); await refresh(); navigate("/studio"); } catch (reason) { setError(String(reason)); } }
  function savedRoutine(saved: Routine): void { setRoutine(saved); setNotice("Flow saved."); void refresh(); if (id === "new-flow") navigate(studioPath(saved.id), { replace: true }); }
