@@ -1701,6 +1701,45 @@ export interface ListInboxResponse {
 	items: InboxItem[];
 }
 
+export type InboxDestination =
+	| { kind: "card"; project: string; column: string }
+	| { kind: "issue"; repo: string }
+	| { kind: "thread"; agent: string }
+	| { kind: "note"; path: string };
+
+export interface InboxProposal {
+	itemId: string;
+	kind: InboxKind;
+	destination: InboxDestination;
+	confidence: number;
+	reason: string;
+	/** A manual default is not a model classification. */
+	classifier: "manual";
+}
+
+export interface InboxReceipt {
+	kind: InboxDestination["kind"];
+	ref: string;
+	url: string;
+	label: string;
+}
+
+export interface InboxHistoryEvent {
+	at: string;
+	actor: string;
+	text: string;
+	url?: string;
+	receipt?: InboxReceipt;
+}
+
+export interface InboxRouting {
+	classifier: { kind: "manual"; name: string; description: string };
+	flows: { id: string; name: string; enabled: boolean; sourceNodeId: string; url: string }[];
+	columns: { id: string; name: string }[];
+	defaultColumn: string;
+	destinations: { kind: InboxDestination["kind"]; available: boolean; reason?: string }[];
+}
+
 /**
  * Promote an inbox item into a task.
  *
