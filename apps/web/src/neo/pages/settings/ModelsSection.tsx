@@ -5,6 +5,7 @@ import { Card, Empty, NeoButton, NeoCombobox, NeoInput, NeoTextarea, Notice } fr
 import { roleLiveSummary } from "@/lib/model-roles";
 import { settings } from "../../client/settings";
 import { ModelPicker } from "../../components/ModelPicker";
+import { useHiddenProviders } from "../../client/models";
 
 export function ModelsSection() {
  return <Card id="models" title="Model configuration" description="Roles and the model catalogue have their own workspace."><div className="neo-settings-row"><p className="neo-settings-description">Configure inference models without leaving a conversation's model switcher open. Picker visibility remains under Inference providers.</p><Link className="neo-btn" to="/models">Open Models</Link></div></Card>;
@@ -57,6 +58,7 @@ function RoleEditor({ role, expectedValue, allowedModels, disabled, onSaved }: {
  const [selector, setSelector] = useState(role.value ?? "");
  const [busy, setBusy] = useState(false);
  const [error, setError] = useState("");
+ const hiddenProviders = useHiddenProviders();
  async function save() {
   setBusy(true); setError("");
   try {
@@ -72,7 +74,7 @@ function RoleEditor({ role, expectedValue, allowedModels, disabled, onSaved }: {
    <span className="neo-settings-description">{role.resolved ? <>Resolves to <span className="neo-mono">{role.resolved.provider}/{role.resolved.modelId}{role.resolved.thinkingLevel ? `:${role.resolved.thinkingLevel}` : ""}</span></> : "No available model currently resolves this role."}</span>
   </div>
   <div className="neo-settings-stack">
-   {role.section === "chat" ? <ModelPicker value={selector} onChange={setSelector} disabled={disabled || busy} excludeRole={role.id} /> : <NeoCombobox aria-label={`Model for ${role.name}`} value={selector} onValueChange={setSelector} options={allowedModels.map(value => ({ value, label: value }))} allowCustom disabled={disabled || busy} />}
+   {role.section === "chat" ? <ModelPicker value={selector} onChange={setSelector} disabled={disabled || busy} excludeRole={role.id} /> : <NeoCombobox aria-label={`Model for ${role.name}`} value={selector} onValueChange={setSelector} options={allowedModels.filter(value => !hiddenProviders.has(value.slice(0, value.indexOf("/")))).map(value => ({ value, label: value }))} allowCustom disabled={disabled || busy} />}
    <label className="neo-settings-field">Global selector<NeoInput mono aria-label={`Selector for ${role.id}`} value={selector} onChange={event => setSelector(event.target.value)} placeholder="Unset, use the built-in chain" disabled={disabled || busy} /></label>
    {role.effectiveValue !== role.value && <p className="neo-settings-description">Effective selector: <span className="neo-mono">{role.effectiveValue ?? "Built-in chain"}</span></p>}
    {error && <Notice tone="warn">{error}</Notice>}
