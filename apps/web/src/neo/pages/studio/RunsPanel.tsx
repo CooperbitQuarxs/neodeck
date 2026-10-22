@@ -30,7 +30,7 @@ export function RunsPanel({ graphId, graph, refresh, selected, onSelect, onClose
   {error ? <ErrorState error={error} /> : loading ? <p className="neo-studio-help">Loading runs…</p> : runs.length === 0 ? <Empty title="No runs yet" hint={graph ? "Preview run walks the graph with a sample input and sends nothing outside the deck." : "Run now starts the flow once; scheduled runs appear here too."} /> : <>
    <div className="neo-studio-runs" role="listbox" aria-label="Runs, newest first">
     {runs.map(item => { const o = outcome(item); return <button key={item.id} type="button" role="option" aria-selected={item.id === selected} className="neo-studio-run-row" data-current={item.id === selected || undefined} onClick={() => onSelect(item.id === selected ? null : item)}>
-     <i data-run={o.tone} /><span>{o.word}</span><small>{item.trigger}</small><time dateTime={item.startedAt} title={formatTimestamp(item.startedAt)}>{formatShortRelative(item.startedAt)}</time>
+     <i data-run={o.tone} /><span>{o.word}</span><small>{item.mode === "execute" ? "Executed" : item.mode === "preview" ? "Preview" : item.trigger}{item.mode && item.trigger && !/preview/i.test(item.trigger) ? `, ${item.trigger}` : ""}</small><time dateTime={item.startedAt} title={formatTimestamp(item.startedAt)}>{formatShortRelative(item.startedAt)}</time>
     </button>; })}
    </div>
    {run ? <section className="neo-studio-run-detail" aria-label="Selected run">
