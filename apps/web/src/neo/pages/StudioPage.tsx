@@ -1,6 +1,6 @@
 import "./studio.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, BookOpen, History, Map as MapIcon, Play, Save, SlidersHorizontal, Workflow } from "lucide-react";
+import { ArrowLeft, BookOpen, History, Map as MapIcon, Play, Save, SlidersHorizontal, Workflow, Zap } from "lucide-react";
 import { Link, Navigate, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import type { KbGraphResponse, Routine } from "@npi-deck/protocol";
 import { Check, Empty, ErrorState, NeoButton, SearchInput, Segmented, Switch } from "@/components/neo";
@@ -14,6 +14,7 @@ import { KnowledgeMap, mapLegend } from "../components/KnowledgeMap";
 import { PreviewChip } from "../components/PreviewChip";
 import { FlowInspector } from "./studio/FlowInspector";
 import { GraphSettings, NodeInspector } from "./studio/NodeInspector";
+import { ExecuteDialog } from "./studio/ExecuteDialog";
 import { RunsPanel } from "./studio/RunsPanel";
 import { StudioIndex, studioPath, KIND_ICONS } from "./studio/StudioIndex";
 import { SourceView } from "./studio/SourceView";
@@ -63,7 +64,7 @@ function StudioEditor({ requested }: { requested: string }) {
  const [map, setMap] = useState<KbGraphResponse>(), [mapSearch, setMapSearch] = useState(""), [hideOrphans, setHideOrphans] = useState(false);
  const [selected, setSelected] = useState<string | null>(null), [panel, setPanel] = useState<Panel>(() => params.get("panel") === "settings" || params.get("view") === "runs" ? params.get("panel") === "settings" ? "settings" : "runs" : null), [run, setRun] = useState<StudioRun | null>(null);
  const [error, setError] = useState(""), [notice, setNotice] = useState(""), [dirty, setDirty] = useState(false), [sourcePending, setSourcePending] = useState(false);
- const [busy, setBusy] = useState(false), [runRevision, setRunRevision] = useState(0), [loading, setLoading] = useState(true);
+ const [busy, setBusy] = useState(false), [runRevision, setRunRevision] = useState(0), [loading, setLoading] = useState(true), [executing, setExecuting] = useState(false);
  const builder = useRef<RoutineBuilderHandle>(null);
  const summary = graphs.find(item => item.id === requested || item.name === requested || item.kind === "router" && `neoproxy/${item.name}` === requested);
  const id = summary?.id ?? requested; const flow = summary?.kind === "flow" || id === "new-flow", isMap = id === "map";
@@ -108,15 +109,20 @@ function StudioEditor({ requested }: { requested: string }) {
  async function toggle(enabled: boolean): Promise<void> {
   try { await studio.setEnabled(id, enabled); if (flow && routine) setRoutine({ ...routine, enabled }); if (graph) setGraph({ ...graph, enabled }); await refresh(); } catch (reason) { setError(String(reason)); }
  }
- async function startRun(): Promise<void> {
+ /* Preview walks the graph without acting; execute is explicit and confirmed in ExecuteDialog. */
+ async function startRun(mode: "preview" | "execute"): Promise<void> {
   setBusy(true); setError("");
-  try { await studio.run(id); setNotice(flow ? "Run started. Its steps appear in Runs as the runner records them." : "Preview run finished. Nothing was sent outside the deck."); setRunRevision(value => value + 1); setSelected(null); setPanel("runs"); await refresh(); }
-  catch (reason) {
+  try {
+   await studio.run(id, { mode });
+   setNotice(mode === "preview" ? "Preview run finished. Nothing was sent outside the deck." : flow ? "Run started. Its steps appear in Runs as the runner records them." : "Executed once. Each step's result is in Runs.");
+   setExecuting(false); setRunRevision(value => value + 1); setSelected(null); setPanel("runs"); await refresh();
+  } catch (reason) {
    if (reason instanceof StudioRequestError && reason.problems.length) {
     const nodeId = reason.problems.find(problem => problem.nodeId)?.nodeId;
     if (nodeId) { setSelected(nodeId); setPanel(null); }
     setError(reason.problems.map(problem => problem.message).join("; "));
    } else setError(reason instanceof Error ? reason.message : String(reason));
+   setExecuting(false);
   } finally { setBusy(false); }
  }
  async function remove(): Promise<void> { try { await studio.remove(id); setPanel(null); await refresh(); navigate("/studio"); } catch (reason) { setError(String(reason)); } }
@@ -128,6 +134,7 @@ function StudioEditor({ requested }: { requested: string }) {
  const enabled = flow ? routine?.enabled ?? false : graph?.enabled ?? false;
  const router = graph?.kind === "router" || summary?.kind === "router";
  const stored = flow ? "Deck routines" : router ? "This browser, until NeoProxy can save routers" : SOURCES.studioGraphs === "live" ? "The deck server" : "This browser";
+ const runBlocked = busy || loading || id === "new-flow" || unsaved || sourcePending;
  const kind = isMap ? "map" : flow ? "flow" : graph?.kind ?? summary?.kind ?? "pipeline"; const KindIcon = KIND_ICONS[kind];
  const showPanel: "node" | Panel = selectedNode && panel !== "runs" ? "node" : panel;
  function rename(value: string): void { if (flow && flowState) builder.current?.updateSpec({ ...flowState.spec, name: value }); else if (graph) change({ ...graph, name: value }); }
@@ -135,7 +142,7 @@ function StudioEditor({ requested }: { requested: string }) {
   <header className="neo-studio-bar">
    <div className="neo-studio-ident">
     <Link to="/studio" className="neo-studio-back"><ArrowLeft size={13} />Studio</Link>
-    <div className="neo-studio-title"><KindIcon size={16} aria-hidden="true" /><input className="neo-studio-name" aria-label="Graph name" value={title} readOnly={isMap || loading || (!flow && !graph)} onChange={event => rename(event.target.value)} size={Math.max(6, Math.min(40, title.length))} />{isMap ? null : <span className="neo-studio-kind">{KIND_LABELS[kind]}</span>}{!isMap && !flow ? <PreviewChip domains={["studioGraphs"]} what="This graph" /> : null}</div>
+    <div className="neo-studio-title"><KindIcon size={16} aria-hidden="true" /><input className="neo-studio-name" aria-label="Graph name" value={title} readOnly={isMap || loading || (!flow && !graph)} onChange={event => rename(event.target.value)} size={Math.max(6, Math.min(40, title.length))} />{isMap ? null : <span className="neo-studio-kind">{KIND_LABELS[kind]}</span>}{!isMap && !flow ? <PreviewChip domains={[router ? "studioRouters" : "studioGraphs"]} what={router ? "This router" : "This graph"} /> : null}</div>
    </div>
    {isMap ? <div className="neo-studio-bar-tools">
     <SearchInput size="sm" value={mapSearch} onChange={setMapSearch} placeholder="Search notes on the map" aria-label="Search notes on the map" width={260} />
@@ -147,7 +154,8 @@ function StudioEditor({ requested }: { requested: string }) {
      <label className="neo-studio-enabled" title={flow ? "An enabled flow runs on its schedule and triggers." : "Marks the graph as in use. Studio graphs do not yet start on their own triggers."}><Switch checked={enabled} onChange={next => void toggle(next)} disabled={loading || id === "new-flow"} label="Enabled" /><span>Enabled</span></label>
      <NeoButton size="sm" variant="ghost" on={panel === "runs"} aria-pressed={panel === "runs"} onClick={() => setPanel(current => current === "runs" ? null : "runs")} disabled={id === "new-flow"} title="Every time this graph ran, newest first"><History size={13} />Runs</NeoButton>
      <NeoButton size="sm" variant="ghost" on={showPanel === "settings"} aria-pressed={showPanel === "settings"} onClick={() => { setSelected(null); setPanel(current => current === "settings" ? null : "settings"); }}><SlidersHorizontal size={13} />{flow ? "Flow settings" : "Graph settings"}</NeoButton>
-     <NeoButton size="sm" onClick={() => void startRun()} disabled={busy || loading || id === "new-flow" || unsaved || sourcePending} title={flow ? "Run the flow once now, for real" : "Walk the graph with its sample input. Nothing leaves the deck."}><Play size={12} />{flow ? "Run now" : "Preview run"}</NeoButton>
+     <NeoButton size="sm" onClick={() => void startRun("preview")} disabled={runBlocked} title="Walk the graph once without acting. Nothing leaves the deck."><Play size={12} />Preview run</NeoButton>
+     {!router ? <NeoButton size="sm" variant="ghost" onClick={() => setExecuting(true)} disabled={runBlocked} title="Run it once for real, after you confirm"><Zap size={12} />Execute</NeoButton> : null}
      <NeoButton size="sm" variant="primary" onClick={() => void save()} disabled={!canSave || busy}><Save size={12} />{unsaved || id === "new-flow" ? "Save" : "Saved"}</NeoButton>
     </div>
    </>}
@@ -172,5 +180,6 @@ function StudioEditor({ requested }: { requested: string }) {
   {showPanel === "node" && graph && selectedNode ? <NodeInspector graph={graph} node={selectedNode} onChange={change} onClose={() => setSelected(null)} onDelete={nodeId => { change({ ...graph, nodes: graph.nodes.filter(n => n.id !== nodeId), edges: graph.edges.filter(e => e.from.node !== nodeId && e.to.node !== nodeId) }); setSelected(null); }} /> : null}
   {showPanel === "settings" ? flow ? <FlowInspector spec={flowState?.spec} onChange={spec => builder.current?.updateSpec(spec)} onDelete={id === "new-flow" ? undefined : () => void remove()} onClose={() => setPanel(null)} /> : graph ? <GraphSettings graph={graph} stored={stored} onChange={change} onDeleteGraph={() => void remove()} onClose={() => setPanel(null)} /> : null : null}
   {showPanel === "runs" && !isMap && id !== "new-flow" ? <RunsPanel key={id} graphId={id} graph={flow ? undefined : graph} refresh={runRevision} selected={run?.id ?? null} onSelect={setRun} onClose={() => { setPanel(null); setRun(null); }} /> : null}
+  <ExecuteDialog open={executing} graph={flow ? undefined : graph} flowName={flow ? title : undefined} busy={busy} onClose={() => setExecuting(false)} onExecute={() => void startRun("execute")} />
  </div>;
 }

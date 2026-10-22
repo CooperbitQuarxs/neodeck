@@ -2,9 +2,11 @@ import { Trash2, SlidersHorizontal, Workflow } from "lucide-react";
 import { Check, NeoButton, NeoSelect, SectionLabel } from "@/components/neo";
 import { ModelPicker } from "../../components/ModelPicker";
 import type { StudioGraph, StudioNode } from "../../client/studio";
-import { KIND_LABELS, nodePorts, nodeType, type Field } from "./vocab";
+import { KIND_LABELS, nodePorts, nodeType, studioNodeExecution, type Field } from "./vocab";
 import { nodeTitle } from "./StudioCanvas";
 import { StudioPanel } from "./StudioPanel";
+
+const SUPPORT = { local: "Runs inside the deck when executed.", action: "Acts outside the canvas when executed.", preview: "No executor yet: preview runs skip it and Execute refuses the graph." } as const;
 
 /** Graph settings: what the whole graph is called, what it listens to, where it is kept. */
 export function GraphSettings({ graph, stored, onChange, onDeleteGraph, onClose }: { graph: StudioGraph; stored: string; onChange: (graph: StudioGraph) => void; onDeleteGraph: () => void; onClose: () => void }) {
@@ -26,6 +28,7 @@ export function NodeInspector({ graph, node, onChange, onDelete, onClose }: { gr
  const type = nodeType(node.type); const ports = nodePorts(node);
  function update(key: string, value: unknown): void { onChange({ ...graph, nodes: graph.nodes.map(n => n.id === node.id ? { ...n, config: { ...n.config, [key]: value } } : n) }); }
  return <StudioPanel title={nodeTitle(node)} subtitle={type ? `${type.label}. ${type.blurb}` : node.type} icon={<Workflow size={14} />} onClose={onClose} footer={<NeoButton variant="ghost" className="neo-studio-danger" onClick={() => onDelete(node.id)} title="Delete node (Delete key on the canvas)"><Trash2 size={13} />Delete node</NeoButton>}>
+  <p className="neo-studio-support" data-support={studioNodeExecution(node.type)}><i />{SUPPORT[studioNodeExecution(node.type)]}</p>
   <label className="neo-field">Node title<input className="neo-input" value={String(node.config.name ?? "")} onChange={e => update("name", e.target.value)} /></label>
   {type?.fields.map(field => <ConfigField key={field.key} field={field} value={node.config[field.key]} onChange={value => update(field.key, value)} />)}
   <section className="neo-studio-ports"><SectionLabel>Ports</SectionLabel>{(["inputs", "outputs"] as const).map(direction => <div key={direction}><h3>{direction === "inputs" ? "Inputs" : "Outputs"}</h3>{ports[direction].length === 0 ? <p className="neo-studio-help">None</p> : ports[direction].map(port => <div className="neo-studio-port" key={port.id}><span><i />{port.label}</span><code>{port.type}</code></div>)}</div>)}</section>

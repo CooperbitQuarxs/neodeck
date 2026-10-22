@@ -134,3 +134,30 @@ are not implemented by the CLI adapter.
 ## 13. Settings
 
 Env (`/api/settings/env`), NeoPi config (`/api/npi-config`), models (`/api/models-config`), MCP (`/api/mcp-servers`), bridges (`/api/bridges`), workspaces and notifications are live. The contract adds accounts (§1), dictation (§8), the GitHub app (§11), and a deck-config read: `GET /api/state` already serves it.
+
+`GET /api/npi-config/model-roles?cwd=` reads role provenance for the requested
+workspace through the pinned SDK. `PATCH /api/npi-config` accepts optional
+`expectedValue` for non-secret settings and rejects a changed global value
+with HTTP 409 before invoking the native setting setter and `Settings.flush`.
+Role assignments and ordinary non-secret configuration forms send this snapshot.
+Secrets cannot be compared through this field.
+
+The dedicated `/models` workspace uses the live inventory, SDK-backed global
+role assignments and the existing revision-checked custom catalogue editor.
+Project-scope role writes and effort-rule editing require the newer native
+`get_models_configuration`, `set_model_role_configuration`,
+`set_model_role_storage` and `set_effort_rules` contracts. The current pin does
+not expose these, so Deck reports the unavailable capability without inventing
+native policy or writing role YAML in the browser.
+
+Preview provider visibility is persisted under the browser key
+`neodeck.provider-picker-visibility` and published through `useProviders()`.
+It hides matching inference providers in Deck pickers, including for admins,
+without changing served-model exposure or credentials.
+
+## 14. Native model selection
+
+- `GET /api/models?sessionId=&cwd=` reads the live catalogue within the session or workspace.
+- `GET /api/models/selector?q=&sessionId=&cwd=` delegates search and ranking to NeoPi's native `query_model_selector` implementation. Returns `{ items, roles, error }`, preserving each opaque `selector`, `resolvedSelector` and nullable facts. A backend without the optional native selector feature returns `501`; the GUI can browse its live catalogue but does not emulate search.
+- `PATCH /api/sessions/:id` accepts `{ selector: string }`. Native resolution retains `@role` policy and effort suffixes, and snapshots expose `modelSelector` separately from the resolved concrete `model`. Existing `{ model: { provider, id } }` clients remain supported.
+- Provider visibility is Deck-local picker state, not NeoProxy exposure or an inference permission. Hidden providers are omitted for every account, including admins, and cannot return through search results or old recent selections.

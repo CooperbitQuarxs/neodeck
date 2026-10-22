@@ -29,6 +29,7 @@ import { SkillsPage } from "./neo/pages/SkillsPage";
 import { GitHubPage } from "./neo/pages/GitHubPage";
 import { UsagePage } from "./neo/pages/UsagePage";
 import { SettingsPage } from "./neo/pages/SettingsPage";
+import { ModelsPage } from "./neo/pages/ModelsPage";
 import { NAV_ITEMS } from "./neo/nav";
 import { RouteErrorPage } from "./neo/pages/RouteErrorPage";
 
@@ -89,6 +90,7 @@ const PLACE_PAGES: Record<string, JSX.Element> = {
 	"/github": <GitHubPage />,
 	"/usage": <UsagePage />,
 	"/settings": <SettingsPage />,
+	"/models": <ModelsPage />,
 };
 
 /** Guard every leaf and layout, including failures above the authenticated shell. */

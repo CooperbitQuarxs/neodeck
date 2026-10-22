@@ -1,3 +1,5 @@
+export type { ModelSelectorFacts, ModelSelectorItem, ModelSelectorResult } from "./model-selector.ts";
+
 /**
  * Shared transport types between npi-deck server and web.
  *
@@ -317,6 +319,8 @@ export interface NpiConfigPatchRequest {
 	value?: unknown;
 	unset?: boolean;
 	entries?: Record<string, unknown>;
+	/** Reject stale non-secret edits when the global value no longer matches this read snapshot. */
+	expectedValue?: unknown;
 }
 
 /** What one live chat's settings resolve for the patched key after the reload. */
@@ -1134,6 +1138,8 @@ export interface SessionSnapshot {
 	sessionName?: string;
 	cwd: string;
 	model?: ModelRef;
+	/** Opaque policy selector, when the model was selected through a native role. */
+	modelSelector?: string;
 	thinkingLevel?: string;
 	/** Current NeoPi configuration warnings; refreshed by `config_warnings_changed`. */
 	configWarnings?: string[];

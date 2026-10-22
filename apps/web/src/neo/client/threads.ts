@@ -3,9 +3,10 @@ import { api } from "@/lib/api";
 import { useStore } from "@/lib/store";
 import type { ChatMessage, ToolCallStream } from "@/lib/types";
 import { PREVIEW_TEMPLATES, type Restriction } from "./preview-data";
+import { hueFor } from "../components/AgentSwatch";
 import { SOURCES } from "./source";
 
-/** An equal participant; spawnedBy marks an agent-created participant, not a type. */
+/** An equal member of a thread. spawnedBy is a relationship (who started it), never a kind of agent. */
 export interface ThreadAgent {
 	id: string;
 	name: string;
@@ -52,6 +53,8 @@ export interface ThreadsClient {
 	send(threadId: string, targets: readonly string[], text: string): void;
 	stop(threadId: string, targets: readonly string[]): void;
 	dispose(threadId: string): Promise<void>;
+	/** Members added in the deck to live threads: preview until NeoPi hosts equal agents (neopi#11). */
+	previewMembers(): Array<{ threadId: string; agent: ThreadAgent }>;
 }
 const listeners = new Set<() => void>();
 let revision = 0;
@@ -60,17 +63,17 @@ export function useThreadsRevision(): number {
 	return useSyncExternalStore((listener) => { listeners.add(listener); return () => listeners.delete(listener); }, () => revision);
 }
 const ago = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString();
-function agent(id: string, name: string, hue: number, template = "blank", state: ThreadAgent["state"] = "idle", spawnedBy?: string): ThreadAgent {
+function agent(id: string, name: string, template = "blank", state: ThreadAgent["state"] = "idle", spawnedBy?: string): ThreadAgent {
 	const t = PREVIEW_TEMPLATES.find((item) => item.id === template)!;
-	return { id, name, hue, template, state, model: t.model, restrictions: t.restrictions.map((r) => ({ ...r })), ...(spawnedBy ? { spawnedBy } : {}) };
+	return { id, name, hue: hueFor(name), template, state, model: t.model, restrictions: t.restrictions.map((r) => ({ ...r })), ...(spawnedBy ? { spawnedBy } : {}) };
 }
 const fixtures: ThreadSummary[] = [
-	{ id: "preview:anchors", title: "Fix the broken anchor links in getting-started", project: "atlas", agents: [agent("main", "Main", 190, "blank", "needs-you"), agent("reviewer", "Reviewer", 300, "advisor")], state: "needs-you", updatedAt: ago(12), live: false },
-	{ id: "preview:build", title: "Why is the build slower since 0.4?", project: "atlas", agents: [agent("main", "Main", 190, "blank", "working"), agent("worker", "Worker", 40, "worker", "working", "main")], state: "working", updatedAt: ago(3), live: false },
-	{ id: "preview:release", title: "Draft 0.5 release notes", project: "atlas", agents: [agent("main", "Main", 190, "blank", "working"), agent("chronicler", "Chronicler", 260, "chronicler")], state: "working", updatedAt: ago(24), live: false },
-	{ id: "preview:theme", title: "Dark theme toggle", project: "portal", agents: [agent("main", "Main", 190)], state: "settled", updatedAt: ago(180), live: false },
-	{ id: "preview:flaky", title: "Freeze the clock in the flaky test", project: "atlas", agents: [agent("main", "Main", 190)], state: "settled", updatedAt: ago(360), live: false },
-	{ id: "preview:sitemap", title: "Sitemap lastmod dates", project: "portal", agents: [agent("main", "Main", 190)], state: "settled", updatedAt: ago(1500), live: false },
+	{ id: "preview:anchors", title: "Fix the broken anchor links in getting-started", project: "atlas", agents: [agent("main", "Main", "blank", "needs-you"), agent("reviewer", "Reviewer", "advisor")], state: "needs-you", updatedAt: ago(12), live: false },
+	{ id: "preview:build", title: "Why is the build slower since 0.4?", project: "atlas", agents: [agent("main", "Main", "blank", "working"), agent("worker", "Worker", "worker", "working", "main")], state: "working", updatedAt: ago(3), live: false },
+	{ id: "preview:release", title: "Draft 0.5 release notes", project: "atlas", agents: [agent("main", "Main", "blank", "working"), agent("chronicler", "Chronicler", "chronicler")], state: "working", updatedAt: ago(24), live: false },
+	{ id: "preview:theme", title: "Dark theme toggle", project: "portal", agents: [agent("main", "Main")], state: "settled", updatedAt: ago(180), live: false },
+	{ id: "preview:flaky", title: "Freeze the clock in the flaky test", project: "atlas", agents: [agent("main", "Main")], state: "settled", updatedAt: ago(360), live: false },
+	{ id: "preview:sitemap", title: "Sitemap lastmod dates", project: "portal", agents: [agent("main", "Main")], state: "settled", updatedAt: ago(1500), live: false },
 ];
 const transcripts = new Map<string, ThreadTranscript>();
 function user(id: string, text: string, minutes = 120): ThreadMessage { return { id, role: "user", text, timestamp: Date.now() - minutes * 60_000 }; }
@@ -107,11 +110,14 @@ const emptyTranscript: ThreadTranscript = { messages: [], toolCalls: {} };
 function liveAgents(id: string): ThreadAgent[] {
 	const store = useStore.getState();
 	const session = store.sessionsById[id];
-	const main = agent("main", "Main", 190, "blank", session && session.status !== "idle" ? "working" : "idle");
-	main.model = session?.model ? `${session.model.provider}/${session.model.id}` : "No model selected";
-	return [main, ...(extraAgents.get(id) ?? []), ...(store.subagentsBySession[id] ?? []).map((node, i) => ({ ...agent(node.id, node.name, [40, 260, 150, 20][i % 4]!, "worker", /running|working|streaming/.test(node.status) ? "working" : "idle", node.parentId), model: "Model not reported" }))];
+	const main = agent("main", "Main", "blank", session && session.status !== "idle" ? "working" : "idle");
+	// Keep the selected policy (`@role`) rather than its resolved model, with the reported effort.
+	const selector = session?.modelSelector ?? (session?.model ? `${session.model.provider}/${session.model.id}` : undefined);
+	main.model = selector ? (session?.thinkingLevel && !/:[a-z]+$/.test(selector) ? `${selector}:${session.thinkingLevel}` : selector) : "No model selected";
+	return [main, ...(extraAgents.get(id) ?? []), ...(store.subagentsBySession[id] ?? []).map((node) => ({ ...agent(node.id, node.name, "worker", /running|working|streaming/.test(node.status) ? "working" : "idle", node.parentId), model: "Unknown" }))];
 }
 const preview: ThreadsClient = {
+	previewMembers() { return [...extraAgents].flatMap(([threadId, list]) => list.map((agent) => ({ threadId, agent }))); },
 	previewList() { return fixtures.map((item) => ({ ...item, agents: [...item.agents] })); },
 	async list() { return fixtures.map((item) => ({ ...item, agents: [...item.agents] })); },
 	async agents(id) { return fixtures.find((item) => item.id === id)?.agents ?? extraAgents.get(id) ?? []; },
@@ -161,9 +167,8 @@ const live: ThreadsClient = {
 	settle(id, value) { if (fixtures.some((t) => t.id === id)) return preview.settle(id, value); if (value) { settled.add(id); reopened.delete(id); } else { settled.delete(id); reopened.add(id); } localStorage.setItem(SETTLED_KEY, JSON.stringify([...settled])); emit(); },
 	async setModel(id, agentId, model) {
 		if (fixtures.some((t) => t.id === id) || agentId !== "main") return preview.setModel(id, agentId, model);
-		const split = model.indexOf("/"); if (split < 0) throw new Error("Choose a provider/model before sending.");
 		const liveId = await useStore.getState().resumeSession(id);
-		await api.setSessionModel(liveId, { provider: model.slice(0, split), id: model.slice(split + 1) });
+		await api.setSessionSelector(liveId, model);
 	},
 	async dispose(id) { if (fixtures.some((t) => t.id === id)) return preview.dispose(id); await useStore.getState().disposeSession(id); settled.add(id); emit(); },
 };
