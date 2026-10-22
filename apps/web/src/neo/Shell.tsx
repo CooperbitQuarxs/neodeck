@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { BrandLockup } from "@/components/BrandLockup";
 import { EngineChip } from "@/components/EngineChip";
-import { Kbd, NeoButton } from "@/components/neo";
+import { Kbd, NeoButton, NeoMenu } from "@/components/neo";
 import { useStore } from "@/lib/store";
 import { useTheme } from "@/lib/theme";
 import { auth, useAccount } from "./client/auth";
@@ -159,36 +159,26 @@ function PresenceFoot() {
 	);
 }
 
-/** Who is signed in. Opens Usage; the menu holds sign out. */
+/** Signed-in identity and account actions. */
 function AccountChip() {
 	const account = useAccount();
 	const navigate = useNavigate();
-	const [open, setOpen] = useState(false);
 	if (!account) return null;
 	return (
-		<div className="relative">
-			<button type="button" className="neo-account-button" onClick={() => setOpen((v) => !v)} aria-label={`Account: ${account.name}`} aria-haspopup="menu" aria-expanded={open} title={`${account.name} (@${account.handle}) · ${account.role}`}>
-				<Avatar account={account} size={20} />
-				<span className="neo-account-name">{account.name}</span>
-			</button>
-			{open ? (
-				<>
-					<button type="button" className="fixed inset-0 z-[80] cursor-default" aria-label="Close menu" onClick={() => setOpen(false)} />
-					<div className="neo-menu" role="menu">
-						<button type="button" role="menuitem" className="neo-menu-item" onClick={() => { setOpen(false); navigate("/usage"); }}>
-							Your usage
-						</button>
-						<button type="button" role="menuitem" className="neo-menu-item" onClick={() => { setOpen(false); navigate("/settings#accounts"); }}>
-							Account
-						</button>
-						<div className="neo-menu-sep" />
-						<button type="button" role="menuitem" className="neo-menu-item" onClick={() => { setOpen(false); void auth.logout().then(() => navigate("/login")); }}>
-							<LogOut size={13} /> Sign out
-						</button>
-					</div>
-				</>
-			) : null}
-		</div>
+		<NeoMenu
+			label="Account menu"
+			trigger={
+				<button type="button" className="neo-account-button" aria-label={`Account: ${account.name}`} title={`${account.name} (@${account.handle}) · ${account.role}`}>
+					<Avatar account={account} size={20} />
+					<span className="neo-account-name">{account.name}</span>
+				</button>
+			}
+			items={[
+				{ label: "Your usage", onSelect: () => navigate("/usage") },
+				{ label: "Account", onSelect: () => navigate("/settings#accounts") },
+				{ label: "Sign out", icon: <LogOut size={13} />, danger: true, onSelect: () => { void auth.logout().then(() => navigate("/login")); } },
+			]}
+		/>
 	);
 }
 
