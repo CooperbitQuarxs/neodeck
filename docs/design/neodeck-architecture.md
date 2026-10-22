@@ -39,6 +39,7 @@ Library     Knowledge (k)  the wiki, with the map one keystroke away
             Skills (s)     installed skills and the marketplace, one page
 Engine      GitHub (g)     repos, issues, PRs, the implementation wheel
             Usage (y)      your quota, your pools, what you spent
+            Models (m)     effort rules, roles and inference providers
             Settings (,)   engine, accounts, integrations, appearance
 ```
 
@@ -50,14 +51,16 @@ new one covers every feature it had (Settings › Legacy deck).
 
 ## 3. The shell
 
-Unchanged chassis from the design language: 52 px glass topbar with the
-`NeoPi / deck / Page` lockup, naked grouped sidebar (224 px), one inset
-panel. Two changes:
+The chassis follows NeoProxy: a 52 px glass topbar with the
+`NeoPi / deck / Page` lockup, grouped sidebar at 224 px with 32 px rows,
+and one inset panel. The hamburger hides the entire sidebar on desktop;
+the choice persists in this browser. Below 900 px it opens a navigation
+overlay instead, with Escape, keyboard focus containment and focus return.
+Opening the mobile menu does not change the saved desktop choice.
 
-- The topbar's right side is the **presence row**: the engine chip, the
-  signed-in account (avatar + name, opens Usage), dictation, theme. Nothing
-  else. View-local toggles are gone; a page that needs a side column has it
-  inside the panel, always.
+- The topbar's right side holds engine status, dictation, theme and the
+  signed-in account menu. Status and identity are quiet inline controls,
+  not a row of pills. View-local controls stay inside each page.
 - The sidebar foot shows **who is live**: the number of agents working and
   the number of threads that need you, as two small dots, so the state of the
   office is visible from every page.

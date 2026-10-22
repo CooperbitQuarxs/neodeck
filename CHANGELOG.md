@@ -6,6 +6,7 @@ All notable changes to NPI deck (a fork of bjb2/omp-deck; entries before the for
 ## [Unreleased]
 
 ### Added
+- The shell follows NeoProxy's compact chrome, with quieter status controls and a sidebar that can be hidden from the hamburger. Desktop visibility persists in this browser; mobile navigation supports Escape and returns keyboard focus. By GPT-6.1 Sol.
 
 - Studio now edits pipelines, virtual-model routers, classifiers and board flows beside live routines and the knowledge map, with typed connections, a node inspector, editable TOML and per-node run timelines.
 - Knowledge now has a searchable note tree, a linked Markdown reader, and a map toggled with M. Follow backlinks, browse recent notes, or ask an agent to change a note in a prefilled thread.
