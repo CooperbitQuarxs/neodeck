@@ -20,6 +20,7 @@ import type {
 	ExtUiDialogResponse,
 	ModelInfo,
 	ModelRef,
+	ModelSelectorResult,
 	PendingPlanApprovalWire,
 	PlanModeContextWire,
 	ServerFrame,
@@ -659,6 +660,23 @@ export class InProcessAgentBridge implements AgentBridge {
 			lease?.release();
 		}
 	}
+	async queryModels(query: string, opts: { sessionId?: string; cwd?: string } = {}): Promise<ModelSelectorResult> {
+		const api = feature("model-selector");
+		const entry = opts.sessionId ? this.active.get(opts.sessionId) : undefined;
+		if (opts.sessionId && !entry) throw new Error("The selected session is not active.");
+		if (entry) return api.getRpcModelSelector(entry.session, query);
+		const registry = await this.ensureModelRegistry();
+		const cwd = opts.cwd ? path.resolve(opts.cwd) : process.cwd();
+		const lease = await this.leaseMixtures(registry, cwd);
+		try {
+			await registry.awaitBackgroundRefresh();
+			const settings = await sdk().Settings.loadReadOnly({ cwd, agentDir: sdk().getAgentDir() });
+			return api.queryModelSelector(api.createModelBrowserSource(settings), registry, [], query);
+		} finally {
+			lease?.release();
+		}
+	}
+
 
 	async fallbackChain(sessionId: string): Promise<SessionFallbackChainResponse | undefined> {
 		const entry = this.active.get(sessionId);
@@ -1282,6 +1300,9 @@ export class InProcessSessionHandle implements SessionHandle {
 				s.model && typeof s.model === "object"
 					? { provider: String(s.model.provider), id: String(s.model.id) }
 					: undefined,
+			modelSelector: hasFeature("model-roles") && this.roleState().activeRole()
+				? `@${this.roleState().activeRole()}`
+				: undefined,
 			thinkingLevel: typeof s.thinkingLevel === "string" ? s.thinkingLevel : undefined,
 			configWarnings: Array.isArray(s.configWarnings) ? s.configWarnings.filter((warning: unknown): warning is string => typeof warning === "string") : [],
 			isStreaming: Boolean(s.isStreaming),
@@ -1320,6 +1341,39 @@ export class InProcessSessionHandle implements SessionHandle {
 			return undefined;
 		}
 	}
+	private modelRoles: InstanceType<ReturnType<typeof feature<"model-roles">>["RpcRoles"]> | undefined;
+
+	private roleState() {
+		return this.modelRoles ??= new (feature("model-roles").RpcRoles)(this.session);
+	}
+
+	async setModelSelector(selector: string): Promise<void> {
+		if (this.session.isStreaming || this.session.isCompacting) throw new Error("Stop the active turn before changing its model.");
+		const registry = await this.modelRegistryRef();
+		const lease = await this.mixtureLease(registry, this.mixtureCwd());
+		try {
+			const resolved = feature("model-selection").resolveCliModel({
+				cliModel: selector, modelRegistry: registry, settings: this.session.settings,
+			});
+			if (resolved.error || !resolved.model) throw new Error(resolved.error ?? `No available model for ${selector}`);
+			if (!registry.hasConfiguredAuth(resolved.model)) throw new Error(`No auth configured for ${resolved.model.provider}/${resolved.model.id}`);
+			if (resolved.model.provider === "mixture") {
+				const refusal = mixtureRefusal(lease, resolved.model.id, registry, this.session.settings, this.mixtureCwd());
+				if (refusal) throw new Error(refusal);
+			}
+			if (resolved.configuredRole) {
+				const result = await this.roleState().setRole(resolved.configuredRole);
+				if (!result.ok) throw new Error(result.message);
+			} else {
+				await this.session.setModel(resolved.model);
+			}
+			if (resolved.thinkingLevel !== undefined) this.session.setThinkingLevel(resolved.thinkingLevel);
+		} finally {
+			lease?.release();
+		}
+		this.emit({ type: "session_updated", snapshot: this.snapshot() } as unknown as AgentSessionEventJson);
+	}
+
 
 	async compact(focus?: string): Promise<void> {
 		// `session.compact(customInstructions?)` is the public SDK entry. The

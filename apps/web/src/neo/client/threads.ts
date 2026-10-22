@@ -161,9 +161,8 @@ const live: ThreadsClient = {
 	settle(id, value) { if (fixtures.some((t) => t.id === id)) return preview.settle(id, value); if (value) { settled.add(id); reopened.delete(id); } else { settled.delete(id); reopened.add(id); } localStorage.setItem(SETTLED_KEY, JSON.stringify([...settled])); emit(); },
 	async setModel(id, agentId, model) {
 		if (fixtures.some((t) => t.id === id) || agentId !== "main") return preview.setModel(id, agentId, model);
-		const split = model.indexOf("/"); if (split < 0) throw new Error("Choose a provider/model before sending.");
 		const liveId = await useStore.getState().resumeSession(id);
-		await api.setSessionModel(liveId, { provider: model.slice(0, split), id: model.slice(split + 1) });
+		await api.setSessionSelector(liveId, model);
 	},
 	async dispose(id) { if (fixtures.some((t) => t.id === id)) return preview.dispose(id); await useStore.getState().disposeSession(id); settled.add(id); emit(); },
 };
