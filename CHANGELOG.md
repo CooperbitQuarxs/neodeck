@@ -7,6 +7,8 @@ All notable changes to NPI deck (a fork of bjb2/omp-deck; entries before the for
 
 ### Changed
 
+- Studio is a list page and a full-width canvas. `/studio` lists every graph by kind with a sentence on what each kind models; opening one goes to `/studio/<id>`, where the canvas takes the whole panel and the inspector docks to the right only while a node, the graph's settings or its runs are open. Delete and Backspace remove the selected node or connection on Studio and flow canvases. Picking a run paints each node's outcome on the canvas. The New graph menu that rendered under the map's search field is gone; old `/studio?graph=` links redirect. Claude Opus 5.5.
+
 - Skills & tools separates live skills, slash commands, extension discovery, marketplace plugins and sources. Shared `.agent` directories are no longer mislabeled as subagents; usage examples are opt-in rather than mixed into the installed inventory. GPT-6.1 Sol on behalf of PsychedelicShayna.
 
 - The Neo themes now use NeoProxy's chassis: purple-tinted black surfaces (`#0b0810` page, `#100c16` panel, `#16111d` card) and NeoProxy's ink ramp, so NeoDeck and NeoProxy read as one family. Neo light moves to the matching lilac-grey page. Claude Opus 5.5.
