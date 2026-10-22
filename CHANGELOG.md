@@ -5,10 +5,18 @@ All notable changes to NPI deck (a fork of bjb2/omp-deck; entries before the for
 
 ## [Unreleased]
 
-### Added
+### Changed
 
 - Skills & tools separates live skills, slash commands, extension discovery, marketplace plugins and sources. Shared `.agent` directories are no longer mislabeled as subagents; usage examples are opt-in rather than mixed into the installed inventory. GPT-6.1 Sol on behalf of PsychedelicShayna.
 
+- The Neo themes now use NeoProxy's chassis: purple-tinted black surfaces (`#0b0810` page, `#100c16` panel, `#16111d` card) and NeoProxy's ink ramp, so NeoDeck and NeoProxy read as one family. Neo light moves to the matching lilac-grey page. Claude Opus 5.5.
+
+### Added
+- The shell follows NeoProxy's compact chrome, with quieter status controls and a sidebar that can be hidden from the hamburger. Desktop visibility persists in this browser; mobile navigation supports Escape and returns keyboard focus. By GPT-6.1 Sol.
+
+- Knowledge now separates a wide note reader from a full-size searchable map, with collection filters, keyboard-accessible map results and live Git history. Project agents remain the only note authors. Implemented by GPT-6 Astra for PsychedelicShayna.
+- Shared layer tokens keep page chrome, menus, modal drawers and nested pickers on one stacking scale. The design guide documents portal and nested-overlay rules. GPT-6.1 Sol.
+- Engine status opens Engine settings instead of a missing route. Every route now has a themed recovery page, including unknown URLs, and legacy settings, advisor, marketplace and run-detail links point to their registered pages. Removed unconfigured NeoProxy links instead of sending them to nonexistent Deck routes. By GPT-6.1 Sol.
 - Studio now edits pipelines, virtual-model routers, classifiers and board flows beside live routines and the knowledge map, with typed connections, a node inspector, editable TOML and per-node run timelines.
 - Knowledge now has a searchable note tree, a linked Markdown reader, and a map toggled with M. Follow backlinks, browse recent notes, or ask an agent to change a note in a prefilled thread.
 - Threads now groups conversations by attention, opens real session transcripts, and keeps each agent's colour and message target visible. Preview threads support several primary agents, removable spawn restrictions, folded tools and spawned-agent depth, and remain available when live sessions cannot load.
@@ -17,6 +25,7 @@ All notable changes to NPI deck (a fork of bjb2/omp-deck; entries before the for
 - Skills brings installed skills, marketplace plugins and sources into one page, with SKILL.md drawers, editing, authoring and plugin update checks. Last-used timestamps are marked as preview data.
 - GitHub adds a preview implementation wheel, repository issues and pull requests, review comments, worker assignment and issue filing with an optional live board card.
 - Agents now has a searchable roster, editable restriction templates, spawn and detail drawers, and a judge log with reversible stops. Preview agents sit beside live sessions and their workers.
+- Shared Neo controls now use styled portal menus and listboxes instead of native select popups. Dialogs and drawers share nested Escape handling, focus trapping and restoration, with keyboard navigation and type-ahead in pickers. GPT-6.1 Sol.
 - A new deck, designed from scratch: sign in at `/login`, land in the Inbox with the Today strip, and jump between nine places with `G` + a letter; the old deck stays reachable at `/legacy`.
 - **Inbox redesigned as the office's front door** ([#237](https://github.com/PsychedelicShayna/neodeck/issues/237)). One page in the Neo language: Capture opens a slip at the top of the list (title, optional notes, a label), the captured slip lands in the list with its label and opens on the right, and only slips that still need you are shown ("Show settled" brings the rest back). A slip's ways out are explicit: Make a card, Open in a thread, Done. A Private / Shared switch shows the shared office inbox as planned, and the empty reader explains how a slip moves and where slips come from (this deck, Telegram with live bridge status, GitHub issues and dictation as planned). `/inbox?capture=1` from Home opens the slip directly.
 - **Routine canvas and editor in the Neo language** ([#236](https://github.com/PsychedelicShayna/neodeck/issues/236)). Nodes are cards with a readable title (the step's name, as words), an icon, the action, and what the step does: the prompt, the command, the URL, the path. The trigger is on the canvas as a start node ("Weekdays at 07:00") and opens its own editor when selected. Field labels are sentence-case with help under the control; a validation problem is shown at the field, on the node, and in the save bar with a "show me" link, instead of a red band. The save bar is always visible, the source view is a full-height YAML editor with its problems beneath it, and the add-action menu, triggers, options and step list follow the same language.

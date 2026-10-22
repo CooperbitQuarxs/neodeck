@@ -10,7 +10,7 @@ export function usageFraction(pool: UsagePool): number {
 }
 export function VirtualModelCard({pool,admin}:{pool:UsagePool;admin:boolean}) {
  const full = usageFraction(pool) >= 1;
- return <Card className="neo-usage-pool" title={<span className="neo-mono">neoproxy/{pool.name}</span>} description={pool.stages.map(s=>s.model.split("/")[1]).join(" then ")} actions={<><span className="neo-usage-cost neo-num">{formatCost(pool.spentUsd)} <span>· {pool.requests.toLocaleString()} requests</span></span><a className="neo-btn" data-variant="ghost" data-size="sm" target="_blank" rel="noreferrer" href={`/neo/#/virtual-models/${pool.name}`}>Edit in NeoProxy</a><Link className="neo-btn" data-variant="ghost" data-size="sm" to={`/studio?graph=r_${pool.name}`}>Open in Studio</Link></>}>
+ return <Card className="neo-usage-pool" title={<span className="neo-mono">neoproxy/{pool.name}</span>} description={pool.stages.map(s=>s.model.split("/")[1]).join(" then ")} actions={<><span className="neo-usage-cost neo-num">{formatCost(pool.spentUsd)} <span>· {pool.requests.toLocaleString()} requests</span></span><Link className="neo-btn" data-variant="ghost" data-size="sm" to={`/studio?graph=r_${pool.name}`}>Open in Studio</Link></>}>
   <div className="neo-usage-pool-body"><Ring pool={pool}/><div className="neo-chain" aria-label={`${pool.name} demotion chain`}>
    {pool.stages.length > 1 && <><div className="neo-usage-request"><ArrowRight size={14}/><span>Request</span></div><div className="neo-chain-link"><i/></div></>}
    {pool.stages.map((stage,i)=><Fragment key={stage.model}><div className="neo-chain-stage" data-demotion={i>0}>

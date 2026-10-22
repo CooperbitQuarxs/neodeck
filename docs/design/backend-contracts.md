@@ -78,9 +78,11 @@ Flows are today's routines (`/api/routines`). The other kinds share one document
 
 ## 9. Knowledge history (`knowledgeHistory`)
 
-Notes are read live (`/api/kb/*`); humans do not write (the server refuses by design; agents write through `kb_write`). The page's verb is "Ask an agent", which opens a thread.
+Notes are read live through `/api/kb/*`. Humans request edits through a project agent; the server reserves `kb_write` for authenticated agents. Notes and Map are separate workspaces. `/knowledge?view=map` opens the full map from Knowledge or Studio; an optional `note` selects its focus. Map search lives in the toolbar, outside the canvas stacking context.
 
-- `GET /api/kb/history?path=` → `{ events: { id, at, actor, kind: "wrote"|"asked"|"linked", text, threadId? }[] }`.
+- `GET /api/kb/history?path=` returns `{ available: boolean, entries: { id, at, actor, kind: "committed", text }[] }`. This is live Git history, capped at 40 commits and following renames. `id` is the commit hash, `at` the author's ISO timestamp, `actor` the Git author and `text` the subject. It does not claim the author was an agent.
+- A directory outside Git returns `available: false` with no entries; an uncommitted note in a Git repository returns `available: true` with no entries. Missing, excluded and escaping paths return 404. Git failures after repository discovery return 500 rather than fabricated history.
+- Agent activity events remain unavailable. Git history is labeled separately and does not imply a thread link or capture receipt.
 
 ## 10. Skills, commands, extensions and usage
 

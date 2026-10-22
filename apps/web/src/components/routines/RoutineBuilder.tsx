@@ -752,7 +752,7 @@ function RunList({ routine, runs }: { routine: Routine; runs: RoutineRun[] }) {
 							{dur !== undefined ? <span className="neo-mono text-ink-4">{formatDurationMs(dur)}</span> : null}
 							{r.abortReason ? <span className="text-warn">{r.abortReason}</span> : null}
 							<a
-								href={`/routines/${routine.id}/runs/${r.id}`}
+								href={`/legacy/routines/${encodeURIComponent(routine.id)}/runs/${encodeURIComponent(r.id)}`}
 								className="ml-auto text-ink-3 underline-offset-2 hover:text-accent hover:underline"
 							>
 								detail
