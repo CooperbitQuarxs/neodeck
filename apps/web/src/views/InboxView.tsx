@@ -172,14 +172,14 @@ export function InboxView() {
 			`task, POST /api/tasks and report the new task id.`,
 		].join("\n");
 		setPendingDraft({ text: draft });
-		navigate("/threads");
+		navigate("/legacy/threads");
 	}
 
 	async function makeCard(it: InboxItem): Promise<void> {
 		try {
 			const { task, inbox } = await inboxApi.promote(it.id);
 			replaceItem(inbox);
-			navigate(`/tasks?open=${encodeURIComponent(task.id)}`);
+			navigate(`/legacy/tasks?open=${encodeURIComponent(task.id)}`);
 		} catch (e) {
 			setError(String(e));
 		}
@@ -218,7 +218,7 @@ export function InboxView() {
 						{scope === "shared" ? (
 							<Construction>
 								<strong className="text-ink">The shared inbox is not built yet.</strong> It arrives with accounts: one inbox the whole office drops slips
-								into, next to each person's private one. Until then every slip here is yours. See <a href="/people" className="text-accent underline-offset-2 hover:underline">People</a>.
+								into, next to each person's private one. Until then every slip here is yours. See <a href="/legacy/people" className="text-accent underline-offset-2 hover:underline">People</a>.
 							</Construction>
 						) : null}
 

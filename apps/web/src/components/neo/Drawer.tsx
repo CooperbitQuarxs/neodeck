@@ -5,8 +5,8 @@
  * bottom so forms inside never hide their buttons below the fold.
  */
 import { X } from "lucide-react";
-import { type CSSProperties, type ReactNode, useEffect, useRef } from "react";
-import { createPortal } from "react-dom";
+import { type CSSProperties, type ReactNode, useId, useRef } from "react";
+import { NeoModalScope, NeoPortal, useNeoLayer, useNeoOverlay } from "./overlays";
 import { NeoButton } from "./primitives";
 
 export interface DrawerProps {
@@ -23,36 +23,19 @@ export interface DrawerProps {
 }
 
 export function Drawer({ open, onClose, title, subtitle, actions, footer, width, children }: DrawerProps) {
-	const onCloseRef = useRef(onClose);
-	onCloseRef.current = onClose;
 	const panelRef = useRef<HTMLDivElement>(null);
-
-	useEffect(() => {
-		if (!open) return;
-		const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-		panelRef.current?.focus();
-		const onKey = (e: KeyboardEvent) => {
-			if (e.key !== "Escape") return;
-			e.preventDefault();
-			e.stopPropagation();
-			onCloseRef.current();
-		};
-		window.addEventListener("keydown", onKey, true);
-		return () => {
-			window.removeEventListener("keydown", onKey, true);
-			opener?.focus();
-		};
-	}, [open]);
+	const titleId = useId(), subtitleId = useId();
+	const layer = useNeoLayer(true);
+	useNeoOverlay({ open, onClose, panelRef, modal: true });
 
 	if (!open) return null;
-	return createPortal(
-		<>
-			<div className="neo-drawer-scrim" onClick={onClose} role="presentation" />
-			<div ref={panelRef} className="neo-drawer" role="dialog" aria-modal="true" tabIndex={-1} style={width !== undefined ? ({ "--drawer-w": `${width}px` } as CSSProperties) : undefined}>
+	return <NeoPortal><NeoModalScope>
+			<div className="neo-drawer-scrim" style={layer} role="presentation" />
+			<div ref={panelRef} className="neo-drawer neo-modal-sheet" role="dialog" aria-modal="true" aria-labelledby={titleId} aria-describedby={subtitle !== undefined ? subtitleId : undefined} tabIndex={-1} style={{ ...layer, zIndex: `calc(${layer.zIndex} + 1)`, ...(width !== undefined ? { "--drawer-w": `${width}px` } : {}) } as CSSProperties}>
 				<header className="neo-drawer-header">
 					<div className="neo-drawer-titles">
-						<h2 className="neo-drawer-title">{title}</h2>
-						{subtitle !== undefined && <div className="neo-drawer-subtitle">{subtitle}</div>}
+						<h2 id={titleId} className="neo-drawer-title">{title}</h2>
+						{subtitle !== undefined && <div id={subtitleId} className="neo-drawer-subtitle">{subtitle}</div>}
 					</div>
 					{actions}
 					<NeoButton variant="ghost" icon onClick={onClose} aria-label="Close">
@@ -62,9 +45,7 @@ export function Drawer({ open, onClose, title, subtitle, actions, footer, width,
 				<div className="neo-drawer-body">{children}</div>
 				{footer !== undefined && <footer className="neo-drawer-footer">{footer}</footer>}
 			</div>
-		</>,
-		document.body,
-	);
+		</NeoModalScope></NeoPortal>;
 }
 
 /** Small-caps-free section label inside drawers and cards (`Timing`, `Tokens`). */

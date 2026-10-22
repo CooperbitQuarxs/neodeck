@@ -9,7 +9,7 @@ export function noteTitle(path: string): string { return (path.split("/").pop() 
 export function noteDir(path: string): string { return path.includes("/") ? path.split("/")[0]! : ""; }
 
 function NoteRow({ entry, active, title, onOpen }: { entry: KbTreeEntry; active?: string; title?: string; onOpen: (path: string) => void }) {
-	return <button type="button" className="neo-row" data-active={active === entry.path} onClick={() => onOpen(entry.path)} title={entry.path}>
+	return <button type="button" className="neo-row" data-active={active === entry.path} aria-current={active === entry.path ? "page" : undefined} onClick={() => onOpen(entry.path)} title={entry.path}>
 		<span className="neo-row-lead"><i className="neo-knowledge-dot" style={{ background: dirColor(noteDir(entry.path)) }} /></span>
 		<span className="neo-row-title">{title ?? noteTitle(entry.path)}</span>
 		<span className="neo-row-when">{entry.mtime ? formatShortRelative(entry.mtime) : ""}</span>
@@ -48,7 +48,7 @@ export function NoteList({ tree, counter, mode, active, titles, results, searchi
 
 function Branch({ tree, counter, active, titles, onOpen, root }: { tree: KbTreeResponse; counter: number; active?: string; titles: Record<string, string>; onOpen: (path: string) => void; root?: boolean }) {
 	return <>{tree.dirs.map((dir) => <Directory key={dir.path} entry={dir} counter={counter} active={active} titles={titles} onOpen={onOpen} />)}
-		{root && tree.files.length ? <div className="neo-split-group">(root) <span className="neo-num">{tree.files.length}</span></div> : null}
+		{root && tree.files.length ? <div className="neo-split-group">Top-level notes <span className="neo-num">{tree.files.length}</span></div> : null}
 		{tree.files.map((entry) => <NoteRow key={entry.path} entry={entry} active={active} title={titles[entry.path]} onOpen={onOpen} />)}
 		{root && !tree.dirs.length && !tree.files.length ? <Empty title="No notes yet" hint="Ask an agent to write the first note." /> : null}
 	</>;
