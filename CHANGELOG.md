@@ -5,6 +5,10 @@ All notable changes to NPI deck (a fork of bjb2/omp-deck; entries before the for
 
 ## [Unreleased]
 
+### Changed
+
+- The Neo themes now use NeoProxy's chassis: purple-tinted black surfaces (`#0b0810` page, `#100c16` panel, `#16111d` card) and NeoProxy's ink ramp, so NeoDeck and NeoProxy read as one family. Neo light moves to the matching lilac-grey page. Claude Opus 5.5.
+
 ### Added
 
 - Shared layer tokens keep page chrome, menus, modal drawers and nested pickers on one stacking scale. The design guide documents portal and nested-overlay rules. GPT-6.1 Sol.
