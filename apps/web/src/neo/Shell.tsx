@@ -209,8 +209,13 @@ function useJumpShortcuts(): void {
 		let armed = 0;
 		function onKey(e: KeyboardEvent): void {
 			const target = e.target as HTMLElement | null;
-			if (e.ctrlKey || e.metaKey || e.altKey) return;
-			if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT" || target.isContentEditable)) return;
+			const editing = target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT" || target.isContentEditable);
+			const overlay = [...document.querySelectorAll('[role="dialog"], [role="menu"], [role="listbox"], .neo-shell[data-nav-open="true"]')]
+				.some((element) => element.getClientRects().length > 0);
+			if (e.defaultPrevented || e.isComposing || e.ctrlKey || e.metaKey || e.altKey || editing || overlay) {
+				armed = 0;
+				return;
+			}
 			const now = Date.now();
 			if (e.key === "g" || e.key === "G") {
 				armed = now;
