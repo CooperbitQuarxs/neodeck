@@ -81,7 +81,7 @@
 	position: absolute;
 	inset: 0;
 	pointer-events: none;
-	z-index: 0;
+	z-index: var(--neo-layer-base);
 	background:
 		radial-gradient(60rem 28rem at 12% -10%, var(--neo-ambient-a), transparent 70%),
 		radial-gradient(50rem 26rem at 95% -12%, var(--neo-ambient-b), transparent 70%);
@@ -89,7 +89,7 @@
 
 .neo-topbar {
 	position: relative;
-	z-index: 40;
+	z-index: var(--neo-layer-chrome);
 	display: flex;
 	align-items: center;
 	gap: 12px;
@@ -148,7 +148,7 @@
 	display: flex;
 	flex-direction: column;
 	gap: 8px;
-	z-index: 30;
+	z-index: var(--neo-layer-chrome);
 }
 
 .neo-sidebar::-webkit-scrollbar {
@@ -248,7 +248,7 @@
 
 .neo-panel {
 	position: relative;
-	z-index: 1;
+	z-index: var(--neo-layer-raised);
 	flex: 1;
 	min-width: 0;
 	min-height: 0;
@@ -265,7 +265,7 @@
 	position: absolute;
 	inset: 0;
 	background: rgba(0, 0, 0, 0.5);
-	z-index: 60;
+	z-index: var(--neo-layer-modal);
 	animation: neo-fade var(--dur-2) var(--ease) both;
 }
 
@@ -669,7 +669,7 @@ textarea.neo-input {
 
 .neo-segmented-option {
 	position: relative;
-	z-index: 1;
+	z-index: var(--neo-layer-raised);
 	height: 24px;
 	padding: 0 9px;
 	border-radius: 6px;
@@ -883,7 +883,7 @@ textarea.neo-input {
 .neo-table th {
 	position: sticky;
 	top: 0;
-	z-index: 1;
+	z-index: var(--neo-layer-sticky);
 	text-align: left;
 	font-size: 12px;
 	font-weight: 500;
@@ -1021,7 +1021,7 @@ textarea.neo-input {
 	right: 8px;
 	bottom: 8px;
 	width: min(var(--drawer-w, 560px), calc(100% - 16px));
-	z-index: 61;
+	z-index: calc(var(--neo-layer-modal) + 1);
 	display: flex;
 	flex-direction: column;
 	border-radius: var(--r-panel);
@@ -1504,7 +1504,7 @@ select.neo-input {
 	left: 50%;
 	bottom: 14px;
 	transform: translateX(-50%);
-	z-index: 20;
+	z-index: var(--neo-layer-chrome);
 	display: inline-flex;
 	align-items: center;
 	gap: 7px;
@@ -1958,7 +1958,7 @@ select.neo-input {
 .neo-drawer-scrim {
 	position: fixed;
 	inset: 0;
-	z-index: 60;
+	z-index: var(--neo-layer-modal);
 	background: rgba(0, 0, 0, 0.35);
 	animation: neo-fade var(--dur-2) var(--ease) both;
 }
@@ -2021,7 +2021,7 @@ select.neo-input {
 	border-bottom: 1px solid var(--neo-line-2);
 	position: sticky;
 	top: 0;
-	z-index: 1;
+	z-index: var(--neo-layer-sticky);
 	background: var(--neo-card);
 }
 
@@ -2169,7 +2169,7 @@ button.neo-timeline-span {
 .neo-timeline-span:hover,
 .neo-timeline-span[data-selected="true"] {
 	box-shadow: 0 0 0 2px var(--neo-focus);
-	z-index: 1;
+	z-index: var(--neo-layer-raised);
 }
 
 .neo-timeline-span:focus-visible {
@@ -2345,7 +2345,7 @@ button.neo-timeline-span {
 	position: absolute;
 	top: calc(100% + 6px);
 	right: 0;
-	z-index: 81;
+	z-index: var(--neo-layer-popover);
 	min-width: 180px;
 	padding: 4px;
 	border-radius: var(--r-card);
@@ -2839,7 +2839,7 @@ button.neo-timeline-span {
 	position: absolute;
 	left: 0;
 	top: calc(100% + 6px);
-	z-index: 60;
+	z-index: var(--neo-layer-popover);
 	width: 340px;
 	max-height: 440px;
 	overflow-y: auto;
