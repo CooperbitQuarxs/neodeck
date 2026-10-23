@@ -29,10 +29,12 @@ async function main() {
 		});
 	} else if (mode === "grandchild") {
 		const ready = { shell: config.shell, parent: process.ppid, grandchild: process.pid };
+		await Promise.all([
+			new Promise((resolve, reject) => process.stdout.write("tree stdout ready\n", error => error ? reject(error) : resolve())),
+			new Promise((resolve, reject) => process.stderr.write("tree stderr ready\n", error => error ? reject(error) : resolve())),
+		]);
 		fs.writeFileSync(config.marker + ".tmp", JSON.stringify(ready));
 		fs.renameSync(config.marker + ".tmp", config.marker);
-		process.stdout.write("tree stdout ready\n");
-		process.stderr.write("tree stderr ready\n");
 		await new Promise(resolve => setTimeout(resolve, 30_000));
 	} else if (mode !== "success") {
 		throw new Error(`unknown shell fixture mode: ${mode}`);

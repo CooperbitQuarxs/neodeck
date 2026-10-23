@@ -213,8 +213,10 @@ export async function terminateOwned(proc: OwnedProcess, graceMs = 800): Promise
 }
 
 export async function stopOwnedProcesses(): Promise<void> {
-	await Promise.all([...windowsActive.values()].map(terminateWindows));
-	if (process.platform === "win32") return;
+	if (process.platform === "win32") {
+		await Promise.all([...windowsActive.values()].map(terminateWindows));
+		return;
+	}
 	const records = [...active.values()];
 	for (const record of records) signalGroup(record, "SIGTERM");
 	await new Promise((resolve) => setTimeout(resolve, 800));
