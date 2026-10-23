@@ -97,6 +97,7 @@ All notable changes to NPI deck (a fork of bjb2/omp-deck; entries before the for
 
 ### Fixed
 
+- Read-only card workers start when temporary runtime or worktree paths have symlinked parents. Bubblewrap mounts the same directories by their canonical paths, retaining read-only host access and the existing namespace isolation ([#273](https://github.com/PsychedelicShayna/neodeck/issues/273)).
 - Inbox compose slips focus the title first and keep empty notes ready to edit when switching fields ([#244](https://github.com/PsychedelicShayna/neodeck/issues/244)).
 - Inbox captures retain the current notes even when Capture activates before the editor loses focus ([#235](https://github.com/PsychedelicShayna/neodeck/issues/235)).
 - The SDK contract probe and server types support current NeoPi nightly alongside the documented pin, including role-level settings provenance ([#232](https://github.com/PsychedelicShayna/neodeck/issues/232)).
