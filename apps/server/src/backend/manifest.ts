@@ -19,9 +19,6 @@
  * scripts/check-sdk-imports.ts enforces it.
  */
 
-import type { ModelSelectorResult } from "@npi-deck/protocol";
-import type { AgentSession } from "@oh-my-pi/pi-coding-agent";
-
 export type ModuleTypes = {
 	"@oh-my-pi/pi-utils": typeof import("@oh-my-pi/pi-utils");
 	"@oh-my-pi/pi-ai": typeof import("@oh-my-pi/pi-ai");
@@ -34,14 +31,8 @@ export type ModuleTypes = {
 	"@oh-my-pi/pi-coding-agent/config/model-settings": typeof import("@oh-my-pi/pi-coding-agent/config/model-settings");
 	"@oh-my-pi/pi-coding-agent/config/model-roles": typeof import("@oh-my-pi/pi-coding-agent/config/model-roles");
 	"@oh-my-pi/pi-coding-agent/config/model-resolver": typeof import("@oh-my-pi/pi-coding-agent/config/model-resolver");
-	// Optional newer SDK contract. Keep the older pin compilable without copying native policy.
-	"@oh-my-pi/pi-coding-agent/modes/rpc/rpc-model-selector": {
-		getRpcModelSelector(session: AgentSession, query: string): Promise<ModelSelectorResult>;
-		queryModelSelector(source: unknown, registry: unknown, scopedModels: readonly unknown[], query: string): ModelSelectorResult;
-	};
-	"@oh-my-pi/pi-coding-agent/modes/model-browser-source": {
-		createModelBrowserSource(settings: unknown): unknown;
-	};
+	"@oh-my-pi/pi-coding-agent/modes/rpc/rpc-model-selector": typeof import("@oh-my-pi/pi-coding-agent/modes/rpc/rpc-model-selector");
+	"@oh-my-pi/pi-coding-agent/modes/model-browser-source": typeof import("@oh-my-pi/pi-coding-agent/modes/model-browser-source");
 	"@oh-my-pi/pi-coding-agent/modes/rpc/rpc-roles": typeof import("@oh-my-pi/pi-coding-agent/modes/rpc/rpc-roles");
 	"@oh-my-pi/pi-tui/thinking": typeof import("@oh-my-pi/pi-tui/thinking");
 	"@oh-my-pi/pi-coding-agent/config/models-config": typeof import("@oh-my-pi/pi-coding-agent/config/models-config");

@@ -9,7 +9,7 @@ import { createRoutine, createV1Routine, getRoutine, listRuns, updateV1Routine }
 import { RoutineTestFixtures } from "./test-fixture.ts";
 import { createIsolatedTest, isIsolatedCase } from "../test-isolation.ts";
 import { createShellFixture } from "./shell-fixture.ts";
-import { observeProcessTree, unrelatedProcess } from "./process-fixture.ts";
+import { observeProcessTree, unrelatedProcess } from "../../test-fixtures/process-fixture.ts";
 import { resolveBackendSelection } from "../backend/runtime.ts";
 
 const nativeBackend = resolveBackendSelection();
