@@ -141,6 +141,10 @@ jobs:
 
       - name: typecheck (all workspaces)
         id: typecheck
+        # Telegram's program includes the pinned SDK. macOS Node defaults to
+        # about 2 GiB, which is too small; workspace checks run serially.
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
         run: bun .github/scripts/typecheck.ts
 
       - name: test (all workspaces)
