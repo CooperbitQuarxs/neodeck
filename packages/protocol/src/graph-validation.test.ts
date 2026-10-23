@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import type { GraphNodeType, RoutineGraph } from "./graph";
+import type { GraphNodeType, GraphValue, RoutineGraph } from "./graph";
 import { isGraphValue, validateRoutineGraph } from "./graph-validation";
 import { graphBuiltinNodeTypes } from "./graph-builtins";
 
@@ -96,7 +96,8 @@ test("bounded iteration validates its body and rejects run-wide settings inside 
 		expect(validateRoutineGraph(spec, builtinCatalogue).errors?.some(error => error.keyword === "iterationBound")).toBe(true);
 	}
 	for (const body of [null, {}, { version: 2, nodes: [], edges: [] }, { version: 2, nodes: [{ id: "source", type: "event.source", config: { eventType: "manual" } }], edges: [] }, { version: 2, nodes: [{ id: "item", type: "iteration.input", config: { eventType: "iteration" } }], edges: [], budget: { max_steps_executed: 100 } }]) {
-		const spec = iterationGraph(); spec.nodes[1]!.config.body = body;
+		// These bodies are invalid on purpose to exercise runtime rejection.
+		const spec = iterationGraph(); spec.nodes[1]!.config.body = body as unknown as GraphValue;
 		expect(validateRoutineGraph(spec, builtinCatalogue).valid).toBe(false);
 	}
 });
