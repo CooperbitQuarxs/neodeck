@@ -9,6 +9,8 @@ import * as path from "node:path";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 
 import { InProcessAgentBridge } from "./bridge/in-process.ts";
+// Keep recovery and openDb in one hot-reloaded graph; dynamic imports can retain an old DB module.
+import { CardAgentRunner } from "./card-agents.ts";
 import { RoutinesRunner } from "./routines-runner.ts";
 import { closeDb, openDb } from "./db/index.ts";
 import { loadConfig } from "./config.ts";
@@ -194,7 +196,6 @@ export async function startDeck(opts: StartDeckOptions = {}): Promise<DeckHandle
 	notificationService.register(new BrowserNotificationChannel());
 
 
-	const { CardAgentRunner } = await import("./card-agents.ts");
 	const cardAgents = new CardAgentRunner(config);
 	const bridge = new InProcessAgentBridge({
 		idleTimeoutMs: config.idleTimeoutMs,
