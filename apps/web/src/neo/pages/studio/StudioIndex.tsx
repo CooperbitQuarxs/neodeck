@@ -1,5 +1,5 @@
 import { BookOpen, Clock, GitFork, KanbanSquare, Plus, Route, Workflow } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Empty, ErrorState, NeoButton, PageHeader, SearchInput, formatShortRelative } from "@/components/neo";
 import { studio, type GraphKind, type GraphSummary } from "../../client/studio";
@@ -24,16 +24,11 @@ export function studioPath(id: string): string { return `/studio/${encodeURIComp
 export function StudioIndex({ onCreate }: { onCreate: (kind: BuildableKind) => Promise<void> }) {
  const page = NAV_ITEMS.find(item => item.to === "/studio")!;
  const [graphs, setGraphs] = useState<GraphSummary[]>(), [error, setError] = useState(""), [search, setSearch] = useState("");
- const searchRef = useRef<HTMLInputElement>(null);
  useEffect(() => { void studio.list().then(setGraphs).catch(reason => setError(String(reason))); }, []);
- useEffect(() => {
-  const key = (event: KeyboardEvent) => { const target = event.target as HTMLElement; if (event.key === "/" && !target.closest("input, textarea, [contenteditable='true']")) { event.preventDefault(); searchRef.current?.focus(); } };
-  window.addEventListener("keydown", key); return () => window.removeEventListener("keydown", key);
- }, []);
  const needle = search.trim().toLowerCase();
  const visible = useMemo(() => (graphs ?? []).filter(g => `${g.name} ${g.description}`.toLowerCase().includes(needle)), [graphs, needle]);
  return <div className="neo-page neo-studio-index">
-  <PageHeader title={page.label} description="Graphs model how work moves through the office. Open one to edit it on a full canvas." actions={<SearchInput ref={searchRef} value={search} onChange={setSearch} placeholder="Find a graph" aria-label="Find a graph" width={240} />} />
+  <PageHeader title={page.label} description="Graphs model how work moves through the office. Open one to edit it on a full canvas." actions={<SearchInput pageSearch value={search} onChange={setSearch} placeholder="Find a graph" aria-label="Find a graph" width={240} />} />
   {error ? <ErrorState error={error} /> : !graphs ? <p className="neo-studio-help">Loading graphs…</p> : <>
    {SECTIONS.map(section => {
     const items = visible.filter(g => g.kind === section.kind);

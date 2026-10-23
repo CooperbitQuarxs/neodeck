@@ -7,6 +7,7 @@ import { Empty, ErrorState, Kbd, NeoButton, PageHeader, SearchInput, SectionLabe
 import type { KbStatusResponse } from "@/lib/kb-api";
 import { useStore } from "@/lib/store";
 import { knowledge, type KnowledgeHistoryEntry } from "../client/knowledge";
+import { usePageShortcuts } from "../shortcuts";
 import { PreviewChip } from "../components/PreviewChip";
 import { dirColor, KnowledgeMap } from "../components/KnowledgeMap";
 import { NAV_ITEMS } from "../nav";
@@ -63,6 +64,11 @@ export function KnowledgePage() {
 	}, [setParams]);
 	function ask(note = path): void { navigate(`/threads?draft=${encodeURIComponent(note ? `Change the note knowledge/${note}: ` : "Add a note to the knowledge base about ")}`); }
 	function askMissing(): void { navigate(`/threads?draft=${encodeURIComponent(`Write the note knowledge/${unresolved}: `)}`); }
+	usePageShortcuts({ shortcuts: [{ key: "m", label: "Toggle Knowledge map", run: () => changeView(view === "map" ? "notes" : "map") }] });
+	usePageShortcuts({ search: searchRef, focusSearch: () => {
+		if (path) setParams(previous => { const next = new URLSearchParams(previous); next.delete("note"); return next; });
+		requestAnimationFrame(() => searchRef.current?.focus());
+	} }, view === "notes");
 
 	useEffect(() => { try { localStorage.setItem(MAP_KEY, String(mapOpen)); } catch { /* The toggle still works when storage is disabled. */ } }, [mapOpen]);
 	useEffect(() => {
@@ -76,20 +82,10 @@ export function KnowledgePage() {
 				else if (!typing) setUnresolved(null);
 				return;
 			}
-			if (typing) return;
-			if (event.key.toLowerCase() === "m") { event.preventDefault(); changeView(view === "map" ? "notes" : "map"); }
-			if (event.key === "/") {
-				event.preventDefault();
-				if (view === "map") document.querySelector<HTMLInputElement>('.neo-knowledge-atlas input')?.focus();
-				else {
-					if (path) setParams(previous => { const next = new URLSearchParams(previous); next.delete("note"); return next; });
-					requestAnimationFrame(() => searchRef.current?.focus());
-				}
-			}
 		}
 		window.addEventListener("keydown", key);
 		return () => window.removeEventListener("keydown", key);
-	}, [search, view, changeView, path, setParams]);
+	}, [search]);
 	useEffect(() => {
 		let cancelled = false;
 		void Promise.all([knowledge.tree(), knowledge.status(), knowledge.graph()]).then(([nextTree, nextStatus, nextGraph]) => {

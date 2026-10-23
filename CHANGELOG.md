@@ -6,6 +6,7 @@ All notable changes to NPI deck (a fork of bjb2/omp-deck; entries before the for
 ## [Unreleased]
 
 ### Changed
+- Every page shares G navigation, `/` page search, and a keyboard-accessible `?` shortcut guide. Page actions register alongside the global keys, and typing, IME composition and open overlays suppress them. The sidebar teaches the same contract ([#300](https://github.com/PsychedelicShayna/neodeck/issues/300)). GPT-6.1 Sol on behalf of PsychedelicShayna.
 - Board cards and GitHub items open in the shell's docked inspector instead of blocking the page with a modal sheet. Selection moves focus into the inspector, Escape or its close button returns to the selected row, and card assignment and destructive actions stay in its footer ([#294](https://github.com/PsychedelicShayna/neodeck/issues/294)). GPT-6.1 Sol on behalf of PsychedelicShayna.
 - Studio keeps graph kind and preview status visible when its title wraps on narrow canvases. Its empty map directs you to ask an agent for a note, matching Knowledge's agent-authored workflow ([#305](https://github.com/PsychedelicShayna/neodeck/issues/305)). GPT-6.1 Sol on behalf of PsychedelicShayna.
 - Fixed settings choices now stay visible as segments: account access, MCP scope and transport, dictation engine and language, and record entry type. Disabled groups keep their keyboard and pointer actions disabled ([#299](https://github.com/PsychedelicShayna/neodeck/issues/299)). GPT-6.1 Sol on behalf of PsychedelicShayna.

@@ -29,7 +29,7 @@ export function GitHubPage() {
   {error ? <ErrorState error={error} onRetry={() => void refresh()} /> : null}
   {data?.errors.map(e => <Notice key={e.repo} tone="warn">{e.repo}: {e.error}</Notice>)}
   <div className="neo-split neo-fill-body"><aside className="neo-split-list">
-   <div className="neo-split-list-head"><SearchInput value={query} onChange={setQuery} placeholder="Find a repository" size="sm" /></div>
+   <div className="neo-split-list-head"><SearchInput pageSearch value={query} onChange={setQuery} placeholder="Find a repository" size="sm" /></div>
    <div className="neo-split-group">Tracked repositories</div><div className="neo-split-rows">
     {data?.repos.filter(r => r.name.toLowerCase().includes(query.toLowerCase())).map(r => <button key={r.id} type="button" className="neo-row" data-active={repo?.id === r.id} onClick={() => setParams({ repo: r.id })}><span className="neo-row-lead"><GitBranch size={14} /></span><span className="neo-row-title">{r.name.split("/")[1]}</span><span className="neo-row-when">{r.openPrs} PRs</span><span className="neo-row-sub">{r.name.split("/")[0]}</span></button>)}
     {data?.repos.length && !data.repos.some(r => r.name.toLowerCase().includes(query.toLowerCase())) ? <Empty title="No repository matches" hint="Try its owner or repository name." /> : null}
