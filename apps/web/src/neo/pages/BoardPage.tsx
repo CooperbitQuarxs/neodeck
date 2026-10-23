@@ -7,7 +7,7 @@ import { projectLabel } from "@/lib/kanban-project";
 import { useStore } from "@/lib/store";
 import { board, type BoardCard, type BoardColumn } from "../client/board";
 import { AgentSwatch } from "../components/AgentSwatch";
-import { CardDrawer } from "./board/CardDrawer";
+import { CardInspector } from "./board/CardInspector";
 import { ColumnsDrawer, NewCardDrawer } from "./board/Editors";
 
 export const activeRun = (card: BoardCard) => card.run?.status === "running" || card.run?.status === "queued";
@@ -75,21 +75,21 @@ export function BoardPage() {
 				const inColumn = visible.filter(card => card.columnId === column.id);
 				return <section key={column.id} className="neo-board-column" aria-label={column.name}>
 					<header className="neo-board-column-head"><span className="neo-board-state-dot" style={{ background: column.color }} /><h2>{column.name}</h2><span className="neo-num">{inColumn.length}</span>{inColumn.some(activeRun) && <Dot tone="live" />}</header>
-					<div className="neo-board-column-body">{inColumn.map(card => <Card key={card.id} card={card} parent={card.parent ? relations.byRef.get(card.parent) : undefined} childrenCount={relations.counts.get(card.id) ?? 0} onOpen={() => select(card.id)} />)}{inColumn.length === 0 && <p className="neo-board-column-empty">No work here</p>}</div>
+					<div className="neo-board-column-body">{inColumn.map(card => <Card key={card.id} card={card} selected={open?.id === card.id} parent={card.parent ? relations.byRef.get(card.parent) : undefined} childrenCount={relations.counts.get(card.id) ?? 0} onOpen={() => select(card.id)} />)}{inColumn.length === 0 && <p className="neo-board-column-empty">No work here</p>}</div>
 				</section>;
 			})}</div>
 		</>}
 		<footer className="neo-board-controls"><span>State changes and run outcomes are kept with each card.</span><div><NeoButton size="sm" variant="ghost" onClick={() => setEditor("new")} disabled={!columns.length}><Plus size={12} />Add directly</NeoButton><NeoButton size="sm" variant="ghost" onClick={() => setEditor("columns")}><Settings2 size={12} />Columns</NeoButton></div></footer>
 		{selected && cards !== null && !open && <ErrorState error="This card is no longer on the board." onRetry={() => select(null)} />}
-		{open && <CardDrawer key={open.id} card={open} cards={cards ?? []} columns={columns} onClose={() => select(null)} onOpenCard={select} onChanged={refresh} onRemoved={() => { select(null); void refresh(); }} />}
+		{open && <CardInspector key={open.id} card={open} cards={cards ?? []} columns={columns} onClose={() => select(null)} onOpenCard={select} onChanged={refresh} onRemoved={() => { select(null); void refresh(); }} />}
 		{editor === "columns" && <ColumnsDrawer columns={columns} onClose={() => setEditor(null)} onChanged={refresh} />}
 		{editor === "new" && <NewCardDrawer columns={columns} projects={projects} initialProject={project.startsWith("cwd:") ? project.slice(4) : ""} onClose={() => setEditor(null)} onCreated={async card => { await refresh(); setEditor(null); select(card.id); }} />}
 	</div>;
 }
 
-function Card({ card, parent, childrenCount, onOpen }: { card: BoardCard; parent?: BoardCard; childrenCount: number; onOpen: () => void }) {
+function Card({ card, selected, parent, childrenCount, onOpen }: { card: BoardCard; selected: boolean; parent?: BoardCard; childrenCount: number; onOpen: () => void }) {
 	const Icon = { inbox: Inbox, github: GitBranch, thread: MessagesSquare, routine: Workflow, manual: Plus }[card.origin.kind];
-	return <button type="button" className="neo-board-card" onClick={onOpen} data-running={activeRun(card)} data-failed={card.run?.status === "failed"} data-archived={card.archived}>
+	return <button type="button" className="neo-board-card" onClick={onOpen} data-board-card={card.id} aria-pressed={selected} data-running={activeRun(card)} data-failed={card.run?.status === "failed"} data-archived={card.archived}>
 		<span className="neo-board-card-meta"><span>T-{card.number}</span><span title={card.cwd}>{projectLabel(card.cwd)}</span>{card.archived && <span>Archived</span>}</span>
 		<span className="neo-board-card-title">{card.title}</span>
 		{(parent || childrenCount > 0) && <span className="neo-board-related"><ArrowDownLeft size={11} />{parent ? `From T-${parent.number}` : `${childrenCount} related ${childrenCount === 1 ? "card" : "cards"}`}</span>}
