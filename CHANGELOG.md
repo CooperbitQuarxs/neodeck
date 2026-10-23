@@ -7,6 +7,8 @@ All notable changes to NPI deck (a fork of bjb2/omp-deck; entries before the for
 
 ### Changed
 
+- Card-agent lifecycle tests report a worker's terminal error instead of waiting for provider or KB events that a failed worker can never emit. Read-only completion failures now include the worker diagnostic ([#206](https://github.com/PsychedelicShayna/neodeck/issues/206), [#287](https://github.com/PsychedelicShayna/neodeck/issues/287)).
+
 - Development hot reload keeps card-agent recovery in the same module graph as the opened database, avoiding a fatal `db not opened` after server edits. Production startup still opens the database and recovers unfinished cards in the same order ([#262](https://github.com/PsychedelicShayna/neodeck/issues/262)).
 
 - Telegram setup now lives in Integrations, with masked bot credentials, one-use account pairing, per-chat thread and intake choices, polling status, and opt-in needs-you notifications. Streaming replies and inbox capture use the existing live bridge; plan proposals are no longer automatically rejected. Bridge restarts retain the replacement process when an older exit callback arrives late ([#282](https://github.com/PsychedelicShayna/neodeck/pull/282), GPT-6 Astra on behalf of PsychedelicShayna).
