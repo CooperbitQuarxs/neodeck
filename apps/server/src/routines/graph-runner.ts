@@ -13,6 +13,13 @@ export interface GraphUsage {
 	llmTokensOut?: number;
 	llmCostMicros?: number;
 }
+export interface GraphNodeOutcome {
+	status: GraphNodeRun["status"];
+	error?: string;
+	/** Only a deliberate skip or failure policy can keep the aggregate successful. */
+	continue?: boolean;
+	abortReason?: GraphExecutionResult["abortReason"];
+}
 export interface GraphNodeContext {
 	node: GraphNode;
 	inputs: GraphNodeInput[];
@@ -23,11 +30,18 @@ export interface GraphNodeContext {
 	runId: string;
 	routineId?: string;
 	dryRun: boolean;
+	/** Shared run start and remaining duration, including routing and retry delays. */
+	startedAt?: string;
+	remainingDurationMs?(): number;
 	iteration?: GraphIterationAddress[];
 	/** Previously settled nodes in this graph/pass, in deterministic execution order. */
 	priorNodeRuns?: readonly GraphNodeRun[];
 	/** Trace details are not outputs and never activate consumers, including on failure. */
 	recordDiagnostics?(details: GraphObject): void;
+	/** Set the real node result independently of a policy that continues the run. */
+	recordOutcome?(outcome: GraphNodeOutcome): void;
+	/** Account one completed attempt. Terminal aborts retain their original cause. */
+	recordStepAttempt?(usage: GraphUsage, terminal?: boolean): void;
 	/** Effects are journaled by actions before writes; retained even on failure/abort. */
 	recordEffect(effect: GraphEffect): void;
 	/** Report each increment once. Caps are checked immediately; never estimate silently. */
@@ -37,6 +51,9 @@ export interface GraphNodeContext {
 }
 export interface GraphNodeImplementation {
 	definition: GraphNodeType;
+	/** Native actions account for retries themselves and settle cooperative abort diagnostics. */
+	stepAccounting?: "attempts";
+	settlesOnAbort?: boolean;
 	execute(context: GraphNodeContext): GraphEmission[] | Promise<GraphEmission[]>;
 }
 export interface GraphExecutionOptions {
@@ -70,7 +87,22 @@ export class GraphNodeRegistry {
 				outputs: [{ id: "event", type: "object" }],
 				configSchema: {
 					type: "object", required: ["eventType"],
-					properties: { eventType: { type: "string", minLength: 1 }, cron: { type: "string", minLength: 1 } },
+					properties: {
+						eventType: { type: "string", minLength: 1 }, cron: { type: "string", minLength: 1 },
+						webhook: {
+							type: "object", required: ["path"],
+							properties: { path: { type: "string", pattern: "^/hooks/[a-z][a-z0-9-]*$" }, secret_env: { type: "string", minLength: 1 } },
+							additionalProperties: false,
+						},
+						manualTriggers: {
+							type: "array", minItems: 1,
+							items: { type: "object", properties: { params_schema: {} }, additionalProperties: false },
+						},
+						eventTriggers: {
+							type: "array", minItems: 1,
+							items: { type: "object", required: ["source"], properties: { source: { type: "string", minLength: 1 }, type: { type: "string" }, filter: { type: "string" } }, additionalProperties: false },
+						},
+					},
 					additionalProperties: false,
 				},
 			},
@@ -106,10 +138,17 @@ export class GraphNodeRegistry {
 		if (!result.valid) return result;
 		const errors: ValidationError[] = [];
 		const validateConfigs = (definition: RoutineGraph, prefix: string) => {
+			let webhookSources = 0;
 			for (const [index, node] of definition.nodes.entries()) {
 				const path = `${prefix}/nodes/${index}/config`;
 				const validation = this.validators.get(node.type)?.(node.config);
 				for (const error of validation?.errors ?? []) errors.push({ ...error, path: `${path}${error.path === "/" ? "" : error.path}` });
+				if (node.type === "event.source") {
+					for (const [field, eventType] of [["webhook", "webhook"], ["manualTriggers", "manual"], ["eventTriggers", "event"]] as const) {
+						if (node.config[field] !== undefined && node.config.eventType !== eventType) errors.push({ path: `${path}/${field}`, keyword: "eventType", message: `${field} requires eventType ${eventType}`, params: {} });
+					}
+					if (node.config.webhook !== undefined && ++webhookSources > 1) errors.push({ path: `${path}/webhook`, keyword: "maxProperties", message: "a routine supports only one webhook registration", params: {} });
+				}
 				if (node.type === "iteration.each") validateConfigs(node.config.body as unknown as RoutineGraph, `${path}/body`);
 			}
 		};
@@ -130,12 +169,14 @@ function message(error: unknown): string { return error instanceof Error ? error
 export async function executeGraph(graph: RoutineGraph, activation: GraphActivation, registry: GraphNodeRegistry, options: GraphExecutionOptions = {}): Promise<GraphExecutionResult> {
 	const validation = registry.validate(graph);
 	if (!validation.valid) throw new GraphValidationError(validation.errors ?? []);
-	if (!isGraphValue(activation) || !activation || Array.isArray(activation) || typeof activation.eventType !== "string" || !activation.eventType.trim() || !activation.event || typeof activation.event !== "object" || Array.isArray(activation.event) || (activation.sourceNodeId !== undefined && (typeof activation.sourceNodeId !== "string" || !graph.nodes.some((node) => node.id === activation.sourceNodeId && registry.get(node.type)!.definition.kind === "event")))) {
-		throw new GraphValidationError([{ path: "/activation", keyword: "type", message: "activation requires eventType, an event object, and an existing event source when selected", params: {} }]);
+	if (!isGraphValue(activation) || !activation || Array.isArray(activation) || typeof activation.eventType !== "string" || !activation.eventType.trim() || !activation.event || typeof activation.event !== "object" || (activation.sourceNodeId !== undefined && (typeof activation.sourceNodeId !== "string" || !graph.nodes.some((node) => node.id === activation.sourceNodeId && registry.get(node.type)!.definition.kind === "event")))) {
+		throw new GraphValidationError([{ path: "/activation", keyword: "type", message: "activation requires eventType, an event object or array, and an existing event source when selected", params: {} }]);
 	}
 	const state = newBudgetState(Date.now);
+	const routineMode = graph.execution?.mode === "routine-v1";
+	const startedAt = new Date(state.startedAtMs).toISOString();
 	const controller = new AbortController();
-	let abortReason: "budget" | "cancelled" | undefined;
+	let abortReason: GraphExecutionResult["abortReason"];
 	let runError: string | undefined;
 	let status: GraphExecutionResult["status"] = "success";
 	const cancel = () => {
@@ -159,7 +200,7 @@ export async function executeGraph(graph: RoutineGraph, activation: GraphActivat
 		if (remaining <= 0) abortBudget("Graph budget exceeded: max_duration_secs");
 		else deadline = setTimeout(scheduleDeadline, Math.min(remaining, 2_147_483_647));
 	};
-	if (graph.budget?.max_duration_secs !== undefined) scheduleDeadline();
+	if (!routineMode && graph.budget?.max_duration_secs !== undefined) scheduleDeadline();
 	const runId = options.runId ?? crypto.randomUUID();
 	const runBudget = graph.budget;
 	const rootActivation = activation;
@@ -191,13 +232,23 @@ export async function executeGraph(graph: RoutineGraph, activation: GraphActivat
 				? (activation.sourceNodeId === undefined || activation.sourceNodeId === node.id) && node.config.eventType === activation.eventType
 				: inputs.length > 0 && definition.inputs.every((port) => port.required === false || inputs.some((input) => input.port === port.id));
 			if (status === "success" && selected) {
-				enforceBudget();
-				if (!controller.signal.aborted && runBudget?.max_steps_executed !== undefined && state.stepsExecuted >= runBudget.max_steps_executed) abortBudget("Graph budget exceeded: max_steps_executed");
+				if (!routineMode) enforceBudget();
+				if (!routineMode && !controller.signal.aborted && runBudget?.max_steps_executed !== undefined && state.stepsExecuted >= runBudget.max_steps_executed) abortBudget("Graph budget exceeded: max_steps_executed");
 				if (controller.signal.aborted) {
-					record.status = "aborted"; record.error = runError; status = "aborted";
+					record.status = "aborted"; record.error = runError; status = routineMode && abortReason === "budget" ? "failed" : "aborted";
 				} else {
 					record.startedAt = new Date().toISOString();
 					let active = true;
+					const settlement: { outcome?: GraphNodeOutcome } = {};
+					const reportUsage = (usage: GraphUsage) => {
+						if (!active) throw new Error("Cannot report usage after graph node settled");
+						if (!usage || typeof usage !== "object" || Array.isArray(usage)) throw new Error("Invalid graph usage");
+						for (const [key, value] of Object.entries(usage)) if (!["llmTokensIn", "llmTokensOut", "llmCostMicros"].includes(key) || typeof value !== "number" || !Number.isFinite(value) || value < 0 || (key !== "llmCostMicros" && !Number.isInteger(value))) throw new Error(`Invalid graph usage: ${key}`);
+						if (!Number.isFinite(state.totalTokensIn + (usage.llmTokensIn ?? 0)) || !Number.isFinite(state.totalTokensOut + (usage.llmTokensOut ?? 0)) || !Number.isFinite(state.totalCostMicros + (usage.llmCostMicros ?? 0))) throw new Error("Graph usage totals overflowed");
+						state.totalTokensIn += usage.llmTokensIn ?? 0;
+						state.totalTokensOut += usage.llmTokensOut ?? 0;
+						state.totalCostMicros += usage.llmCostMicros ?? 0;
+					};
 					try {
 						for (const port of definition.inputs) {
 							const values = inputs.filter((input) => input.port === port.id);
@@ -207,6 +258,8 @@ export async function executeGraph(graph: RoutineGraph, activation: GraphActivat
 						const context: GraphNodeContext = {
 							node, inputs, activation, rootActivation, signal: controller.signal, runId, iteration, priorNodeRuns: nodeRuns,
 							routineId: options.routineId, dryRun: options.dryRun === true,
+							startedAt,
+							remainingDurationMs: () => runBudget?.max_duration_secs === undefined ? Infinity : state.startedAtMs + runBudget.max_duration_secs * 1000 - Date.now(),
 							recordEffect: (effect) => {
 								record.effects ??= [];
 								const index = record.effects.findIndex((item) => item.logicalKey === effect.logicalKey);
@@ -217,14 +270,22 @@ export async function executeGraph(graph: RoutineGraph, activation: GraphActivat
 								if (!isGraphValue(details) || details === null || typeof details !== "object" || Array.isArray(details)) throw new Error("Graph diagnostics must be a JSON object");
 								record.diagnostics = details;
 							},
+							recordOutcome: (result) => {
+								if (!active) throw new Error("Cannot record outcome after graph node settled");
+								if (!["success", "skipped", "failed", "aborted"].includes(result.status) || (result.continue && result.status !== "skipped" && result.status !== "failed")) throw new Error("Invalid graph node outcome");
+								settlement.outcome = result;
+							},
+							recordStepAttempt: (usage, terminal = false) => {
+								if (implementation.stepAccounting !== "attempts") throw new Error("Only attempt-accounted nodes can report attempts");
+								reportUsage(usage);
+								state.stepsExecuted++;
+								if (!terminal) {
+									enforceBudget();
+									controller.signal.throwIfAborted();
+								}
+							},
 							recordUsage: (usage) => {
-								if (!active) throw new Error("Cannot report usage after graph node settled");
-								if (!usage || typeof usage !== "object" || Array.isArray(usage)) throw new Error("Invalid graph usage");
-								for (const [key, value] of Object.entries(usage)) if (!["llmTokensIn", "llmTokensOut", "llmCostMicros"].includes(key) || typeof value !== "number" || !Number.isFinite(value) || value < 0 || (key !== "llmCostMicros" && !Number.isInteger(value))) throw new Error(`Invalid graph usage: ${key}`);
-								if (!Number.isFinite(state.totalTokensIn + (usage.llmTokensIn ?? 0)) || !Number.isFinite(state.totalTokensOut + (usage.llmTokensOut ?? 0)) || !Number.isFinite(state.totalCostMicros + (usage.llmCostMicros ?? 0))) throw new Error("Graph usage totals overflowed");
-								state.totalTokensIn += usage.llmTokensIn ?? 0;
-								state.totalTokensOut += usage.llmTokensOut ?? 0;
-								state.totalCostMicros += usage.llmCostMicros ?? 0;
+								reportUsage(usage);
 								enforceBudget();
 								controller.signal.throwIfAborted();
 							},
@@ -239,11 +300,12 @@ export async function executeGraph(graph: RoutineGraph, activation: GraphActivat
 								}
 							},
 						};
-						state.stepsExecuted++;
-						const emissions = node.type === "iteration.each"
+						if (!routineMode && implementation.stepAccounting !== "attempts") state.stepsExecuted++;
+						const emissions = node.type === "iteration.each" || implementation.settlesOnAbort
 							? await implementation.execute(context)
 							: await withAbort(() => implementation.execute(context), controller.signal);
-						enforceBudget(); controller.signal.throwIfAborted();
+						if (!routineMode) enforceBudget();
+						controller.signal.throwIfAborted();
 						if (!Array.isArray(emissions)) throw new Error("Node must return an array of emissions");
 						const counts = new Map<string, number>();
 						for (const emission of emissions) {
@@ -252,6 +314,7 @@ export async function executeGraph(graph: RoutineGraph, activation: GraphActivat
 							if (!port) throw new Error(`Unknown output port: ${emission.port}`);
 							if (!isGraphValue(emission.value)) throw new Error(`Output port ${port.id} returned non-JSON, nonfinite or cyclic data`);
 							if (!valueMatches(emission.value, port.type)) throw new Error(`Output port ${port.id} expected ${port.type}`);
+							if (emission.includeSiblingOutputs !== undefined && (!Array.isArray(emission.includeSiblingOutputs) || new Set(emission.includeSiblingOutputs).size !== emission.includeSiblingOutputs.length || emission.includeSiblingOutputs.some(port => typeof port !== "string" || !counts.has(port)))) throw new Error("Emission ancestry must name earlier output ports from the same batch");
 							counts.set(port.id, (counts.get(port.id) ?? 0) + 1);
 							if (!port.multiple && counts.get(port.id)! > 1) throw new Error(`Output port ${port.id} accepts only one emission`);
 						}
@@ -259,15 +322,30 @@ export async function executeGraph(graph: RoutineGraph, activation: GraphActivat
 						for (const emission of emissions) {
 							const value = emission.value;
 							const passOutputs = record.passes?.flatMap(pass => pass.outputs) ?? [];
-							const output: GraphOutput = { nodeId: node.id, port: emission.port, result: value !== null && typeof value === "object" && !Array.isArray(value) ? value : { value }, inputs: passOutputs.length ? [...envelopes, ...passOutputs] : envelopes, ...(iteration.length ? { iteration } : {}) };
+							const siblingOutputs = emission.includeSiblingOutputs ? record.outputs.filter(output => emission.includeSiblingOutputs!.includes(output.port)) : [];
+							// Earlier siblings already retain the original inputs transitively.
+							const output: GraphOutput = { nodeId: node.id, port: emission.port, result: value !== null && typeof value === "object" && !Array.isArray(value) ? value : { value }, inputs: siblingOutputs.length ? siblingOutputs : passOutputs.length ? [...envelopes, ...passOutputs] : envelopes, ...(iteration.length ? { iteration } : {}) };
 							record.outputs.push(output); emittedValues.set(output, value);
 						}
-						record.status = "success";
+						const outcome = settlement.outcome;
+						record.status = outcome?.status ?? "success";
+						if (outcome?.error !== undefined) record.error = outcome.error;
+						if (outcome && outcome.status !== "success" && !outcome.continue) {
+							abortReason = outcome.abortReason;
+							status = outcome.status === "aborted" && !(routineMode && abortReason === "timeout") ? "aborted" : "failed";
+							runError = outcome.error;
+						}
 					} catch (error) {
 						const cancelled = controller.signal.aborted && error === controller.signal.reason;
-						record.status = cancelled ? "aborted" : "failed";
-						record.error = cancelled ? runError : message(error);
-						status = record.status; runError = record.error;
+						record.status = cancelled ? settlement.outcome?.status ?? "aborted" : "failed";
+						record.error = cancelled ? settlement.outcome?.error ?? runError : message(error);
+						if (cancelled) {
+							status = routineMode && abortReason === "budget" ? "failed" : "aborted";
+						} else {
+							status = "failed";
+							if (routineMode) abortReason ??= "failure";
+							runError = record.error;
+						}
 					} finally { active = false; }
 				}
 			}
@@ -283,8 +361,8 @@ export async function executeGraph(graph: RoutineGraph, activation: GraphActivat
 	};
 	try {
 		const result = await runScope(graph, activation);
-		if (controller.signal.aborted && status === "success") status = "aborted";
-		return { ...result, status, dryRun: options.dryRun === true, ...(runError !== undefined ? { error: runError } : {}), ...(status === "aborted" && abortReason ? { abortReason } : {}), usage: { llmTokensIn: state.totalTokensIn, llmTokensOut: state.totalTokensOut, llmCostMicros: state.totalCostMicros, stepsExecuted: state.stepsExecuted } };
+		if (controller.signal.aborted && status === "success") status = routineMode && abortReason === "budget" ? "failed" : "aborted";
+		return { ...result, status, dryRun: options.dryRun === true, ...(runError !== undefined ? { error: runError } : {}), ...((status === "aborted" || routineMode && status === "failed") && abortReason ? { abortReason } : {}), usage: { llmTokensIn: state.totalTokensIn, llmTokensOut: state.totalTokensOut, llmCostMicros: state.totalCostMicros, stepsExecuted: state.stepsExecuted } };
 	} finally {
 		if (deadline !== undefined) clearTimeout(deadline);
 		options.signal?.removeEventListener("abort", cancel);

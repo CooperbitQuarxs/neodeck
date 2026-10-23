@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { Database } from "bun:sqlite";
+import { createHmac } from "node:crypto";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
@@ -10,6 +11,7 @@ import { createGraphRoutine, createRoutine, createV1Routine, getGraphRun, getRou
 import { upsertWebhookSecret } from "../db/routine-step-runs.ts";
 import { initializeOwnedGeneration, stopOwnedProcesses } from "../owned-process.ts";
 import { buildRoutinesRouter } from "../routes-routines.ts";
+import { buildHooksRouter } from "../routes-hooks.ts";
 import { RoutinesRunner } from "../routines-runner.ts";
 import { exportRoutineMigration, inspectRoutineMigrations, migrateRoutines, restoreRoutineDefinition } from "./graph-migration.ts";
 import { findGraphOutput } from "./graph-runner.ts";
@@ -207,25 +209,32 @@ test("native HTTP uses the real local transport with typed deep substitutions an
 	expect(JSON.stringify(trace)).not.toContain("Bearer ");
 });
 
-test("actual bundled YAML templates stay unchanged with exact field-level blockers and no secret values", () => {
+test("bundled census now converts without executing; briefing stays blocked only by its agent", () => {
 	for (const slug of ["daily-briefing", "kb-orphan-census"]) {
 		const raw = fs.readFileSync(new URL(`../templates/${slug}.yaml`, import.meta.url), "utf8");
 		const source = parse(raw) as RoutineSpec;
 		const routine = seed(source, raw);
 		const before = row(routine.id);
 		const result = migrate(routine.id);
-		expect(result.reports[0]?.status).toBe("blocked");
-		expect(result.reports[0]?.fields.some(field => field.path.startsWith("/spec/budget/") && field.status === "blocked")).toBe(true);
-		expect(row(routine.id)).toEqual(before);
+		const report = result.reports[0]!;
+		expect(report.fields.some(field => field.path.startsWith("/spec/budget/") && field.status === "blocked")).toBe(false);
+		if (slug === "daily-briefing") {
+			expect(report.status).toBe("blocked");
+			expect(report.fields.filter(field => field.status === "blocked").every(field => field.path.startsWith("/spec/steps/5"))).toBe(true);
+			expect(row(routine.id)).toEqual(before);
+		} else {
+			expect(report.status).toBe("migrated");
+			expect(parse(exportRoutineMigration(routine.id, report.sourceDigest))).toEqual(source);
+			expect(migrate(routine.id).reports[0]?.status).toBe("native");
+			restoreRoutineDefinition(routine.id, report.sourceDigest);
+			expect(row(routine.id)).toEqual(before);
+		}
 		expect(listRuns(routine.id)).toEqual([]);
 	}
 });
 
-test("V0 actions, unknown keys, malformed budgets, duplicate ids and unsupported controls are never rewritten", () => {
+test("agent actions, unknown keys, malformed budgets and duplicate ids are never rewritten", () => {
 	const cases = [
-		{ id: "a", type: "transform", body: "return 1;", when: "'truthy'" },
-		{ id: "a", type: "transform", body: "return 1;", on_failure: "continue" },
-		{ id: "a", type: "transform", body: "return 1;", retry: { times: 2, backoff: "linear" }, on_failure: "retry" },
 		{ id: "a", type: "transform", body: "return 1;", on_error: "ignored-but-not-aliased" },
 		{ id: "a", type: "agent", prompt: "NEVER RUN THIS", skills_allowed: [], mcp_servers_allowed: [] },
 	] as RoutineSpec["steps"];
@@ -234,7 +243,7 @@ test("V0 actions, unknown keys, malformed budgets, duplicate ids and unsupported
 	for (const raw of ["name: broken\nname: duplicate", "bad: [", "name: other\ntrigger: []\nsteps: []\nversion: 1"]) routines.push(seed(spec(), raw));
 	const malformed = seed(); getDb().query("UPDATE routines SET budget_json = ? WHERE id = ?").run("not-json-test-secret", malformed.id); routines.push(malformed);
 	const mirrored = seed(); getDb().query("UPDATE routines SET concurrency = 'parallel' WHERE id = ?").run(mirrored.id); routines.push(mirrored);
-	for (const kind of ["bash", "script", "prompt"] as const) routines.push(createRoutine({ name: `v0-${kind}`, cron: "0 1 * * *", actionKind: kind, actionBody: "NEVER EXECUTE", enabled: false }));
+	routines.push(createRoutine({ name: "v0-prompt", cron: "0 1 * * *", actionKind: "prompt", actionBody: "NEVER EXECUTE", enabled: false }));
 	for (const routine of routines) {
 		const before = row(routine.id);
 		const report = migrate(routine.id).reports[0]!;
@@ -259,7 +268,7 @@ test("migration endpoints preflight, block unsafe originals, export/restore and 
 	expect((await api.request(`/routine-migrations/${routine.id}/${digest}/export`)).status).toBe(200);
 	expect((await api.request(`/routine-migrations/${routine.id}/${digest}/restore`, request())).status).toBe(200);
 	expect(getRoutine(routine.id)?.specVersion).toBe(1);
-	const blocked = seed(spec([{ id: "skip", type: "wait", duration_secs: 0.1, when: "false" }]));
+	const blocked = seed(spec([{ id: "agent", type: "agent", prompt: "NEVER EXECUTE", skills_allowed: [], mcp_servers_allowed: [] }]));
 	expect((await api.request(`/routine-migrations/${blocked.id}`, request())).status).toBe(409);
 	expect((await api.request("/routine-migrations/missing", request())).status).toBe(404);
 });
@@ -324,7 +333,242 @@ test("queued migrated runs initialize expression timestamps after admission and 
 	for (const run of listRuns(routine.id)) {
 		const trace = getGraphRun(run.id)!;
 		expect(trace.status).toBe("success");
-		expect(trace.nodeRuns.find(node => node.nodeId === "inspect")!.outputs[0]!.result.started).toBe(trace.nodeRuns.find(node => node.nodeId === "__trigger_0")!.startedAt!);
+		const contextStarted = Date.parse(trace.nodeRuns.find(node => node.nodeId === "inspect")!.outputs[0]!.result.started as string);
+		expect(contextStarted).toBeGreaterThanOrEqual(Date.parse(run.startedAt));
+		expect(contextStarted).toBeLessThanOrEqual(Date.parse(trace.nodeRuns.find(node => node.nodeId === "__trigger_0")!.startedAt!));
 	}
 	expect(getRoutine(untouched.id)?.specVersion).toBe(1);
+});
+
+function assertV1Lifecycle(routineId: string, source: RoutineSpec, digest: string) {
+	expect(parse(exportRoutineMigration(routineId, digest))).toEqual(source);
+	const copy = seed(parse(exportRoutineMigration(routineId, digest)) as RoutineSpec);
+	expect(migrate(copy.id).reports[0]?.status).toBe("migrated");
+	expect(graph(copy.id)).toEqual(graph(routineId));
+	expect(migrate(routineId).reports[0]?.status).toBe("native");
+	restoreRoutineDefinition(routineId, digest);
+	expect(getRoutine(routineId)?.specVersion).toBe(1);
+	expect(getRoutine(routineId)?.specYaml).toBe(stringify(source));
+}
+
+test("when skip and continued failure migrate exact context, native receipts and aggregate history", async () => {
+	const source = spec([
+		{ id: "false_value", type: "transform", body: "return 'must not run';", when: "false" },
+		{ id: "bad_predicate", type: "write", path: "must-not-exist.txt", content: "no", when: "missing.deep.property" },
+		{ id: "truthy", type: "transform", body: "return 'truthy-result';", when: "'not-a-boolean'" },
+		{ id: "failed", type: "run", command: "printf 'out'; printf 'err' >&2; exit 7", on_failure: "continue" },
+		{ id: "inspect", type: "transform", body: "return context.steps;" },
+	]);
+	const routine = seed(source), converted = migrate(routine.id).reports[0]!;
+	expect(converted.status).toBe("migrated");
+	await runner.fire(routine.id);
+	const run = listRuns(routine.id)[0]!, trace = getGraphRun(run.id)!;
+	expect(trace.status).toBe("success");
+	expect(run).toMatchObject({ exitCode: 0, stepCountTotal: 3, stepCountFailed: 1 });
+	expect(run.abortReason).toBeUndefined();
+	const inspect = trace.nodeRuns.find(node => node.nodeId === "inspect")!.outputs.find(output => output.port === "result")!;
+	expect(inspect.result.false_value).toEqual({ status: "skipped", stdout: "", stderr: "", duration_ms: 0 });
+	expect(inspect.result.bad_predicate).toEqual({ status: "skipped", stdout: "", stderr: "", duration_ms: 0 });
+	expect(inspect.result.failed).toMatchObject({ status: "failed", stdout: "out", stderr: "err", error: "exit code 7" });
+	expect(trace.nodeRuns.find(node => node.nodeId === "failed")).toMatchObject({ status: "failed", outputs: [{ port: "completed", result: { stepId: "failed", status: "failed" } }] });
+	expect(trace.nodeRuns.find(node => node.nodeId === "false_value")?.outputs.some(output => output.port === "result")).toBe(false);
+	expect(trace.nodeRuns.find(node => node.nodeId === "truthy")?.diagnostics?.whenValue).toBe("not-a-boolean");
+	expect(trace.nodeRuns.find(node => node.nodeId === "false_value")?.diagnostics?.whenValue).toBe(false);
+	expect(trace.nodeRuns.find(node => node.nodeId === "bad_predicate")?.diagnostics?.whenError).toBeString();
+	expect(findGraphOutput(inspect, "__trigger_0")?.result).toEqual({});
+	expect(fs.existsSync(path.join(home, "must-not-exist.txt"))).toBe(false);
+	assertV1Lifecycle(routine.id, source, converted.sourceDigest);
+});
+
+test("retry recovery and exhausted after_retry continue retain every native attempt", async () => {
+	const source = spec([
+		{ id: "recover", type: "run", command: "if test -e retried; then printf recovered; else touch retried; printf first; exit 5; fi", on_failure: "retry", retry: { times: 3, backoff: "exponential", max_delay_secs: 0 } },
+		{ id: "exhaust", type: "run", command: "printf exhausted; exit 9", on_failure: "retry", retry: { times: 2, backoff: "linear", max_delay_secs: 0, after_retry: "continue" } },
+		{ id: "inspect", type: "transform", body: "return { recovered: steps.recover.stdout, failed: steps.exhaust.error };" },
+	]);
+	const routine = seed(source), converted = migrate(routine.id).reports[0]!;
+	expect(converted.status).toBe("migrated");
+	await runner.fire(routine.id);
+	const run = listRuns(routine.id)[0]!, trace = getGraphRun(run.id)!;
+	expect(trace.status).toBe("success");
+	expect(run).toMatchObject({ exitCode: 0, stepCountTotal: 3, stepCountFailed: 1 });
+	expect(trace.usage?.stepsExecuted).toBe(5);
+	expect(trace.nodeRuns.find(node => node.nodeId === "recover")?.diagnostics?.attempts).toHaveLength(2);
+	expect(trace.nodeRuns.find(node => node.nodeId === "exhaust")?.diagnostics?.attempts).toHaveLength(2);
+	expect(trace.nodeRuns.find(node => node.nodeId === "inspect")?.outputs.find(output => output.port === "result")?.result).toEqual({ recovered: "recovered", failed: "exit code 9" });
+	assertV1Lifecycle(routine.id, source, converted.sourceDigest);
+});
+
+test("all budget declarations round-trip and native attempt limit excludes sources and when skips", async () => {
+	const source = spec([
+		{ id: "skip", type: "transform", when: "false", body: "return 'never';" },
+		{ id: "retry", type: "run", command: "printf attempted; exit 3", on_failure: "retry", retry: { times: 3, backoff: "linear", max_delay_secs: 0 } },
+		{ id: "never", type: "write", path: "budget-never.txt", content: "no" },
+	]);
+	source.budget = { max_steps_executed: 1, max_duration_secs: 10, max_llm_tokens_input: 0, max_llm_tokens_output: 0, max_llm_cost_usd: 0 };
+	const routine = seed(source), converted = migrate(routine.id).reports[0]!;
+	expect(converted.status).toBe("migrated");
+	await runner.fire(routine.id);
+	const run = listRuns(routine.id)[0]!, trace = getGraphRun(run.id)!;
+	expect(trace).toMatchObject({ status: "failed", abortReason: "budget", usage: { stepsExecuted: 2 } });
+	expect(trace.nodeRuns.find(node => node.nodeId === "retry")?.diagnostics?.attempts).toHaveLength(2);
+	expect(run).toMatchObject({ abortReason: "budget", stepCountTotal: 1, stepCountFailed: 0 });
+	expect(fs.existsSync(path.join(home, "budget-never.txt"))).toBe(false);
+	assertV1Lifecycle(routine.id, source, converted.sourceDigest);
+});
+
+test("manual schemas and duplicate event declarations preserve explicit admission without inventing subscriptions", async () => {
+	const source = spec();
+	source.trigger = [
+		{ manual: { params_schema: { type: "object", required: ["required"], properties: { required: { type: "boolean" } }, additionalProperties: false } } },
+		{ manual: { params_schema: false } },
+		{ event: { source: "deck_inbox", type: "added", filter: "trigger.kind === 'capture'" } },
+		{ event: { source: "routine_finished" } },
+	];
+	const routine = seed(source);
+	getDb().query("UPDATE routines SET enabled = 1 WHERE id = ?").run(routine.id);
+	const converted = migrate(routine.id).reports[0]!;
+	expect(converted.status).toBe("migrated");
+	expect(graph(routine.id).nodes.filter(node => node.config.eventType === "manual")).toHaveLength(1);
+	expect(graph(routine.id).nodes.filter(node => node.config.eventType === "event")).toHaveLength(1);
+	expect(graph(routine.id).nodes.some(node => node.config.eventType === "inbox.card_added")).toBe(false);
+	for (const trigger of ["manual", "event"] as const) {
+		await runner.fire(routine.id, trigger, { false: false, zero: 0, nested: [null, ""] });
+		const trace = getGraphRun(listRuns(routine.id)[0]!.id)!;
+		expect(trace.status).toBe("success");
+		expect(trace.nodeRuns.filter(node => node.nodeId === "value" && node.status === "success")).toHaveLength(1);
+		expect(trace.nodeRuns.find(node => node.nodeId === "value")?.outputs.find(output => output.port === "result")?.result).toEqual({ false: false, zero: 0, nested: [null, ""] });
+	}
+	assertV1Lifecycle(routine.id, source, converted.sourceDigest);
+});
+
+test("migrated webhook keeps exact credentials, authenticates native admission and restores registration unchanged", async () => {
+	const source = spec();
+	source.trigger = [{ webhook: { path: "/hooks/migrated", secret_env: "TEST_ONLY_SECRET" } }];
+	const routine = seed(source);
+	getDb().query("UPDATE routines SET enabled = 1 WHERE id = ?").run(routine.id);
+	upsertWebhookSecret({ routineId: routine.id, path: "/hooks/migrated", secret: "isolated-test-key" });
+	const credential = getDb().query("SELECT * FROM routine_webhook_secrets WHERE routine_id = ?").get(routine.id);
+	const converted = migrate(routine.id).reports[0]!;
+	expect(converted.status).toBe("migrated");
+	expect(getDb().query("SELECT * FROM routine_webhook_secrets WHERE routine_id = ?").get(routine.id)).toEqual(credential);
+	const timestamp = String(Math.floor(Date.now() / 1000)), body = JSON.stringify({ exact: [false, 0, null, ""] });
+	const signature = `sha256=${createHmac("sha256", "isolated-test-key").update(`${timestamp}.${body}`).digest("hex")}`;
+	const response = await buildHooksRouter(runner).request("/hooks/migrated", { method: "POST", headers: { "content-type": "application/json", "x-routine-timestamp": timestamp, "x-routine-signature": signature }, body });
+	expect(response.status).toBe(202);
+	const deadline = Date.now() + 3000;
+	while (!listRuns(routine.id)[0]?.endedAt && Date.now() < deadline) await Bun.sleep(10);
+	const trace = getGraphRun(listRuns(routine.id)[0]!.id)!;
+	expect(trace.status).toBe("success");
+	expect(trace.nodeRuns.find(node => node.nodeId === "value")?.outputs.find(output => output.port === "result")?.result).toEqual({ exact: [false, 0, null, ""] });
+	const used = getDb().query("SELECT * FROM routine_webhook_secrets WHERE routine_id = ?").get(routine.id);
+	assertV1Lifecycle(routine.id, source, converted.sourceDigest);
+	expect(getDb().query("SELECT * FROM routine_webhook_secrets WHERE routine_id = ?").get(routine.id)).toEqual(used);
+});
+
+test("orphan registrations, mismatched hook paths and multiple hooks retain originals with exact blockers", () => {
+	for (const mode of ["orphan", "mismatch", "multiple"] as const) {
+		const source = spec();
+		if (mode !== "orphan") source.trigger = [{ webhook: { path: "/hooks/declared", secret_env: "TEST_ONLY" } }];
+		if (mode === "multiple") source.trigger.push({ webhook: { path: "/hooks/second", secret_env: "TEST_ONLY" } });
+		const routine = seed(source);
+		upsertWebhookSecret({ routineId: routine.id, path: `/hooks/${mode}`, secret: "unchanged-test-key" });
+		const before = row(routine.id), secret = getDb().query("SELECT * FROM routine_webhook_secrets WHERE routine_id = ?").get(routine.id);
+		const report = migrate(routine.id).reports[0]!;
+		expect(report.status).toBe("blocked");
+		expect(report.fields.some(field => field.path === "/row/webhook_registration" && field.status === "blocked")).toBe(true);
+		if (mode === "multiple") expect(report.fields.some(field => field.path === "/spec/trigger/1/webhook" && field.status === "blocked")).toBe(true);
+		expect(row(routine.id)).toEqual(before);
+		expect(getDb().query("SELECT * FROM routine_webhook_secrets WHERE routine_id = ?").get(routine.id)).toEqual(secret);
+	}
+});
+
+test("V0 bash and script use exact original argv and aggregate receipts with reversible conversion", async () => {
+	for (const action of [
+		{ actionKind: "bash" as const, actionBody: "printf '{{literal}}'; printf 'original-stderr' >&2; exit 7", expected: "{{literal}}", exit: 7 },
+		{ actionKind: "script" as const, actionBody: "/usr/bin/printf    %s    {{literal}}", expected: "{{literal}}", exit: 0 },
+	]) {
+		const routine = createRoutine({ name: `v0-${action.actionKind}`, cron: "0 1 * * *", actionKind: action.actionKind, actionBody: action.actionBody, actionCwd: home, enabled: false });
+		getDb().query("UPDATE routines SET concurrency = 'queue', timezone = 'UTC', tags = 'one, two', budget_json = ? WHERE id = ?").run('{"max_steps_executed":0}', routine.id);
+		await runner.fire(routine.id);
+		const original = listRuns(routine.id)[0]!;
+		const before = row(routine.id), converted = migrate(routine.id).reports[0]!;
+		expect(converted.status).toBe("migrated");
+		expect(listRuns(routine.id)).toHaveLength(1);
+		const exported = parse(exportRoutineMigration(routine.id, converted.sourceDigest));
+		const copy = createRoutine(exported);
+		getDb().query("UPDATE routines SET concurrency = ?, timezone = ?, tags = ?, budget_json = ? WHERE id = ?").run(exported.metadata.concurrency, exported.metadata.timezone, exported.metadata.tags, exported.metadata.budget_json, copy.id);
+		expect(migrate(copy.id).reports[0]?.status).toBe("migrated");
+		expect(graph(copy.id)).toEqual(graph(routine.id));
+		expect(migrate(routine.id).reports[0]?.status).toBe("native");
+		await runner.fire(routine.id, "manual", {}, { dryRun: true });
+		expect(getGraphRun(listRuns(routine.id)[0]!.id)?.nodeRuns.find(node => node.type === "process.v0")?.diagnostics).toBeUndefined();
+		await runner.fire(routine.id);
+		const native = listRuns(routine.id)[0]!;
+		expect(native).toMatchObject({ exitCode: action.exit, stdoutExcerpt: action.expected, stderrExcerpt: original.stderrExcerpt, stepCountTotal: 0, stepCountFailed: 0 });
+		expect(native.abortReason).toBeUndefined();
+		expect(original).toMatchObject({ exitCode: native.exitCode, stdoutExcerpt: native.stdoutExcerpt, stderrExcerpt: native.stderrExcerpt });
+		restoreRoutineDefinition(routine.id, converted.sourceDigest);
+		expect(getRoutine(routine.id)?.specVersion).toBe(0);
+		expect(row(routine.id)).toEqual({ ...before, last_run_at: row(routine.id).last_run_at });
+	}
+});
+
+test("long migrated completion chains persist all prior results without exponential ancestry expansion", async () => {
+	const source = spec(Array.from({ length: 24 }, (_, index) => ({
+		id: `step_${index}`, type: "transform" as const,
+		body: index === 0 ? "return trigger.value;" : `return { original: steps.step_0.json, previous: steps.step_${index - 1}.status };`,
+	})));
+	const routine = seed(source);
+	expect(migrate(routine.id).reports[0]?.status).toBe("migrated");
+	await runner.fire(routine.id, "manual", { value: "truthy-not-true" });
+	const run = listRuns(routine.id)[0]!;
+	expect(run).toMatchObject({ exitCode: 0, stepCountTotal: 24 });
+	closeDb(); openDb({ path: path.join(home, "deck.db") });
+	const trace = getGraphRun(run.id)!;
+	expect(trace.status).toBe("success");
+	const last = trace.nodeRuns.find(node => node.nodeId === "step_23")!.outputs.find(output => output.port === "result")!;
+	expect(last.result).toEqual({ original: "truthy-not-true", previous: "success" });
+	expect(findGraphOutput(last, "step_0", "result")?.result).toEqual({ value: "truthy-not-true" });
+	expect(findGraphOutput(last, "__trigger_0")?.result).toEqual({ value: "truthy-not-true" });
+});
+
+test("V0 process launch failures retain original aggregate terminal outcomes after conversion", async () => {
+	const routine = createRoutine({ name: "v0-launch-failure", cron: "0 1 * * *", actionKind: "script", actionBody: path.join(home, "missing-command"), actionCwd: home, enabled: false });
+	await runner.fire(routine.id);
+	const original = listRuns(routine.id)[0]!;
+	expect(original.exitCode).not.toBe(0);
+	expect(migrate(routine.id).reports[0]?.status).toBe("migrated");
+	await runner.fire(routine.id);
+	const native = listRuns(routine.id)[0]!;
+	expect(native.error).toBe(original.error);
+	expect(native.stdoutExcerpt).toBe(original.stdoutExcerpt);
+	expect(native.stderrExcerpt).toBe(original.stderrExcerpt);
+	expect(native.exitCode).toBe(original.exitCode);
+	expect(getGraphRun(native.id)?.nodeRuns.find(node => node.type === "process.v0")?.diagnostics?.v0).toMatchObject({ stdoutExcerpt: original.stdoutExcerpt, stderrExcerpt: original.stderrExcerpt, exitCode: original.exitCode });
+});
+
+test("V0 cancellation waits for process-tree cleanup and retains the actual terminal receipt", async () => {
+	const marker = path.join(home, "v0-child.pid");
+	const routine = createRoutine({ name: "v0-cancel", cron: "0 1 * * *", actionKind: "bash", actionBody: `printf partial; sleep 30 & echo $! > '${marker}'; wait`, actionCwd: home, enabled: false });
+	const stop = async () => {
+		const firing = runner.fire(routine.id);
+		const deadline = Date.now() + 3000;
+		while (!fs.existsSync(marker) && Date.now() < deadline) await Bun.sleep(10);
+		expect(fs.existsSync(marker)).toBe(true);
+		await runner.dispose(); await firing;
+		const pid = Number(fs.readFileSync(marker, "utf8"));
+		const child = Bun.spawnSync(["ps", "-p", String(pid), "-o", "stat="], { stdout: "pipe", stderr: "ignore" });
+		const status = new TextDecoder().decode(child.stdout).trim();
+		expect(status === "" || status.startsWith("Z")).toBe(true);
+		runner = new RoutinesRunner();
+		return listRuns(routine.id)[0]!;
+	};
+	const original = await stop();
+	fs.rmSync(marker);
+	expect(migrate(routine.id).reports[0]?.status).toBe("migrated");
+	const native = await stop();
+	expect(native).toMatchObject({ stdoutExcerpt: original.stdoutExcerpt, stderrExcerpt: original.stderrExcerpt, exitCode: original.exitCode, stepCountTotal: 0, stepCountFailed: 0 });
+	expect(native.abortReason).toBeUndefined();
+	expect(getGraphRun(native.id)?.nodeRuns.find(node => node.type === "process.v0")?.diagnostics?.v0).toMatchObject({ stdoutExcerpt: "partial", exitCode: native.exitCode });
 });

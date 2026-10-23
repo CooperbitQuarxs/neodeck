@@ -199,33 +199,72 @@ become executable connections. Semantic export does not reproduce YAML
 comments, anchors, formatting or key order, which the report names as a
 syntax loss. The raw snapshot retains them exactly.
 
-The current safe subset is V1, manual and cron triggers, with straight-line
-`run`, `write`, `http`, `deck`, `mcp`, `transform`, `wait` and `set_state` actions.
-The production registry validates every mapped `step.*` node against the
-existing action schema. Unknown step fields are refused rather than dropped.
-Common action handlers retain interpolation, bounded expressions, filesystem
-and transport behavior. Actual returned values and recursive input envelopes
-use native graph outputs. Diagnostics retain the legacy `steps.<id>` context.
-Disabled routines still allow explicit manual runs, as before.
-The shared `set_state` handler now refreshes the active run's state only after
-its atomic save succeeds, so both legacy and native following steps see the
-persisted values. Queued native expressions start their clock at actual
-execution admission rather than including time spent waiting in the queue.
+Conversion supports V1 `run`, `write`, `http`, `deck`, `mcp`, `transform`,
+`wait` and `set_state` actions. The production registry validates every
+mapped `step.*` node against the existing action schema. Unknown fields
+remain blockers. No YAML is read by native execution.
 
-Conversion deliberately blocks V0 actions, agent steps, `when`, retry and
-continued-failure controls, nonempty execution budgets, webhook registrations
-and event triggers, manual parameter schemas, duplicate ids, malformed or
-divergent raw mirrors and ambiguous write cwd overrides. These require
-additional native behavior, not a hidden YAML execution adapter. The bundled
-daily briefing and census templates currently contain blocked features.
-Timeouts and failures have native trace records; their legacy run-aggregate
-cause and per-attempt presentation are not a completed compatibility contract.
-MCP schemas/configs can migrate, but live MCP equivalence is not established
-by the conversion tests.
+Converted V1 graphs use `execution.mode = "routine-v1"`. Their `completed`
+connections continue after a skipped condition or a deliberately continued
+failure. The separate `result` port contains only an actual successful
+action value. Completion retains that result and the original upstream
+input envelopes. Failed and skipped steps never manufacture result values.
+The native trace keeps skipped status, failed status, each retry attempt,
+stdout, stderr and errors. Diagnostics project the original `steps.<id>`
+context, including failure details.
+
+`when` uses the same bounded expression evaluator and truthiness as V1.
+Evaluation errors skip the step, and an empty expression is not evaluated.
+Exact-value gates remain available for graph routing, but they cannot replace
+this expression/error-skip/continue contract. Retry `times` counts total
+attempts, with the original linear or exponential delay, delay cap and
+`after_retry` behavior. Cancellation interrupts retry delay and active work.
+The native routine-v1 budget mode counts dispatched attempts, including
+failures and retries, not sources or skipped conditions. It checks the
+original strict-greater-than caps after each attempt. A duration cap bounds
+the active attempt's remaining timeout, preserving timeout precedence over
+budget and cancellation causes. All usage fields retain their actual reported
+values. Ordinary native graphs keep their existing node-count budgets.
+Run history counts final dispatched steps, failed final steps and final
+stdout like the original V1 runtime.
+
+Manual declarations, including arbitrary `params_schema` values, survive in
+the source's `manualTriggers` array. They remain informational because the
+original manual API does not enforce schemas. Event declarations survive in
+`eventTriggers` on one generic `event` source. Explicit event admission
+remains available; conversion does not invent subscriptions or evaluate
+filters that the original runtime never consumed. Duplicate declarations
+share one source so they cannot execute a step twice.
+
+Webhook sources use `config.webhook.path` and the existing signed-delivery
+admission. Conversion never creates, moves or rotates a credential.
+Orphaned or divergent registrations and multiple webhook declarations stay
+blocked. Native saves, explicit rotation, refusal of bare secrets and status
+reads use the existing credential-management rules.
+
+V0 `bash` and `script` rows convert to `process.v0`, with
+`execution.mode = "routine-v0"`. The original process helper supplies the
+exact argv, whitespace splitting, lack of interpolation, cwd fallback,
+output clipping and ten-minute runtime limit. Original stdout, stderr and
+exit codes remain in run history. `prompt` stays blocked because it starts
+an agent.
+
+Disabled routines still admit explicit manual runs. The shared `set_state`
+handler refreshes active state only after persistence succeeds, and queued
+expression clocks start at execution admission.
+
+Agent steps, malformed or divergent source data, duplicate ids and ambiguous
+write cwd overrides remain blocked. The bundled census can now convert;
+the daily briefing still needs native agent support from neopi#11.
+MCP schemas and configuration can migrate, but live MCP equivalence is not
+established by these tests.
 
 `GET /api/routine-migrations/:id/:sourceDigest/export` returns the original's
 semantic YAML for one-shot round trips, only while its native definition is
-unchanged. It is not an authoring source. `POST
+unchanged. V0 export contains its original single-action request fields,
+`version: 0` and raw concurrency/budget/timezone/tag columns in `metadata`;
+V1 export contains the original semantic spec. Neither is an authoring
+source. `POST
 /api/routine-migrations/:id/:sourceDigest/restore` restores that definition,
 refusing later native or metadata edits. State and history remain as they
 are; restoration never claims to undo external actions. For a complete

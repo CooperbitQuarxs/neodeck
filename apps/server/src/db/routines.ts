@@ -452,7 +452,7 @@ export function setRoutineSchedule(
 // ─── Runs ──────────────────────────────────────────────────────────────────
 
 /** Record a run's start. The trigger payload is stored through `encodeTriggerPayload`. */
-export function startRun(routineId: string, trigger: RoutineRun["trigger"], triggerPayload?: Record<string, unknown>): RoutineRun {
+export function startRun(routineId: string, trigger: RoutineRun["trigger"], triggerPayload?: Record<string, unknown> | unknown[]): RoutineRun {
 	const runId = `run_${id().toLowerCase().slice(0, 18)}`;
 	const startedAt = nowIso();
 	getDb()
@@ -574,6 +574,42 @@ export function finishGraphRun(record: GraphRunRecord, abortReason?: string): vo
 			? `${traceError}\n${record.error?.slice(0, MAX_GRAPH_HISTORY_ERROR_CHARS) ?? ""}`.slice(0, MAX_GRAPH_HISTORY_ERROR_CHARS)
 			: record.error?.slice(0, MAX_GRAPH_HISTORY_ERROR_CHARS);
 		getDb().query("UPDATE routine_runs SET graph_run_json = ? WHERE id = ?").run(trace, record.id);
+		const mode = record.graph.execution?.mode;
+		if (mode === "routine-v0") {
+			const receipt = record.nodeRuns.find(node => node.type === "process.v0")?.diagnostics?.v0;
+			const result = receipt && typeof receipt === "object" && !Array.isArray(receipt) ? receipt : {};
+			finalizeRun(record.id, {
+				endedAt: record.endedAt,
+				exitCode: traceError ? null : typeof result.exitCode === "number" ? result.exitCode : null,
+				stdoutExcerpt: typeof result.stdoutExcerpt === "string" ? result.stdoutExcerpt : "",
+				stderrExcerpt: typeof result.stderrExcerpt === "string" ? result.stderrExcerpt : "",
+				error: traceError ? historyError : typeof result.error === "string" ? result.error : undefined,
+			});
+			return;
+		}
+		if (mode === "routine-v1") {
+			const steps = record.nodeRuns.filter(node => node.type.startsWith("step.") && node.diagnostics?.result);
+			let stdout = "";
+			for (const step of steps) {
+				const result = step.diagnostics!.result;
+				const more = result && typeof result === "object" && !Array.isArray(result) && typeof result.stdoutExcerpt === "string" ? result.stdoutExcerpt : "";
+				const room = MAX_GRAPH_HISTORY_ERROR_CHARS - stdout.length;
+				if (room > 0) stdout += more.length > room ? more.slice(0, room) + "\n…(truncated)" : more;
+			}
+			const reason = abortReason ?? record.abortReason ?? (record.status === "aborted" ? "cancelled" : record.status === "failed" ? "failure" : undefined);
+			finalizeRun(record.id, {
+				endedAt: record.endedAt,
+				exitCode: !traceError && record.status === "success" ? 0 : null,
+				stdoutExcerpt: stdout, stderrExcerpt: "",
+				error: traceError ? historyError : reason ? `aborted: ${reason}` : undefined,
+				...(reason ? { abortedAt: record.endedAt, abortReason: reason } : {}),
+				totalLlmTokens: (record.usage?.llmTokensIn ?? 0) + (record.usage?.llmTokensOut ?? 0),
+				totalLlmCostMicros: record.usage?.llmCostMicros ?? 0,
+				stepCountTotal: steps.length,
+				stepCountFailed: steps.filter((node, index) => (node.status === "failed" || node.status === "aborted") && !(reason === "budget" && index === steps.length - 1)).length,
+			});
+			return;
+		}
 		finalizeRun(record.id, {
 			endedAt: record.endedAt,
 			exitCode: !traceError && record.status === "success" ? 0 : 1,

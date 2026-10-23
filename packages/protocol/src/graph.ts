@@ -60,6 +60,8 @@ export interface RoutineGraph {
 	edges: GraphEdge[];
 	concurrency?: RoutineConcurrency;
 	budget?: RoutineBudget;
+	/** Converted routine semantics, including native attempt accounting for V1. */
+	execution?: { mode: "routine-v1" | "routine-v0" };
 	timezone?: string;
 	tags?: string[];
 	layout?: { nodes?: Record<string, RoutineLayoutNode> };
@@ -67,7 +69,7 @@ export interface RoutineGraph {
 
 export interface GraphActivation {
 	eventType: string;
-	event: GraphObject;
+	event: GraphObject | GraphValue[];
 	/** Select one source explicitly, otherwise activate sources matching eventType. */
 	sourceNodeId?: string;
 	/** Stable event/explicit operation identity; retries must retain it. */
@@ -100,6 +102,8 @@ export interface GraphNodeInput {
 export interface GraphEmission {
 	port: string;
 	value: GraphValue;
+	/** Use earlier same-batch outputs as inputs; they retain original inputs transitively. */
+	includeSiblingOutputs?: string[];
 }
 
 export interface GraphEffect {
@@ -142,7 +146,7 @@ export interface GraphExecutionResult {
 	nodeRuns: GraphNodeRun[];
 	outputs: GraphOutput[];
 	error?: string;
-	abortReason?: "budget" | "cancelled";
+	abortReason?: "budget" | "cancelled" | "timeout" | "failure";
 	usage?: {
 		llmTokensIn: number;
 		llmTokensOut: number;

@@ -6,6 +6,7 @@ All notable changes to NPI deck (a fork of bjb2/omp-deck; entries before the for
 ## [Unreleased]
 
 ### Changed
+- Routine conversion now preserves native condition skips, retries, continued failures, per-attempt budgets, signed webhook admission, manual schema declarations and generic event admission. Non-agent V0 processes also convert without changing argv or interpolation. The bundled census is convertible; agent routines and ambiguous originals stay blocked with field-level reasons. Backups, idempotency and guarded restoration remain mandatory. Part of [#163](https://github.com/PsychedelicShayna/neodeck/issues/163). GPT-6.1 Sol.
 - The standalone legacy-state migration script typechecks with a supported structural path type, retaining POSIX, Windows drive and UNC containment checks ([#314](https://github.com/PsychedelicShayna/neodeck/issues/314)). GPT-6.1 Sol.
 - Iteration actions retain the original trigger's event type and event or card identity, including through nested bodies. Ordinary event-driven loops no longer need an explicit operation ID to preview or execute; pass identities and replay protection remain distinct ([#159](https://github.com/PsychedelicShayna/neodeck/issues/159)). GPT-6.1 Sol.
 - Every page shares G navigation, `/` page search, and a keyboard-accessible `?` shortcut guide. Page actions register alongside the global keys, and typing, IME composition and open overlays suppress them. The sidebar teaches the same contract ([#300](https://github.com/PsychedelicShayna/neodeck/issues/300)). GPT-6.1 Sol on behalf of PsychedelicShayna.
