@@ -51,8 +51,16 @@ const member = (id: string) => ({ id, model: `deck-test/${id}`, systemPrompt: `Y
 const chain = (name: string, description?: string) => ({ name, ...(description ? { description } : {}), entry: "writer", members: [member("writer"), member("editor")], edges: [{ from: "writer", to: "editor", x: { output: true as const } }] });
 const withRoute = (name: string) => {
 	const definition = chain(name);
-	return { ...definition, members: [{ ...definition.members[0]!, route: { instructions: "pick" } }, definition.members[1]!] };
+	return {
+		...definition,
+		members: [{ ...definition.members[0]!, route: { instructions: "Choose the editor for revisions or the alternate for a second opinion." } }, definition.members[1]!, { ...member("editor"), id: "alternate" }],
+		edges: [
+			{ ...definition.edges[0]!, when: "The draft needs revisions." },
+			{ from: "writer", to: "alternate", when: "The draft needs a second opinion.", x: { output: true as const } },
+		],
+	};
 };
+const withInvalidEntry = (name: string) => ({ ...chain(name), entry: "missing" });
 
 beforeEach(async () => {
 	for (const at of [file, path.join(project, ".omp"), path.join(nested, ".omp"), path.join(nested, "MIXTURES.toml"), path.join(outside, "MIXTURES.toml")]) await rm(at, { recursive: true, force: true });
@@ -65,21 +73,28 @@ afterAll(async () => {
 	await rm(outside, { recursive: true, force: true });
 });
 
-test("validation reports NeoPi's M1 gate per definition; a linear model chain is runnable", async () => {
+test("validation accepts linear and routed mixtures and reports NeoPi's remaining capability gates", async () => {
 	const draft = await request("/mixtures/draft", {
 		method: "POST",
 		headers: { "content-type": "application/json" },
-		body: JSON.stringify({ cwd: project, input: { kind: "document", doc: { mixtures: [chain("linear"), withRoute("routed")] } } }),
+		body: JSON.stringify({ cwd: project, input: { kind: "document", doc: { mixtures: [chain("linear"), withRoute("routed"), withInvalidEntry("invalid")] } } }),
 	});
 	expect(draft.status).toBe(200);
 	const body = (await draft.json()) as { validation: MixtureSourceDocument["validation"] };
-	expect(body.validation.map(report => [report.name, report.runnable])).toEqual([["linear", true], ["routed", false]]);
-	expect(body.validation[1]!.unsupported).toEqual([expect.objectContaining({ code: "unsupported.feature", path: "members[0].route" })]);
+	expect(body.validation.map(report => [report.name, report.runnable])).toEqual([["linear", true], ["routed", true], ["invalid", false]]);
+	for (const report of body.validation.slice(0, 2)) {
+		expect(report.errors).toEqual([]);
+		expect(report.unsupported).toEqual([]);
+		expect(report.revision).toEqual(expect.any(String));
+	}
+	expect(body.validation[2]!.errors).toEqual([expect.objectContaining({ code: "entry.unresolved", path: "entry" })]);
+	expect(body.validation[2]!.unsupported).toEqual([]);
 	const capabilities = (await load()).capabilities;
-	expect(capabilities.milestone).toBe("M1");
-	// Pinned NeoPi runs only linear chains of tool-less model members: every probed feature is refused.
-	expect(capabilities.gates.filter(gate => !gate.gated)).toEqual([]);
-	expect(capabilities.gates.map(gate => gate.feature)).toContain("tools");
+	expect(capabilities.milestone).toBe("M2");
+	expect(capabilities.gates.filter(gate => gate.gated).map(gate => gate.feature)).toEqual(["tools", "fanout", "steering", "serve"]);
+	expect(capabilities.gates.filter(gate => !gate.gated).map(gate => gate.feature)).toEqual([
+		"verdict", "route", "terminate", "routing", "transcript", "toolTrace", "maxTraversals", "cycles", "budgetUsd", "wallClockMinutes", "onLimit", "limitTarget",
+	]);
 });
 
 test("save is compare-and-swap on the loaded hash and verifies the file it wrote", async () => {
@@ -147,29 +162,40 @@ test("a .omp directory linked elsewhere is refused as a write target", async () 
 
 test("definitions with validation errors block a save unless carried over unchanged", async () => {
 	const start = await load();
-	const refused = await saveRoot(start, { mixtures: [chain("ok"), withRoute("routed")] });
+	const refused = await saveRoot(start, { mixtures: [chain("ok"), withInvalidEntry("invalid")] });
 	expect(refused.status).toBe(422);
-	expect(((await refused.json()) as { blocked: number[] }).blocked).toEqual([1]);
+	const rejected = (await refused.json()) as { blocked: number[]; validation: MixtureSourceDocument["validation"] };
+	expect(rejected.blocked).toEqual([1]);
+	expect(rejected.validation[1]!.errors).toEqual([expect.objectContaining({ code: "entry.unresolved", path: "entry" })]);
 	expect(await Bun.file(file).exists()).toBe(false);
 
 	// A hand-written non-runnable definition already on disk survives an edit of its neighbour.
-	await writeDoc(file, { mixtures: [chain("ok"), withRoute("routed")] });
+	await writeDoc(file, { mixtures: [chain("ok"), withInvalidEntry("invalid")] });
 	const loaded = await load();
 	const onDisk = rootSource(loaded).doc;
 	const kept = await saveRoot(loaded, { mixtures: [{ ...onDisk.mixtures[0]!, description: "edited" }, onDisk.mixtures[1]!] });
 	expect(kept.status).toBe(200);
 	const result = (await kept.json()) as MixtureSaveResponse;
-	expect(result.source.doc.mixtures.map(mixture => [mixture.name, mixture.description])).toEqual([["ok", "edited"], ["routed", undefined]]);
+	expect(result.source.doc.mixtures.map(mixture => [mixture.name, mixture.description])).toEqual([["ok", "edited"], ["invalid", undefined]]);
+	expect(result.source.doc.mixtures[1]).toEqual(onDisk.mixtures[1]);
 	expect(result.source.validation.map(report => report.runnable)).toEqual([true, false]);
+	expect(result.source.validation[1]!.errors).toEqual([expect.objectContaining({ code: "entry.unresolved", path: "entry" })]);
+
+	// Carry-over permission does not extend to edits of the invalid definition.
+	const savedText = await readFile(file, "utf8");
+	const changed = await saveRoot(await load(), { mixtures: [result.source.doc.mixtures[0]!, { ...result.source.doc.mixtures[1]!, description: "changed" }] });
+	expect(changed.status).toBe(422);
+	expect(((await changed.json()) as { blocked: number[] }).blocked).toEqual([1]);
+	expect(await readFile(file, "utf8")).toBe(savedText);
 });
 
-test("a saved runnable mixture becomes a picker model without a restart, even while a chat holds the workspace", async () => {
+test("a saved routed mixture becomes a picker model without a restart, even while a chat holds the workspace", async () => {
 	// A live chat in the workspace keeps its scope's roster; a save must replace it, not wait for release.
 	const agentDir = sdk().getAgentDir();
 	const chat = await feature("mixtures").MixtureWorkspace.retain("test-live-chat", { cwd: project, agentDir, registry, settings: await sdk().Settings.loadReadOnly({ cwd: project, agentDir }) });
 	try {
 		expect(await pickerMixtures()).not.toContain("fresh");
-		const response = await saveRoot(await load(), { mixtures: [chain("fresh")] });
+		const response = await saveRoot(await load(), { mixtures: [withRoute("fresh")] });
 		expect(response.status).toBe(200);
 		const result = (await response.json()) as MixtureSaveResponse;
 		expect(result.picker).toEqual(["fresh"]);
@@ -187,13 +213,16 @@ test("a saved runnable mixture becomes a picker model without a restart, even wh
 });
 
 test("a saved definition NeoPi refuses never reaches the picker", async () => {
-	await writeDoc(file, { mixtures: [chain("listed"), withRoute("refused")] });
+	await writeDoc(file, { mixtures: [chain("listed"), withInvalidEntry("refused")] });
 	const loaded = await load();
 	const onDisk = rootSource(loaded).doc;
+	expect(rootSource(loaded).validation[1]!.runnable).toBe(false);
+	expect(rootSource(loaded).validation[1]!.errors).toEqual([expect.objectContaining({ code: "entry.unresolved", path: "entry" })]);
 	// Editing only the runnable neighbour saves both and registers only the runnable one.
 	const response = await saveRoot(loaded, { mixtures: [{ ...onDisk.mixtures[0]!, description: "edited" }, onDisk.mixtures[1]!] });
 	expect(response.status).toBe(200);
 	expect(((await response.json()) as MixtureSaveResponse).picker).toEqual(["listed"]);
+	expect(await pickerMixtures()).toEqual(["listed"]);
 });
 
 test("nested .omp and ancestor MIXTURES.toml files are listed in NeoPi's order and the leaf's definition is the one registered", async () => {

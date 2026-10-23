@@ -110,6 +110,10 @@ The script:
    `packages/natives/native/index.js` and `index.d.ts`, which the build
    regenerates.
 
+   A cold build can change those tracked generated bindings. NeoPi's
+   `BUILD_INFO` reports that dirtiness; preflight can accept the verified addon
+   without labeling the dirty source tree as a clean match for `neopi.pin`.
+
    Evidence for a candidate is, in order: this tree's record for those exact
    bytes, a record in the other checkout that holds the file, or that other
    checkout's own native inputs. The last kind is reported as
