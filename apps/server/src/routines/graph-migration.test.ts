@@ -79,7 +79,7 @@ test("semantic export and reimport retain omitted/false/zero/null/empty/nested v
 		{ id: "data", type: "transform", body: "return { list: [false, 0, null, '', 'truthy'], nested: { yes: true } };", on_failure: "abort", timeout_secs: 17 },
 		{ id: "fetch", type: "http", method: "POST", url: "http://127.0.0.1/unused", headers: {}, query: { zero: 0, flag: false, empty: "" }, body: { from: "{{ steps.data.json.list }}", nested: [null, false, 0, ""] }, expect_json: false },
 		{ id: "write", type: "write", path: "unused.txt", content: "", append: false },
-		{ id: "wait", type: "wait", duration_secs: 0 },
+		{ id: "wait", type: "wait", duration_secs: 0.1 },
 	]);
 	source.state = { declared_keys: [] };
 	source.layout = { version: 1, nodes: { data: { x: 0, y: -10, collapsed: false } }, edges: [{ from: "data", to: "write", kind: "manual", label: "display only" }] };
@@ -128,6 +128,8 @@ test("full backup retains raw definitions, state, webhook credentials and histor
 	expect(row(routine.id)).toEqual(before);
 	restoreRoutineDefinition(routine.id, result.reports[0]!.sourceDigest);
 	expect(row(routine.id)).toEqual(before);
+	getDb().query("UPDATE routines SET name = 'edited-after-restore' WHERE id = ?").run(routine.id);
+	expect(() => restoreRoutineDefinition(routine.id, result.reports[0]!.sourceDigest)).toThrow("changed");
 });
 
 test("backup failure and precommit interruption leave originals intact, then retry once", () => {
@@ -174,7 +176,8 @@ test("saved graph executes isolated shell/write/append/state nodes in order and 
 		{ id: "shell", type: "run", command: "printf 'shell-result'" },
 		{ id: "write", type: "write", path: "output/note.txt", content: "{{ steps.shell.stdout }}", append: false },
 		{ id: "append", type: "write", path: "output/note.txt", content: "-tail", append: true },
-		{ id: "set", type: "set_state", state: { count: "{{ (state.count || 0) + 1 }}", exact: { nested: [false, 0, null, ""] } } },
+		{ id: "increment", type: "transform", body: "return (context.state.count || 0) + 1;" },
+		{ id: "set", type: "set_state", state: { count: "{{ steps.increment.json }}", exact: { nested: [false, 0, null, ""] } } },
 		{ id: "read", type: "transform", body: "return context.state;" },
 	]));
 	expect(migrate(routine.id).reports[0]?.status).toBe("migrated");
@@ -184,7 +187,7 @@ test("saved graph executes isolated shell/write/append/state nodes in order and 
 		expect(loadState(routine.id)).toEqual({ count, exact: { nested: [false, 0, null, ""] } });
 		const trace = getGraphRun(listRuns(routine.id)[0]!.id)!;
 		expect(trace.status).toBe("success");
-		expect(trace.nodeRuns.find(node => node.nodeId === "read")?.outputs.find(output => output.port === "result")?.result).toEqual(loadState(routine.id));
+		expect(trace.nodeRuns.find(node => node.nodeId === "read")?.outputs.find(output => output.port === "result")?.result).toEqual({ count, exact: { nested: [false, 0, null, ""] } });
 		closeDb(); openDb({ path: path.join(home, "deck.db") });
 	}
 });
@@ -227,7 +230,7 @@ test("V0 actions, unknown keys, malformed budgets, duplicate ids and unsupported
 		{ id: "a", type: "agent", prompt: "NEVER RUN THIS", skills_allowed: [], mcp_servers_allowed: [] },
 	] as RoutineSpec["steps"];
 	const routines = cases.map(step => seed(spec([step])));
-	routines.push(seed(spec([{ id: "a", type: "wait", duration_secs: 0 }, { id: "a", type: "wait", duration_secs: 0 }])));
+	routines.push(seed(spec([{ id: "a", type: "wait", duration_secs: 0.1 }, { id: "a", type: "wait", duration_secs: 0.1 }])));
 	for (const raw of ["name: broken\nname: duplicate", "bad: [", "name: other\ntrigger: []\nsteps: []\nversion: 1"]) routines.push(seed(spec(), raw));
 	const malformed = seed(); getDb().query("UPDATE routines SET budget_json = ? WHERE id = ?").run("not-json-test-secret", malformed.id); routines.push(malformed);
 	const mirrored = seed(); getDb().query("UPDATE routines SET concurrency = 'parallel' WHERE id = ?").run(mirrored.id); routines.push(mirrored);
@@ -256,7 +259,7 @@ test("migration endpoints preflight, block unsafe originals, export/restore and 
 	expect((await api.request(`/routine-migrations/${routine.id}/${digest}/export`)).status).toBe(200);
 	expect((await api.request(`/routine-migrations/${routine.id}/${digest}/restore`, request())).status).toBe(200);
 	expect(getRoutine(routine.id)?.specVersion).toBe(1);
-	const blocked = seed(spec([{ id: "skip", type: "wait", duration_secs: 0, when: "false" }]));
+	const blocked = seed(spec([{ id: "skip", type: "wait", duration_secs: 0.1, when: "false" }]));
 	expect((await api.request(`/routine-migrations/${blocked.id}`, request())).status).toBe(409);
 	expect((await api.request("/routine-migrations/missing", request())).status).toBe(404);
 });
@@ -306,4 +309,22 @@ test("copied deck fixture shapes preserve card properties and reads without touc
 	expect(created.body).toContain("custom:");
 	expect(trace.nodeRuns.find(node => node.nodeId === "fetch")!.outputs[0]!.result.id).toBe(created.id);
 	expect(trace.nodeRuns.find(node => node.nodeId === "inbox")!.outputs[0]!.result.title).toBe("Copied briefing action");
+});
+
+test("queued migrated runs initialize expression timestamps after admission and migration refuses active work", async () => {
+	const source = spec([{ id: "wait", type: "wait", duration_secs: 0.1 }, { id: "inspect", type: "transform", body: "return context.run;" }]);
+	source.concurrency = "queue";
+	const routine = seed(source);
+	expect(migrate(routine.id).reports[0]?.status).toBe("migrated");
+	const first = runner.fire(routine.id);
+	const second = runner.fire(routine.id);
+	const untouched = seed();
+	expect((await buildRoutinesRouter(runner).request(`/routine-migrations/${untouched.id}`, request())).status).toBe(409);
+	await Promise.all([first, second]);
+	for (const run of listRuns(routine.id)) {
+		const trace = getGraphRun(run.id)!;
+		expect(trace.status).toBe("success");
+		expect(trace.nodeRuns.find(node => node.nodeId === "inspect")!.outputs[0]!.result.started).toBe(trace.nodeRuns.find(node => node.nodeId === "__trigger_0")!.startedAt!);
+	}
+	expect(getRoutine(untouched.id)?.specVersion).toBe(1);
 });

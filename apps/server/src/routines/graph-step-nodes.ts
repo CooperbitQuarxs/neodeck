@@ -39,7 +39,7 @@ function configSchema(schema: unknown): GraphObject {
 
 /** Project legacy access from the shared native trace; original outputs stay intact. */
 function runContext(context: GraphNodeContext): RunContext {
-	const started = getRun(context.runId)?.startedAt ?? new Date().toISOString();
+	const started = context.priorNodeRuns?.find(record => record.startedAt)?.startedAt ?? getRun(context.runId)?.startedAt ?? new Date().toISOString();
 	const ancestors = new Set<string>();
 	const visit = (output: GraphOutput) => {
 		if (ancestors.has(output.nodeId)) return;
@@ -106,8 +106,8 @@ export function registerGraphStepNodes(registry: GraphNodeRegistry): void {
 				const result = await dispatch(step, context, controller.signal, graph.node.config.cwd as string | undefined ?? loadConfig().defaultCwd, graph);
 				const entry: StepContextEntry = { status: result.status, stdout: result.stdoutExcerpt, stderr: result.stderrExcerpt, duration_ms: result.durationMs };
 				if (result.json !== undefined) entry.json = result.json;
-				const diagnostic = { stepId: step.id, entry, state: context.state, result: JSON.parse(JSON.stringify(result)), timedOut };
-				if (!isGraphValue(diagnostic)) throw new Error("Step returned non-JSON diagnostics");
+				const diagnostic: unknown = { stepId: step.id, entry, state: context.state, result: JSON.parse(JSON.stringify(result)), timedOut };
+				if (!isGraphValue(diagnostic) || diagnostic === null || typeof diagnostic !== "object" || Array.isArray(diagnostic)) throw new Error("Step returned non-JSON diagnostics");
 				graph.recordDiagnostics?.(diagnostic);
 				if (timedOut) throw new Error("step timed out");
 				controller.signal.throwIfAborted();

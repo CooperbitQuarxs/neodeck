@@ -2,10 +2,11 @@ import {
 	INBOX_CARD_ADDED_EVENT, inboxCardAddedNodeType,
 	compileStructuredOutputSchema, isGraphValue, validateRoutineGraph,
 	type GraphActivation, type GraphEffect, type GraphEmission, type GraphExecutionResult, type GraphNode,
-	type GraphNodeInput, type GraphNodeRun, type GraphNodeType, type GraphOutput,
+	type GraphNodeInput, type GraphNodeRun, type GraphNodeType, type GraphOutput, type GraphIterationAddress, type GraphObject,
 	type GraphValue, type GraphValueType, type RoutineGraph, type ValidationError, type ValidationResult,
 } from "@npi-deck/protocol";
 import { checkBudget, newBudgetState } from "./budget.ts";
+import { graphBuiltins } from "./graph-builtins.ts";
 
 export interface GraphUsage {
 	llmTokensIn?: number;
@@ -20,10 +21,17 @@ export interface GraphNodeContext {
 	runId: string;
 	routineId?: string;
 	dryRun: boolean;
+	iteration?: GraphIterationAddress[];
+	/** Previously settled nodes in this graph/pass, in deterministic execution order. */
+	priorNodeRuns?: readonly GraphNodeRun[];
+	/** Trace details are not outputs and never activate consumers, including on failure. */
+	recordDiagnostics?(details: GraphObject): void;
 	/** Effects are journaled by actions before writes; retained even on failure/abort. */
 	recordEffect(effect: GraphEffect): void;
 	/** Report each increment once. Caps are checked immediately; never estimate silently. */
 	recordUsage(usage: GraphUsage): void;
+	/** Run a validated iteration body with the same cancellation and budget state. */
+	iterate?(body: RoutineGraph, items: GraphValue[]): Promise<void>;
 }
 export interface GraphNodeImplementation {
 	definition: GraphNodeType;
@@ -67,6 +75,7 @@ export class GraphNodeRegistry {
 			execute: ({ node, activation }) => node.config.eventType === activation.eventType
 				? [{ port: "event", value: activation.event }] : [],
 		});
+		for (const implementation of graphBuiltins) this.register({ ...implementation });
 	}
 
 	register(implementation: GraphNodeImplementation): void {
@@ -94,10 +103,15 @@ export class GraphNodeRegistry {
 		const result = validateRoutineGraph(graph, this.describe());
 		if (!result.valid) return result;
 		const errors: ValidationError[] = [];
-		for (const [index, node] of (graph as RoutineGraph).nodes.entries()) {
-			const validation = this.validators.get(node.type)?.(node.config);
-			for (const error of validation?.errors ?? []) errors.push({ ...error, path: `/nodes/${index}/config${error.path === "/" ? "" : error.path}` });
-		}
+		const validateConfigs = (definition: RoutineGraph, prefix: string) => {
+			for (const [index, node] of definition.nodes.entries()) {
+				const path = `${prefix}/nodes/${index}/config`;
+				const validation = this.validators.get(node.type)?.(node.config);
+				for (const error of validation?.errors ?? []) errors.push({ ...error, path: `${path}${error.path === "/" ? "" : error.path}` });
+				if (node.type === "iteration.each") validateConfigs(node.config.body as unknown as RoutineGraph, `${path}/body`);
+			}
+		};
+		validateConfigs(graph as RoutineGraph, "");
 		return errors.length ? { valid: false, errors } : { valid: true };
 	}
 }
@@ -117,7 +131,6 @@ export async function executeGraph(graph: RoutineGraph, activation: GraphActivat
 	if (!isGraphValue(activation) || !activation || Array.isArray(activation) || typeof activation.eventType !== "string" || !activation.eventType.trim() || !activation.event || typeof activation.event !== "object" || Array.isArray(activation.event) || (activation.sourceNodeId !== undefined && (typeof activation.sourceNodeId !== "string" || !graph.nodes.some((node) => node.id === activation.sourceNodeId && registry.get(node.type)!.definition.kind === "event")))) {
 		throw new GraphValidationError([{ path: "/activation", keyword: "type", message: "activation requires eventType, an event object, and an existing event source when selected", params: {} }]);
 	}
-	const nodeRuns: GraphNodeRun[] = [], outputs: GraphOutput[] = [];
 	const state = newBudgetState(Date.now);
 	const controller = new AbortController();
 	let abortReason: "budget" | "cancelled" | undefined;
@@ -145,6 +158,10 @@ export async function executeGraph(graph: RoutineGraph, activation: GraphActivat
 		else deadline = setTimeout(scheduleDeadline, Math.min(remaining, 2_147_483_647));
 	};
 	if (graph.budget?.max_duration_secs !== undefined) scheduleDeadline();
+	const runId = options.runId ?? crypto.randomUUID();
+	const runBudget = graph.budget;
+	const runScope = async (graph: RoutineGraph, activation: GraphActivation, sourceInputs: GraphOutput[] = [], iteration: GraphIterationAddress[] = []): Promise<Pick<GraphExecutionResult, "status" | "nodeRuns" | "outputs">> => {
+	const nodeRuns: GraphNodeRun[] = [], outputs: GraphOutput[] = [];
 	const incoming = new Map<string, RoutineGraph["edges"]>();
 	const outgoing = new Map<string, string[]>();
 	const indegree = new Map(graph.nodes.map((node) => [node.id, 0]));
@@ -156,8 +173,6 @@ export async function executeGraph(graph: RoutineGraph, activation: GraphActivat
 	const settled = new Map<string, Map<string, GraphOutput[]>>();
 	const emittedValues = new Map<GraphOutput, GraphValue>();
 	const pending = new Set(graph.nodes.map((node) => node.id));
-	const runId = options.runId ?? crypto.randomUUID();
-	try {
 		while (pending.size) {
 			// Graph declaration order breaks ties, independent of handler timing and edge order.
 			const node = graph.nodes.find((candidate) => pending.has(candidate.id) && indegree.get(candidate.id) === 0)!;
@@ -166,14 +181,15 @@ export async function executeGraph(graph: RoutineGraph, activation: GraphActivat
 			const definition = implementation.definition;
 			const inputs: GraphNodeInput[] = [];
 			for (const edge of incoming.get(node.id) ?? []) for (const output of settled.get(edge.from.nodeId)?.get(edge.from.port) ?? []) inputs.push({ port: edge.to.port, edgeId: edge.id, output });
+			if (definition.kind === "event") for (const output of sourceInputs) inputs.push({ port: "parent", edgeId: "iteration-parent", output });
 			const envelopes = inputs.map((input) => input.output);
-			const record: GraphNodeRun = { nodeId: node.id, type: node.type, status: "skipped", inputs: envelopes, inputPorts: inputs.map((input) => input.port), outputs: [], endedAt: "" };
+			const record: GraphNodeRun = { nodeId: node.id, type: node.type, status: "skipped", inputs: envelopes, inputPorts: inputs.map((input) => input.port), outputs: [], endedAt: "", ...(iteration.length ? { iteration } : {}) };
 			const selected = definition.kind === "event"
 				? (activation.sourceNodeId === undefined || activation.sourceNodeId === node.id) && node.config.eventType === activation.eventType
 				: inputs.length > 0 && definition.inputs.every((port) => port.required === false || inputs.some((input) => input.port === port.id));
 			if (status === "success" && selected) {
 				enforceBudget();
-				if (!controller.signal.aborted && graph.budget?.max_steps_executed !== undefined && state.stepsExecuted >= graph.budget.max_steps_executed) abortBudget("Graph budget exceeded: max_steps_executed");
+				if (!controller.signal.aborted && runBudget?.max_steps_executed !== undefined && state.stepsExecuted >= runBudget.max_steps_executed) abortBudget("Graph budget exceeded: max_steps_executed");
 				if (controller.signal.aborted) {
 					record.status = "aborted"; record.error = runError; status = "aborted";
 				} else {
@@ -186,12 +202,17 @@ export async function executeGraph(graph: RoutineGraph, activation: GraphActivat
 							for (const input of values) if (!valueMatches(emittedValues.get(input.output)!, port.type)) throw new Error(`Input port ${port.id} expected ${port.type}`);
 						}
 						const context: GraphNodeContext = {
-							node, inputs, activation, signal: controller.signal, runId,
+							node, inputs, activation, signal: controller.signal, runId, iteration, priorNodeRuns: nodeRuns,
 							routineId: options.routineId, dryRun: options.dryRun === true,
 							recordEffect: (effect) => {
 								record.effects ??= [];
 								const index = record.effects.findIndex((item) => item.logicalKey === effect.logicalKey);
 								if (index < 0) record.effects.push(effect); else record.effects[index] = effect;
+							},
+							recordDiagnostics: (details) => {
+								if (!active) throw new Error("Cannot record diagnostics after graph node settled");
+								if (!isGraphValue(details) || details === null || typeof details !== "object" || Array.isArray(details)) throw new Error("Graph diagnostics must be a JSON object");
+								record.diagnostics = details;
 							},
 							recordUsage: (usage) => {
 								if (!active) throw new Error("Cannot report usage after graph node settled");
@@ -204,8 +225,21 @@ export async function executeGraph(graph: RoutineGraph, activation: GraphActivat
 								enforceBudget();
 								controller.signal.throwIfAborted();
 							},
+							iterate: async (body, items) => {
+								if (node.type !== "iteration.each") throw new Error("Only iteration.each can execute an iteration body");
+								record.passes = [];
+								for (const [index, item] of items.entries()) {
+									enforceBudget(); controller.signal.throwIfAborted();
+									const pass = await runScope(body, { eventType: "iteration", event: { item, index, count: items.length }, operationId: activation.operationId }, envelopes, [...iteration, { nodeId: node.id, index }]);
+									record.passes.push({ index, status: pass.status, nodeRuns: pass.nodeRuns, outputs: pass.outputs });
+									if (pass.status !== "success") { controller.signal.throwIfAborted(); throw new Error(runError ?? "Iteration body failed"); }
+								}
+							},
 						};
-						const emissions = await withAbort(() => { state.stepsExecuted++; return implementation.execute(context); }, controller.signal);
+						state.stepsExecuted++;
+						const emissions = node.type === "iteration.each"
+							? await implementation.execute(context)
+							: await withAbort(() => implementation.execute(context), controller.signal);
 						enforceBudget(); controller.signal.throwIfAborted();
 						if (!Array.isArray(emissions)) throw new Error("Node must return an array of emissions");
 						const counts = new Map<string, number>();
@@ -221,7 +255,8 @@ export async function executeGraph(graph: RoutineGraph, activation: GraphActivat
 						// Validate the whole batch before exposing any part of it to consumers.
 						for (const emission of emissions) {
 							const value = emission.value;
-							const output: GraphOutput = { nodeId: node.id, port: emission.port, result: value !== null && typeof value === "object" && !Array.isArray(value) ? value : { value }, inputs: envelopes };
+							const passOutputs = record.passes?.flatMap(pass => pass.outputs) ?? [];
+							const output: GraphOutput = { nodeId: node.id, port: emission.port, result: value !== null && typeof value === "object" && !Array.isArray(value) ? value : { value }, inputs: passOutputs.length ? [...envelopes, ...passOutputs] : envelopes, ...(iteration.length ? { iteration } : {}) };
 							record.outputs.push(output); emittedValues.set(output, value);
 						}
 						record.status = "success";
@@ -238,11 +273,15 @@ export async function executeGraph(graph: RoutineGraph, activation: GraphActivat
 			settled.set(node.id, ports);
 			outputs.push(...record.outputs);
 			record.endedAt = new Date().toISOString(); nodeRuns.push(record);
-			await options.onNodeRun?.(record);
+			if (!iteration.length) await options.onNodeRun?.(record);
 			for (const target of outgoing.get(node.id) ?? []) indegree.set(target, indegree.get(target)! - 1);
 		}
+		return { nodeRuns, outputs, status };
+	};
+	try {
+		const result = await runScope(graph, activation);
 		if (controller.signal.aborted && status === "success") status = "aborted";
-		return { status, nodeRuns, outputs, dryRun: options.dryRun === true, ...(runError !== undefined ? { error: runError } : {}), ...(status === "aborted" && abortReason ? { abortReason } : {}), usage: { llmTokensIn: state.totalTokensIn, llmTokensOut: state.totalTokensOut, llmCostMicros: state.totalCostMicros, stepsExecuted: state.stepsExecuted } };
+		return { ...result, status, dryRun: options.dryRun === true, ...(runError !== undefined ? { error: runError } : {}), ...(status === "aborted" && abortReason ? { abortReason } : {}), usage: { llmTokensIn: state.totalTokensIn, llmTokensOut: state.totalTokensOut, llmCostMicros: state.totalCostMicros, stepsExecuted: state.stepsExecuted } };
 	} finally {
 		if (deadline !== undefined) clearTimeout(deadline);
 		options.signal?.removeEventListener("abort", cancel);
@@ -272,14 +311,14 @@ export function readGraphPath(output: GraphOutput, path: readonly (string | numb
 	}
 	return value as GraphValue | undefined;
 }
-/** Find the nearest matching upstream envelope, in stable input order. */
-export function findGraphOutput(output: GraphOutput, nodeId: string, port?: string): GraphOutput | undefined {
+/** Find the nearest matching upstream envelope, optionally selecting an exact pass address. */
+export function findGraphOutput(output: GraphOutput, nodeId: string, port?: string, iteration?: readonly GraphIterationAddress[]): GraphOutput | undefined {
 	const queue = [output], seen = new Set<GraphOutput>();
 	for (let index = 0; index < queue.length; index++) {
 		const current = queue[index]!;
 		if (seen.has(current)) continue;
 		seen.add(current);
-		if (current.nodeId === nodeId && (port === undefined || current.port === port)) return current;
+		if (current.nodeId === nodeId && (port === undefined || current.port === port) && (iteration === undefined || JSON.stringify(current.iteration ?? []) === JSON.stringify(iteration))) return current;
 		queue.push(...current.inputs);
 	}
 	return undefined;

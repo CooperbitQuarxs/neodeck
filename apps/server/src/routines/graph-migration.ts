@@ -67,7 +67,7 @@ function plan(row: Row, registry: GraphNodeRegistry): Plan {
 		}
 		return { row, report };
 	}
-	const spec = parsed as RoutineSpec;
+	const spec = parsed as unknown as RoutineSpec;
 	const mirrors: Record<string, unknown> = {
 		concurrency: spec.concurrency ?? "skip", timezone: spec.timezone ?? null,
 		tags: spec.tags?.join(",") ?? null,
@@ -198,16 +198,16 @@ export function restoreRoutineDefinition(routineId: string, sourceDigest: string
 	getDb().transaction(() => {
 		const conversion = getDb().query<Conversion, [string, string]>("SELECT * FROM routine_graph_conversions WHERE routine_id = ? AND source_digest = ?").get(routineId, sourceDigest);
 		if (!conversion) throw new Error("Conversion not found");
-		if (conversion.restored_at !== null) return;
 		const current = getDb().query<Row, [string]>("SELECT * FROM routines WHERE id = ?").get(routineId);
-		if (!current || current.spec_version !== 2 || current.graph_json !== conversion.converted_graph_json) throw new Error("Native definition changed; restore the protected database backup offline instead");
+		if (!current) throw new Error("Routine no longer exists");
 		const original = JSON.parse(conversion.original_json) as Row;
 		// Metadata edits must not disappear as a side effect of restoration.
-		const expected: Row = { ...original, spec_version: 2, spec_yaml: null, graph_json: conversion.converted_graph_json };
+		const expected: Row = conversion.restored_at !== null ? original : { ...original, spec_version: 2, spec_yaml: null, graph_json: conversion.converted_graph_json };
 		for (const key of Object.keys(expected)) {
 			if (key === "last_run_at" || key === "next_run_at") continue;
 			if (current[key] !== expected[key]) throw new Error("Routine metadata changed since conversion");
 		}
+		if (conversion.restored_at !== null) return;
 		getDb().query("UPDATE routines SET spec_version = ?, spec_yaml = ?, graph_json = ?, cron = ?, action_kind = ?, action_body = ?, action_cwd = ?, concurrency = ?, budget_json = ?, timezone = ?, tags = ? WHERE id = ?").run(original.spec_version, original.spec_yaml, original.graph_json, original.cron!, original.action_kind!, original.action_body!, original.action_cwd!, original.concurrency!, original.budget_json!, original.timezone!, original.tags!, routineId);
 		getDb().query("UPDATE routine_graph_conversions SET restored_at = ? WHERE routine_id = ? AND source_digest = ?").run(new Date().toISOString(), routineId, sourceDigest);
 	}).immediate();

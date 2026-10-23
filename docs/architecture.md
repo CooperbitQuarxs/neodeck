@@ -207,6 +207,10 @@ Common action handlers retain interpolation, bounded expressions, filesystem
 and transport behavior. Actual returned values and recursive input envelopes
 use native graph outputs. Diagnostics retain the legacy `steps.<id>` context.
 Disabled routines still allow explicit manual runs, as before.
+The shared `set_state` handler now refreshes the active run's state only after
+its atomic save succeeds, so both legacy and native following steps see the
+persisted values. Queued native expressions start their clock at actual
+execution admission rather than including time spent waiting in the queue.
 
 Conversion deliberately blocks V0 actions, agent steps, `when`, retry and
 continued-failure controls, nonempty execution budgets, webhook registrations
