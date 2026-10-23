@@ -26,10 +26,23 @@ function releaseWindows(record: WindowsOwned): void {
 function terminateWindows(record: WindowsOwned): Promise<void> {
 	// Windows has no SIGTERM phase. The native handle pins the root identity
 	// through leader exit and the native walker hard-kills children first.
-	return record.teardown ??= record.reference.terminate({ gracefulMs: -1, timeoutMs: 800 }).then(exited => {
-		if (!exited) throw new Error(`owned Windows process tree ${record.reference.pid} did not exit`);
+	return record.teardown ??= (async () => {
+		// Native terminate() returns early for an exited root. killTree() still
+		// walks that retained root's descendants, including inherited writers.
+		const references = [record.reference];
+		const seen = new Set([record.reference.pid]);
+		for (let i = 0; i < references.length; i++) {
+			for (const child of references[i]!.children()) {
+				if (seen.has(child.pid)) continue;
+				seen.add(child.pid);
+				references.push(child);
+			}
+		}
+		record.reference.killTree();
+		const exited = await Promise.all(references.map(reference => reference.waitForExit({ timeoutMs: 800 })));
+		if (!exited.every(Boolean)) throw new Error(`owned Windows process tree ${record.reference.pid} did not exit`);
 		if (!record.retained) releaseWindows(record);
-	});
+	})();
 }
 
 /** A pipe-owning caller releases its stable tree only after both readers reach EOF. */
