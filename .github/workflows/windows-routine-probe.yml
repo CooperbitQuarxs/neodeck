@@ -46,8 +46,26 @@ jobs:
           git rev-parse HEAD
           bun --version
           git diff --exit-code HEAD -- apps packages scripts
+      - name: Reproduce unchanged cancellation with the same portable fixtures
+        id: baseline
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          files=(apps/server/src/owned-process.ts apps/server/src/routines/steps/run.ts)
+          trap 'git restore --source=HEAD -- "${files[@]}"' EXIT
+          for file in "${files[@]}"; do
+            git show "a76b395:$file" > "$file"
+          done
+          echo "Cancellation source a76b395, current portable fixtures:"
+          git diff --stat HEAD -- "${files[@]}"
+          bun test apps/server/src/routines/foundations.test.ts -t 'deadline kills shell grandchild|run-duration budget preempts'
+      - name: Require an executed failing baseline
+        if: always()
+        shell: bash
+        run: test '${{ steps.baseline.outcome }}' = failure
       - name: Deadline and duration-budget regressions
         run: bun test apps/server/src/routines/foundations.test.ts -t 'deadline kills shell grandchild|run-duration budget preempts'
       - name: Owned process and portable fixture regressions
         if: always()
-        run: bun test apps/server/src/owned-process.test.ts apps/server/src/routines/shell-fixture.test.ts
+        run: bun test apps/server/src/owned-process.test.ts apps/server/src/owned-process-tree.test.ts apps/server/src/routines/shell-fixture.test.ts

@@ -3,11 +3,42 @@ import * as path from "node:path";
 import { getDataDir } from "./env-store.ts";
 import { beginGeneration, GEN_ENV, killGenerations } from "./owned/generations.ts";
 import { workRegistry } from "./work-registry.ts";
+import { nativeProcessClass } from "./backend/runtime.ts";
 
 interface OwnedRecord { pid: number; pgid: number; starttime: string; generation: string; groupId?: string }
 const GROUP_ENV = "NPI_DECK_OWNED_GROUP";
 const active = new Map<number, OwnedRecord>();
 const releases = new Map<number, () => void>();
+interface WindowsOwned {
+	reference: import("@oh-my-pi/pi-natives").Process;
+	release: () => void;
+	retained: boolean;
+	teardown?: Promise<void>;
+}
+const windowsActive = new Map<number, WindowsOwned>();
+
+function releaseWindows(record: WindowsOwned): void {
+	if (windowsActive.get(record.reference.pid) !== record) return;
+	windowsActive.delete(record.reference.pid);
+	record.release();
+}
+
+function terminateWindows(record: WindowsOwned): Promise<void> {
+	// Windows has no SIGTERM phase. The native handle pins the root identity
+	// through leader exit and the native walker hard-kills children first.
+	return record.teardown ??= record.reference.terminate({ gracefulMs: -1, timeoutMs: 800 }).then(exited => {
+		if (!exited) throw new Error(`owned Windows process tree ${record.reference.pid} did not exit`);
+		if (!record.retained) releaseWindows(record);
+	});
+}
+
+/** A pipe-owning caller releases its stable tree only after both readers reach EOF. */
+export async function completeOwned(proc: OwnedProcess): Promise<void> {
+	const record = windowsActive.get(proc.pid);
+	if (!record) return;
+	await terminateWindows(record);
+	releaseWindows(record);
+}
 let journalPath: string | undefined;
 
 function runDir(): string { return path.join(getDataDir(), "run"); }
@@ -99,8 +130,11 @@ export function spawnOwned<
 	const In extends Bun.SpawnOptions.Writable = "ignore",
 	const Out extends Bun.SpawnOptions.Readable = "pipe",
 	const Err extends Bun.SpawnOptions.Readable = "inherit",
->(cmd: string[], options: Omit<Bun.SpawnOptions.SpawnOptions<In, Out, Err>, "cmd" | "detached"> = {}, policy: { replaceEnv?: boolean } = {}): Bun.Subprocess<In, Out, Err> {
+>(cmd: string[], options: Omit<Bun.SpawnOptions.SpawnOptions<In, Out, Err>, "cmd" | "detached"> = {}, policy: { replaceEnv?: boolean; retainUntilDrained?: boolean } = {}): Bun.Subprocess<In, Out, Err> {
 	if (!cmd.length) throw new Error("spawnOwned requires a command");
+	const NativeProcess = process.platform === "win32"
+		? policy.retainUntilDrained ? nativeProcessClass() : nativeProcessClass(false)
+		: undefined;
 	const wrapped = process.platform === "linux" && fs.existsSync("/usr/bin/setpriv")
 		? ["/usr/bin/setpriv", "--pdeathsig", "KILL", "--", ...cmd] : cmd;
 	const groupId = crypto.randomUUID();
@@ -111,6 +145,8 @@ export function spawnOwned<
 	let proc: Bun.Subprocess<In, Out, Err>;
 	try {
 		proc = Bun.spawn<In, Out, Err>({ ...options, cmd: wrapped, env, detached: process.platform !== "win32", onExit: (child, code, signal, error) => {
+		const native = windowsActive.get(child.pid);
+		if (native) void terminateWindows(native).catch(error => console.error(error));
 		const record = active.get(child.pid);
 		if (record) {
 			// A shell can exit with background descendants still in its group.
@@ -125,6 +161,18 @@ export function spawnOwned<
 	} catch (error) {
 		releaseWork();
 		throw error;
+	}
+	if (NativeProcess) {
+		const reference = NativeProcess.fromPid(proc.pid);
+		if (!reference) {
+			try { proc.kill("SIGKILL"); } finally { releaseWork(); }
+			throw new Error(`cannot retain owned Windows process ${proc.pid}`);
+		}
+		const record: WindowsOwned = { reference, release: releaseWork, retained: policy.retainUntilDrained === true };
+		windowsActive.set(proc.pid, record);
+		// Also covers a child which exited before its onExit callback found us.
+		void proc.exited.then(() => terminateWindows(record)).catch(error => console.error(error));
+		return proc;
 	}
 	const begun = identity(proc.pid);
 	const member = begun?.pgid === proc.pid ? { pid: proc.pid, starttime: begun.starttime } : groupMember(proc.pid, groupId);
@@ -147,6 +195,12 @@ export function spawnOwned<
 
 /** Terminate the entire tree, escalating after the bounded grace period. */
 export async function terminateOwned(proc: OwnedProcess, graceMs = 800): Promise<void> {
+	const native = windowsActive.get(proc.pid);
+	if (native) {
+		await terminateWindows(native);
+		await proc.exited;
+		return;
+	}
 	const record = active.get(proc.pid);
 	if (record) signalGroup(record, "SIGTERM");
 	else try { proc.kill(); } catch { /* exited */ }
@@ -159,6 +213,8 @@ export async function terminateOwned(proc: OwnedProcess, graceMs = 800): Promise
 }
 
 export async function stopOwnedProcesses(): Promise<void> {
+	await Promise.all([...windowsActive.values()].map(terminateWindows));
+	if (process.platform === "win32") return;
 	const records = [...active.values()];
 	for (const record of records) signalGroup(record, "SIGTERM");
 	await new Promise((resolve) => setTimeout(resolve, 800));

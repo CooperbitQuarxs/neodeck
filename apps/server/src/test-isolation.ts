@@ -77,7 +77,7 @@ export function runIsolatedCase(
 	}
 }
 
-export function createIsolatedTest(file: string): (name: string, body: () => void | Promise<void>, timeout?: number) => void {
+export function createIsolatedTest(file: string, extraEnv: Record<string, string> = {}): (name: string, body: () => void | Promise<void>, timeout?: number) => void {
 	const isolated = isIsolatedCase(file);
 	let selected = false;
 	return (name, body, timeout) => {
@@ -91,7 +91,7 @@ export function createIsolatedTest(file: string): (name: string, body: () => voi
 		// The child retains the original case/hook deadlines. This outer envelope
 		// additionally covers cold worker startup, teardown and output draining.
 		test(name, () => {
-			const child = runIsolatedCase(file, name);
+			const child = runIsolatedCase(file, name, extraEnv);
 			if (child.exitCode !== 0) throw new Error(`Isolated test ${JSON.stringify(name)} exited ${child.exitCode}\n${child.output}`);
 			if (!/^\s*1 pass\s*$/m.test(child.output) || !/^\s*0 fail\s*$/m.test(child.output)) {
 				throw new Error(`Isolated test ${JSON.stringify(name)} did not execute exactly one passing case\n${child.output}`);

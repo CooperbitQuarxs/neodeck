@@ -28,14 +28,22 @@ export function shellFixtureCommand(
 		// file instead; only its space-free basename crosses the spawn boundary.
 		const launcher = `routine-fixture-${crypto.randomUUID()}.cmd`;
 		const command = [runtime, script, mode, encoded].map(arg => `"${arg}"`).join(" ");
-		fs.writeFileSync(path.join(path.dirname(script), launcher),
-			`@echo off\r\n${command}${renderedValue === undefined ? "" : ' "%*"'}\r\n`);
+		const release = [runtime, script, "release", encoded].map(arg => `"${arg}"`).join(" ");
+		const body = mode === "tree" && config.leaderExits
+			? `start "" /b ${command}\r\n${release}\r\nexit /b 0`
+			: command + (renderedValue === undefined ? "" : ' "%*"');
+		fs.writeFileSync(path.join(path.dirname(script), launcher), `@echo off\r\n${body}\r\n`);
 		// Rendered fixture values are controlled literals/templates, not shell input.
 		return launcher + (renderedValue === undefined ? "" : ` ${renderedValue}`);
 	}
 	const args = [runtime, script, mode, encoded];
 	if (renderedValue !== undefined) args.push(renderedValue);
-	return args.map(arg => `'${arg.replaceAll("'", "'\"'\"'")}'`).join(" ");
+	const quote = (arg: string) => `'${arg.replaceAll("'", "'\"'\"'")}'`;
+	const command = args.map(quote).join(" ");
+	if (mode === "tree" && config.leaderExits) {
+		return `${command} & ${[runtime, script, "release", encoded].map(quote).join(" ")}; exit 0`;
+	}
+	return command + (mode === "tree" ? "; wait" : "");
 }
 
 export function createShellFixture(home: string) {

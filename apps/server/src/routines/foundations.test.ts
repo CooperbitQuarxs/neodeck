@@ -10,8 +10,10 @@ import { RoutineTestFixtures } from "./test-fixture.ts";
 import { createIsolatedTest, isIsolatedCase } from "../test-isolation.ts";
 import { createShellFixture } from "./shell-fixture.ts";
 import { observeProcessTree, unrelatedProcess } from "./process-fixture.ts";
+import { resolveBackendSelection } from "../backend/runtime.ts";
 
-const isolatedTest = createIsolatedTest(import.meta.path);
+const nativeBackend = resolveBackendSelection();
+const isolatedTest = createIsolatedTest(import.meta.path, nativeBackend ? { NPI_DECK_BACKEND: nativeBackend.path } : {});
 const fixtures = new RoutineTestFixtures();
 function test(name: string, body: (fixture: RoutineTestFixture) => Promise<void>, timeout?: number, agentCommand?: (home: string) => string[]): void {
 	isolatedTest(name, () => fixtures.run(body, agentCommand), timeout);
