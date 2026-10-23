@@ -5,6 +5,7 @@ import * as path from "node:path";
 
 import { ensurePrivateDataDir } from "../env-store.ts";
 import { closeDb, getDb, openDb } from "./index.ts";
+import { removeTestPath } from "../test-cleanup.ts";
 
 // deck.db holds webhook signing keys, so neither it, its WAL files, nor the
 // data dir may be readable by other users.
@@ -13,7 +14,7 @@ let root = "";
 
 afterEach(() => {
 	closeDb();
-	if (root) fs.rmSync(root, { recursive: true, force: true });
+	if (root) removeTestPath(root);
 	root = "";
 });
 

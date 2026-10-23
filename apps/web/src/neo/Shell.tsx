@@ -9,12 +9,17 @@ import { useStore } from "@/lib/store";
 import { useTheme } from "@/lib/theme";
 import { auth, useAccount } from "./client/auth";
 import { Avatar } from "./components/Avatar";
-import { NAV, NAV_ITEMS, navItemForPath } from "./nav";
+import { NAV, navItemForPath } from "./nav";
+import { ShortcutProvider, useShortcutHelp } from "./shortcuts";
 import "./shell.css";
 
 const SIDEBAR_KEY = "neodeck.sidebar-collapsed";
 
 export function Shell() {
+	return <ShortcutProvider><ShellFrame /></ShortcutProvider>;
+}
+
+function ShellFrame() {
 	const location = useLocation();
 	const page = navItemForPath(location.pathname)?.label;
 	const [navOpen, setNavOpen] = useState(false);
@@ -62,7 +67,6 @@ export function Shell() {
 			toggleRef.current?.focus();
 		};
 	}, [mobile, navOpen]);
-	useJumpShortcuts();
 	useEffect(() => setNavOpen(false), [location.pathname]);
 	useEffect(() => {
 		if (focusedPath.current === location.pathname || (mobile && navOpen)) return;
@@ -146,17 +150,17 @@ function SideNav() {
 	);
 }
 
-/** Teach the route chords without duplicating page presence counts. */
+/** Teach the same contract on every page. */
 function ShortcutFoot() {
+	const showHelp = useShortcutHelp();
 	return (
-		<div className="neo-sidebar-foot" aria-label="Navigation shortcuts">
+		<div className="neo-sidebar-foot" aria-label="Keyboard shortcuts">
 			<div className="flex items-center gap-1">
 				<Kbd>G</Kbd>
 				<span>then a letter to jump</span>
 			</div>
-			<div className="flex items-center justify-between"><span>Inbox</span><Kbd>G I</Kbd></div>
-			<div className="flex items-center justify-between"><span>Threads</span><Kbd>G T</Kbd></div>
-			<div className="flex items-center justify-between"><span>Models</span><Kbd>G M</Kbd></div>
+			<div className="flex items-center justify-between"><span>Search this page</span><Kbd>/</Kbd></div>
+			<button type="button" className="flex w-full items-center justify-between text-left" onClick={showHelp}><span>All shortcuts</span><Kbd>?</Kbd></button>
 		</div>
 	);
 }
@@ -204,44 +208,6 @@ function DictationButton() {
 	);
 }
 
-/** `G` then a letter jumps to a page; Alt-M opens model configuration. Ignored while typing. */
-function useJumpShortcuts(): void {
-	const navigate = useNavigate();
-	useEffect(() => {
-		let armed = 0;
-		function onKey(e: KeyboardEvent): void {
-			const target = e.target as HTMLElement | null;
-			const editing = target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT" || target.isContentEditable);
-			const overlay = [...document.querySelectorAll('[role="dialog"], [role="menu"], [role="listbox"], .neo-shell[data-nav-open="true"]')]
-				.some((element) => element.getClientRects().length > 0);
-			if (e.defaultPrevented || e.isComposing || e.ctrlKey || e.metaKey || editing || overlay) {
-				armed = 0;
-				return;
-			}
-			if (e.altKey) {
-				armed = 0;
-				if (e.key.toLowerCase() === "m" && !e.shiftKey) { e.preventDefault(); navigate("/models"); }
-				return;
-			}
-			const now = Date.now();
-			if (armed && now - armed < 1200) {
-				const item = NAV_ITEMS.find((i) => i.hotkey === e.key.toLowerCase());
-				armed = 0;
-				if (item) {
-					e.preventDefault();
-					navigate(item.to);
-				}
-				return;
-			}
-			if (e.key === "g" || e.key === "G") {
-				armed = now;
-				return;
-			}
-		}
-		window.addEventListener("keydown", onKey);
-		return () => window.removeEventListener("keydown", onKey);
-	}, [navigate]);
-}
 
 /** Boots the store (websocket, sessions) once the shell mounts behind the login gate. */
 export function useDeckBootstrap(): void {

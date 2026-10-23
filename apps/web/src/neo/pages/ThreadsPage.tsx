@@ -207,7 +207,7 @@ export function ThreadsPage() {
 			<div className="neo-split neo-fill-body" style={{ "--split-w": "300px" } as CSSProperties}>
 				<aside className="neo-split-list">
 					<div className="neo-split-list-head">
-						<SearchInput value={search} onChange={setSearch} placeholder="Search threads" aria-label="Search threads" size="sm" />
+						<SearchInput pageSearch value={search} onChange={setSearch} placeholder="Search threads" aria-label="Search threads" size="sm" />
 						<NeoSelect value={project} onChange={(e) => setProject(e.target.value)} aria-label="Filter threads by project" size="sm"><option value="">All projects</option>{projects.map((value) => <option key={value} value={value}>{projectLabel(value)}</option>)}</NeoSelect>
 					</div>
 					<div className="neo-split-rows" onKeyDown={(e) => { if (!["ArrowDown", "ArrowUp", "j", "k"].includes(e.key) || !(e.target instanceof HTMLButtonElement)) return; const buttons = Array.from(e.currentTarget.querySelectorAll<HTMLButtonElement>(".neo-row")); const i = buttons.indexOf(e.target); const next = buttons[i + (e.key === "ArrowDown" || e.key === "j" ? 1 : -1)]; if (next) { e.preventDefault(); next.focus(); next.click(); } }}>

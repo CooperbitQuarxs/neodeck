@@ -4,6 +4,7 @@ import * as path from "node:path";
 import { openDb, closeDb } from "../db/index.ts";
 import { initializeOwnedGeneration, stopOwnedProcesses } from "../owned-process.ts";
 import { RoutinesRunner } from "../routines-runner.ts";
+import { removeTestPath } from "../test-cleanup.ts";
 
 export interface RoutineTestFixture {
 	readonly home: string;
@@ -46,7 +47,7 @@ export class RoutineTestFixtures {
 						if (value === undefined) delete process.env[key];
 						else process.env[key] = value;
 					}
-					fs.rmSync(home, { recursive: true, force: true });
+					removeTestPath(home);
 				}
 			}
 		});

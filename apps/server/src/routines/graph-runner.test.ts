@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import type { GraphEmission, GraphNode, GraphNodeType, GraphOutput, GraphPort, RoutineGraph } from "@npi-deck/protocol";
+import type { GraphEmission, GraphNode, GraphNodeType, GraphOutput, GraphPort, GraphValue, RoutineGraph } from "@npi-deck/protocol";
 import { executeGraph, findGraphOutput, GraphNodeRegistry, GraphValidationError, readGraphPath, type GraphNodeImplementation } from "./graph-runner.ts";
 
 function source(id = "source", eventType = "manual"): GraphNode { return { id, type: "event.source", config: { eventType } }; }
@@ -337,4 +337,196 @@ test("a later external cancellation cannot overwrite a budget abort", async () =
 	expect(result.status).toBe("aborted");
 	expect(result.abortReason).toBe("budget");
 	expect(result.error).toContain("max_llm_tokens_input");
+});
+
+function builtin(id: string, type: string, config: GraphNode["config"]): GraphNode { return { id, type, config }; }
+function loopGraph(maxIterations = 100): RoutineGraph {
+	const body: RoutineGraph = {
+		version: 2,
+		nodes: [builtin("item", "iteration.input", { eventType: "iteration" }), builtin("gate", "gate.if", { path: ["result", "item"] }), builtin("yes", "operation.pick", { path: ["result"] }), builtin("no", "operation.pick", { path: ["result"] })],
+		edges: [edge("item-gate", "item", "gate", "item", "input"), edge("gate-yes", "gate", "yes", "true", "input"), edge("gate-no", "gate", "no", "false", "input")],
+	};
+	return { version: 2, nodes: [source(), builtin("loop", "iteration.each", { path: ["result", "items"], maxIterations, body: body as never })], edges: [edge("source-loop", "source", "loop", "event", "input")] };
+}
+
+for (const value of ["truthy-not-true", 1, true, false, 0, "", null, [], { exact: true }]) {
+	test(`shipped if routes exact ${JSON.stringify(value)} and nested gates retain original inputs`, async () => {
+		const spec: RoutineGraph = { version: 2, nodes: [
+			source(), builtin("gate", "gate.if", { path: ["result", "payload"] }),
+			builtin("yes", "gate.if", { path: value !== null && typeof value === "object" && !Array.isArray(value) ? ["result"] : ["result", "value"] }),
+			builtin("no", "gate.if", { path: ["result", "value"] }),
+			builtin("descendant", "operation.pick", { path: ["result"] }),
+		], edges: [edge("s-g", "source", "gate", "event", "input"), edge("g-y", "gate", "yes", "true", "input"), edge("g-n", "gate", "no", "false", "input"), edge("n-d", "no", "descendant", "true", "input")] };
+		const result = await executeGraph(spec, { eventType: "manual", event: { payload: value } }, new GraphNodeRegistry());
+		expect(result.status).toBe("success");
+		const selected = result.outputs.find(item => item.nodeId === "gate")!;
+		expect(selected.port).toBe(value ? "true" : "false");
+		expect(selected.result).toEqual(value !== null && typeof value === "object" && !Array.isArray(value) ? value : { value });
+		const nested = result.outputs.find(item => item.nodeId === (value ? "yes" : "no"))!;
+		expect(nested.inputs[0]).toBe(selected);
+		expect(findGraphOutput(nested, "source")?.result).toEqual({ payload: value });
+		expect(result.nodeRuns.find(item => item.nodeId === (value ? "no" : "yes"))?.status).toBe("skipped");
+		expect(result.nodeRuns.find(item => item.nodeId === "descendant")?.status).toBe("skipped");
+	});
+}
+
+for (const [operator, left, right, branch] of [
+	["eq", 1, "1", "false"], ["ne", 1, "1", "true"], ["lt", 1, 2, "true"], ["lte", 2, 2, "true"],
+	["gt", "b", "a", "true"], ["gte", 2, 3, "false"], ["eq", { a: 1, b: 2 }, { b: 2, a: 1 }, "true"],
+] as const) {
+	test(`shipped comparison ${operator} routes without coercion`, async () => {
+		const spec: RoutineGraph = { version: 2, nodes: [source(), builtin("gate", "gate.compare", { path: ["result", "left"], operator, right })], edges: [edge("e", "source", "gate", "event", "input")] };
+		const result = await executeGraph(spec, { eventType: "manual", event: { left } }, new GraphNodeRegistry());
+		expect(result.status).toBe("success");
+		expect(result.outputs[1]?.port).toBe(branch);
+		expect(result.outputs[1]?.inputs[0]?.result).toEqual({ left });
+	});
+}
+
+test("shipped membership uses typed structural equality and transports either branch unchanged", async () => {
+	for (const [value, branch] of [[1, "true"], ["1", "false"], [{ b: [null], a: true }, "true"], [false, "false"]] as [GraphValue, string][]) {
+		const spec: RoutineGraph = { version: 2, nodes: [source(), builtin("gate", "gate.member", { path: ["result", "value"], values: [1, { a: true, b: [null] }] }), builtin("yes", "operation.pick", { path: ["result"] }), builtin("no", "operation.pick", { path: ["result"] })], edges: [edge("e", "source", "gate", "event", "input"), edge("yes", "gate", "yes", "true", "input"), edge("no", "gate", "no", "false", "input")] };
+		const result = await executeGraph(spec, { eventType: "manual", event: { value } }, new GraphNodeRegistry());
+		expect(result.status).toBe("success");
+		expect(result.outputs[1]?.port).toBe(branch);
+		expect(result.nodeRuns.find(item => item.nodeId === (branch === "true" ? "yes" : "no"))?.status).toBe("success");
+		expect(result.outputs[1]?.inputs[0]?.result).toEqual({ value });
+	}
+});
+
+function arithmetic(operator: string): RoutineGraph {
+	return { version: 2, nodes: [source(), builtin("left", "operation.number", { path: ["result", "left"] }), builtin("right", "operation.number", { path: ["result", "right"] }), builtin("math", "operation.arithmetic", { operator })], edges: [edge("s-l", "source", "left", "event", "input"), edge("s-r", "source", "right", "event", "input"), edge("l-m", "left", "math", "value", "left"), edge("r-m", "right", "math", "value", "right")] };
+}
+for (const [operator, expected] of [["add", 11], ["subtract", 5], ["multiply", 24], ["divide", 8 / 3], ["remainder", 2], ["power", 512]] as const) {
+	test(`shipped arithmetic ${operator} retains numeric inputs`, async () => {
+		const result = await executeGraph(arithmetic(operator), { eventType: "manual", event: { left: 8, right: 3 } }, new GraphNodeRegistry());
+		expect(result.status).toBe("success");
+		expect(result.outputs.at(-1)?.result).toEqual({ value: expected });
+		expect(result.outputs.at(-1)?.inputs.map(input => input.result)).toEqual([{ value: 8 }, { value: 3 }]);
+	});
+}
+test("invalid operands fail without numeric coercion or nonfinite output", async () => {
+	for (const [operator, left, right] of [["add", "8", 3], ["divide", 8, 0], ["remainder", 8, 0], ["power", 1e300, 3]] as const) {
+		const result = await executeGraph(arithmetic(operator), { eventType: "manual", event: { left, right } }, new GraphNodeRegistry());
+		expect(result.status).toBe("failed");
+		expect(result.outputs.some(item => item.nodeId === "math")).toBe(false);
+	}
+	const spec: RoutineGraph = { version: 2, nodes: [source(), builtin("bad", "gate.compare", { path: ["result", "left"], operator: "lt", right: "2" })], edges: [edge("e", "source", "bad", "event", "input")] };
+	expect((await executeGraph(spec, { eventType: "manual", event: { left: 1 } }, new GraphNodeRegistry())).status).toBe("failed");
+});
+
+for (const count of [0, 1, 3, 100]) test(`iteration completes exactly ${count} ordered passes with addressable original ancestry`, async () => {
+	const items = Array.from({ length: count }, (_, index) => index === 0 ? "truthy-not-true" : index % 2 ? false : index);
+	const result = await executeGraph(loopGraph(), { eventType: "manual", event: { items, original: "event" } }, new GraphNodeRegistry());
+	expect(result.status).toBe("success");
+	const loop = result.nodeRuns[1]!;
+	expect(loop.passes).toHaveLength(count);
+	expect(loop.outputs[0]?.result).toEqual({ count, completed: true });
+	expect(loop.outputs[0]?.inputs[0]?.result).toEqual({ items, original: "event" });
+	const persisted = JSON.parse(JSON.stringify(loop.outputs[0])) as GraphOutput;
+	for (const [index, pass] of loop.passes!.entries()) {
+		expect(pass.index).toBe(index);
+		const item = pass.outputs[0]!;
+		expect(item.iteration).toEqual([{ nodeId: "loop", index }]);
+		expect(item.result).toEqual({ item: items[index], index, count });
+		expect(findGraphOutput(item, "source")?.result).toEqual({ items, original: "event" });
+		expect(pass.nodeRuns.filter(item => item.status === "success")).toHaveLength(3);
+		expect(findGraphOutput(persisted, "item", "item", [{ nodeId: "loop", index }])?.result.item).toEqual(items[index]!);
+	}
+	expect(result.usage?.stepsExecuted).toBe(2 + count * 3);
+});
+
+test("iteration rejects an over-cap list before any body execution", async () => {
+	const result = await executeGraph(loopGraph(), { eventType: "manual", event: { items: Array(101).fill(1) } }, new GraphNodeRegistry());
+	expect(result.status).toBe("failed");
+	expect(result.nodeRuns[1]?.passes).toBeUndefined();
+	expect(result.nodeRuns[1]?.outputs).toEqual([]);
+});
+
+test("iteration shares the run-wide step budget and never reports partial completion as success", async () => {
+	const spec = loopGraph(); spec.budget = { max_steps_executed: 5 };
+	const result = await executeGraph(spec, { eventType: "manual", event: { items: [1, 2, 3] } }, new GraphNodeRegistry());
+	expect(result.status).toBe("aborted");
+	expect(result.abortReason).toBe("budget");
+	expect(result.usage?.stepsExecuted).toBe(5);
+	expect(result.nodeRuns[1]?.passes?.[0]?.status).toBe("success");
+	expect(result.nodeRuns[1]?.passes?.[1]?.status).toBe("aborted");
+	expect(result.nodeRuns[1]?.passes).toHaveLength(2);
+	expect(result.nodeRuns[1]?.outputs).toEqual([]);
+});
+
+test("cancellation during real-node passes retains the completed pass and stops the next", async () => {
+	const abort = new AbortController(), registry = new GraphNodeRegistry();
+	const implementation = registry.get("gate.if")!, execute = implementation.execute;
+	implementation.execute = context => { const result = execute(context); if ((context.activation.event as Record<string, unknown>).index === 1) abort.abort(new Error("stop passes")); return result; };
+	const result = await executeGraph(loopGraph(), { eventType: "manual", event: { items: [1, 2, 3] } }, registry, { signal: abort.signal });
+	expect(result.status).toBe("aborted");
+	expect(result.abortReason).toBe("cancelled");
+	expect(result.nodeRuns[1]?.passes?.[0]?.status).toBe("success");
+	expect(result.nodeRuns[1]?.passes?.[1]?.status).toBe("aborted");
+	expect(result.nodeRuns[1]?.passes).toHaveLength(2);
+	expect(result.nodeRuns[1]?.outputs).toEqual([]);
+});
+
+test("four nested iterator levels have unambiguous outer-to-inner addresses", async () => {
+	const spec = loopGraph(1);
+	let loop = spec.nodes[1]!;
+	for (let depth = 1; depth < 4; depth++) {
+		const nested = loopGraph(1);
+		nested.nodes[0] = builtin("item", "iteration.input", { eventType: "iteration" });
+		nested.edges[0]!.from = { nodeId: "item", port: "item" };
+		nested.nodes[1]!.config.path = ["result", "item"];
+		loop.config.body = nested as never;
+		loop = nested.nodes[1]!;
+	}
+	const result = await executeGraph(spec, { eventType: "manual", event: { items: [[[[7]]]] } }, new GraphNodeRegistry());
+	expect(result.status).toBe("success");
+	const address = Array.from({ length: 4 }, () => ({ nodeId: "loop", index: 0 }));
+	const deepest = findGraphOutput(result.outputs[1]!, "gate", "true", address)!;
+	expect(deepest.result).toEqual({ value: 7 });
+	expect(deepest.iteration).toEqual(address);
+	expect(findGraphOutput(deepest, "source")?.result).toEqual({ items: [[[[7]]]] });
+});
+
+for (const budget of [{ max_llm_tokens_input: 1 }, { max_llm_tokens_output: 1 }, { max_llm_cost_usd: 0.000001 }]) {
+	test(`iteration shares usage cap ${JSON.stringify(budget)} across passes`, async () => {
+		const registry = new GraphNodeRegistry(), implementation = registry.get("gate.if")!, execute = implementation.execute;
+		implementation.execute = context => { context.recordUsage({ llmTokensIn: 1, llmTokensOut: 1, llmCostMicros: 1 }); return execute(context); };
+		const spec = loopGraph(); spec.budget = budget;
+		const result = await executeGraph(spec, { eventType: "manual", event: { items: [1, 2, 3] } }, registry);
+		expect(result.status).toBe("aborted");
+		expect(result.abortReason).toBe("budget");
+		expect(result.nodeRuns[1]?.passes?.[0]?.status).toBe("success");
+		expect(result.nodeRuns[1]?.passes?.[1]?.status).toBe("aborted");
+		expect(result.nodeRuns[1]?.passes).toHaveLength(2);
+		expect(result.nodeRuns[1]?.outputs).toEqual([]);
+	});
+}
+test("iteration shares one duration deadline across passes", async () => {
+	const registry = new GraphNodeRegistry(), implementation = registry.get("gate.if")!, execute = implementation.execute;
+	implementation.execute = async context => { if ((context.activation.event as Record<string, unknown>).index === 1) await Bun.sleep(1200); return execute(context); };
+	const spec = loopGraph(); spec.budget = { max_duration_secs: 1 };
+	const result = await executeGraph(spec, { eventType: "manual", event: { items: [1, 2, 3] } }, registry);
+	expect(result.status).toBe("aborted");
+	expect(result.abortReason).toBe("budget");
+	expect(result.nodeRuns[1]?.passes?.[0]?.status).toBe("success");
+	expect(result.nodeRuns[1]?.passes?.[1]?.status).toBe("aborted");
+	expect(result.nodeRuns[1]?.passes).toHaveLength(2);
+	expect(result.nodeRuns[1]?.outputs).toEqual([]);
+});
+
+test("failed node diagnostics survive without emitting values or activating a consumer", async () => {
+	const registry = new GraphNodeRegistry();
+	const implementation = registry.get("gate.if")!;
+	implementation.execute = context => {
+		expect(context.priorNodeRuns?.map(node => node.nodeId)).toEqual(["source"]);
+		context.recordDiagnostics!({ stdout: "partial output", stderr: "expected failure", durationMs: 12 });
+		throw new Error("operation failed");
+	};
+	const spec: RoutineGraph = { version: 2, nodes: [source(), builtin("gate", "gate.if", { path: ["result"] }), builtin("next", "operation.pick", { path: ["result"] })], edges: [edge("s-g", "source", "gate", "event", "input"), edge("g-n", "gate", "next", "true", "input")] };
+	const result = await executeGraph(spec, activation(), registry);
+	expect(result.status).toBe("failed");
+	expect(result.nodeRuns[1]?.diagnostics).toEqual({ stdout: "partial output", stderr: "expected failure", durationMs: 12 });
+	expect(result.nodeRuns[1]?.outputs).toEqual([]);
+	expect(result.nodeRuns[2]?.status).toBe("skipped");
 });

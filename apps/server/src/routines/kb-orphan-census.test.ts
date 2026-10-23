@@ -13,6 +13,7 @@ import { listInbox } from "../db/inbox.ts";
 import { createV1Routine } from "../db/routines.ts";
 import { RoutinesRunner } from "../routines-runner.ts";
 import { loadTemplate } from "./templates.ts";
+import { removeTestPath } from "../test-cleanup.ts";
 
 const savedRoot = process.env.NPI_DECK_KB_ROOT;
 const savedHome = process.env.NPI_DECK_HOME;
@@ -55,7 +56,7 @@ afterEach(async () => {
 		else process.env.NPI_DECK_DB_PATH = savedDbPath;
 		if (savedRoot === undefined) delete process.env.NPI_DECK_KB_ROOT;
 		else process.env.NPI_DECK_KB_ROOT = savedRoot;
-		if (home) fs.rmSync(home, { recursive: true, force: true });
+		if (home) removeTestPath(home);
 		home = "";
 		runner = undefined;
 	}

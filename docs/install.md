@@ -133,8 +133,9 @@ The script:
 5. Registers the tree under `backends` in `~/.npi-deck/config.yml`, and sets
    `activeBackend` if it isn't set yet (see [config.yml](#configyml)).
 6. For the pinned commit (or with `--tsconfig`), writes the gitignored
-   `tsconfig.neopi.json`. `apps/server` extends it, so typechecking the server
-   needs this step first.
+   `tsconfig.neopi.json`. The server and Telegram bridge extend it to resolve
+   NeoPi sources and ambient asset declarations, so typechecking either needs
+   this step first.
 
 `NPI_DECK_HOME` overrides `~/.npi-deck`. Re-running the script is safe. To
 check a tree against everything the deck uses:

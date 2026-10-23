@@ -60,6 +60,8 @@ export interface RoutineGraph {
 	edges: GraphEdge[];
 	concurrency?: RoutineConcurrency;
 	budget?: RoutineBudget;
+	/** Converted routine semantics, including native attempt accounting for V1. */
+	execution?: { mode: "routine-v1" | "routine-v0" };
 	timezone?: string;
 	tags?: string[];
 	layout?: { nodes?: Record<string, RoutineLayoutNode> };
@@ -67,12 +69,14 @@ export interface RoutineGraph {
 
 export interface GraphActivation {
 	eventType: string;
-	event: GraphObject;
+	event: GraphObject | GraphValue[];
 	/** Select one source explicitly, otherwise activate sources matching eventType. */
 	sourceNodeId?: string;
 	/** Stable event/explicit operation identity; retries must retain it. */
 	operationId?: string;
 }
+
+export interface GraphIterationAddress extends GraphObject { nodeId: string; index: number }
 
 /**
  * Golden-rule envelope. Object results are retained under result without copying;
@@ -84,6 +88,8 @@ export interface GraphOutput {
 	port: string;
 	result: GraphObject;
 	inputs: GraphOutput[];
+	/** Outer-to-inner iterator IDs and zero-based pass indexes. */
+	iteration?: GraphIterationAddress[];
 }
 
 export interface GraphNodeInput {
@@ -96,6 +102,8 @@ export interface GraphNodeInput {
 export interface GraphEmission {
 	port: string;
 	value: GraphValue;
+	/** Use earlier same-batch outputs as inputs; they retain original inputs transitively. */
+	includeSiblingOutputs?: string[];
 }
 
 export interface GraphEffect {
@@ -119,6 +127,18 @@ export interface GraphNodeRun {
 	outputs: GraphOutput[];
 	error?: string;
 	effects?: GraphEffect[];
+	/** Non-routing handler details, retained even when execution fails or aborts. */
+	diagnostics?: GraphObject;
+	iteration?: GraphIterationAddress[];
+	/** Each body trace is scoped to its pass, including failed/aborted passes. */
+	passes?: GraphIterationPass[];
+}
+
+export interface GraphIterationPass {
+	index: number;
+	status: GraphExecutionResult["status"];
+	nodeRuns: GraphNodeRun[];
+	outputs: GraphOutput[];
 }
 
 export interface GraphExecutionResult {
@@ -126,7 +146,7 @@ export interface GraphExecutionResult {
 	nodeRuns: GraphNodeRun[];
 	outputs: GraphOutput[];
 	error?: string;
-	abortReason?: "budget" | "cancelled";
+	abortReason?: "budget" | "cancelled" | "timeout" | "failure";
 	usage?: {
 		llmTokensIn: number;
 		llmTokensOut: number;

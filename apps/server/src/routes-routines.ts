@@ -5,6 +5,8 @@ import { parse as parseYaml } from "yaml";
 
 import type {
 	CreateRoutineRequest,
+	GraphActivation,
+	GraphRunRecord,
 	ListRoutineRunsResponse,
 	ListRoutineStepRunsResponse,
 	ListRoutinesResponse,
@@ -12,7 +14,7 @@ import type {
 	RoutineWebhookStatus,
 	UpdateRoutineRequest,
 } from "@npi-deck/protocol";
-import { validateRoutineSpec } from "@npi-deck/protocol";
+import { isGraphValue, validateRoutineSpec } from "@npi-deck/protocol";
 
 import { logger } from "./log.ts";
 import {
@@ -20,8 +22,11 @@ import {
 	createV1Routine,
 	createGraphRoutine,
 	deleteRoutine,
+	DEFAULT_INBOX_TICKET_ROUTINE_ID,
 	getRoutine,
 	getGraphRun,
+	getRun,
+	encodeGraphTrace,
 	listRoutines,
 	listRuns,
 	updateRoutine,
@@ -31,6 +36,7 @@ import {
 import {
 	deleteWebhookSecret,
 	ensureWebhookSecret,
+	getWebhookSecretByPath,
 	getWebhookSecretByRoutine,
 	listStepRuns,
 	refuseWebhookBareSecret,
@@ -38,6 +44,9 @@ import {
 } from "./db/routine-step-runs.ts";
 import type { RoutinesRunner } from "./routines-runner.ts";
 import { listTemplates, loadTemplate } from "./routines/templates.ts";
+import { executeGraph, GraphValidationError } from "./routines/graph-runner.ts";
+import { exportRoutineMigration, inspectRoutineMigrations, migrateRoutines, restoreRoutineDefinition } from "./routines/graph-migration.ts";
+import { graphWebhookPath } from "./routines/graph-triggers.ts";
 
 const log = logger("routes:routines");
 
@@ -53,6 +62,11 @@ function webhookStatus(routineId: string): RoutineWebhookStatus | undefined {
 		lastUsedAt: row.last_used_at,
 		lastBareSecretAt: row.last_bare_secret_at,
 	};
+}
+
+function webhookPathClaimed(hookPath: string | undefined, routineId?: string): boolean {
+	const owner = hookPath ? getWebhookSecretByPath(hookPath) : undefined;
+	return owner !== undefined && owner.routine_id !== routineId;
 }
 
 export function buildRoutinesRouter(runner: RoutinesRunner): Hono {
@@ -74,6 +88,42 @@ export function buildRoutinesRouter(runner: RoutinesRunner): Hono {
 			return c.json({ error: "invalid json" }, 400);
 		}
 	});
+	// Explicit one-shot conversion only. Loading, listing and startup never migrate or run actions.
+	app.get("/routine-migrations", (c) => c.json({ reports: inspectRoutineMigrations(runner.graphRegistry) }));
+	app.post("/routine-migrations/:id", (c) => {
+		if (runner.busy) return c.json({ error: "wait for active routines to finish before migrating" }, 409);
+		const id = c.req.param("id");
+		const report = inspectRoutineMigrations(runner.graphRegistry, id)[0];
+		if (!report) return c.json({ error: "not found" }, 404);
+		if (report.status === "blocked") return c.json({ reports: [report] }, 409);
+		try {
+			const result = migrateRoutines(runner.graphRegistry, { routineId: id });
+			const routine = getRoutine(id);
+			if (routine) runner.schedule(routine);
+			return c.json(result);
+		} catch {
+			return c.json({ error: "conversion failed; inspect the protected backup and retry" }, 500);
+		}
+	});
+	app.get("/routine-migrations/:id/:digest/export", (c) => {
+		try {
+			return c.text(exportRoutineMigration(c.req.param("id"), c.req.param("digest")), 200, { "Content-Type": "application/yaml", "Cache-Control": "no-store" });
+		} catch {
+			return c.json({ error: "conversion missing or native definition changed" }, 409);
+		}
+	});
+	app.post("/routine-migrations/:id/:digest/restore", (c) => {
+		if (runner.busy) return c.json({ error: "wait for active routines to finish before restoring" }, 409);
+		const id = c.req.param("id");
+		try {
+			restoreRoutineDefinition(id, c.req.param("digest"));
+			const routine = getRoutine(id);
+			if (routine) runner.schedule(routine);
+			return c.json({ ok: true });
+		} catch {
+			return c.json({ error: "conversion missing or definition/metadata changed; restore the protected backup offline" }, 409);
+		}
+	});
 
 	app.post("/routines", async (c) => {
 		let body: CreateRoutineRequest & { specYaml?: string };
@@ -91,10 +141,12 @@ export function buildRoutinesRouter(runner: RoutinesRunner): Hono {
 			}
 			const validation = runner.graphRegistry.validate(body.graph);
 			if (!validation.valid) return c.json({ error: "invalid graph", details: validation.errors }, 400);
+			if (webhookPathClaimed(graphWebhookPath(body.graph))) return c.json({ error: "webhook path already in use" }, 409);
 			try {
 				const routine = createGraphRoutine({
 					name: body.name, description: body.description, graph: body.graph, enabled: body.enabled,
 				}, runner.graphRegistry);
+				registerWebhookPath(graphWebhookPath(routine.graph), routine.id);
 				runner.schedule(routine);
 				return c.json(routine, 201);
 			} catch (err) {
@@ -168,12 +220,14 @@ export function buildRoutinesRouter(runner: RoutinesRunner): Hono {
 			if (body.graph !== undefined) {
 				const validation = runner.graphRegistry.validate(body.graph);
 				if (!validation.valid) return c.json({ error: "invalid graph", details: validation.errors }, 400);
+				if (webhookPathClaimed(graphWebhookPath(body.graph), id)) return c.json({ error: "webhook path already in use" }, 409);
 			}
 			try {
 				const updated = updateGraphRoutine(id, {
 					name: body.name, description: body.description, graph: body.graph, enabled: body.enabled,
 				}, runner.graphRegistry);
 				if (!updated) return c.json({ error: "not found" }, 404);
+				if (body.graph !== undefined) registerWebhookPath(graphWebhookPath(updated.graph), updated.id);
 				runner.schedule(updated);
 				return c.json(updated);
 			} catch (err) {
@@ -226,9 +280,42 @@ export function buildRoutinesRouter(runner: RoutinesRunner): Hono {
 
 	app.delete("/routines/:id", (c) => {
 		const id = c.req.param("id");
+		if (id === DEFAULT_INBOX_TICKET_ROUTINE_ID) return c.json({ error: "The default inbox flow cannot be deleted. Disable it instead." }, 409);
 		runner.unschedule(id);
 		const ok = deleteRoutine(id);
 		return c.json({ ok });
+	});
+
+	/** Simulations return a transient trace without admission, journal or domain writes. */
+	app.post("/routines/:id/preview", async (c) => {
+		const routine = getRoutine(c.req.param("id"));
+		if (!routine) return c.json({ error: "not found" }, 404);
+		if (routine.specVersion !== 2 || !routine.graph) return c.json({ error: "native graph required for write-free preview" }, 400);
+		const validation = runner.graphRegistry.validate(routine.graph);
+		if (!validation.valid) return c.json({ error: "invalid graph", details: validation.errors }, 400);
+		let body: unknown;
+		try { body = await c.req.json(); } catch { return c.json({ error: "invalid json" }, 400); }
+		if (!isGraphValue(body) || !body || typeof body !== "object" || Array.isArray(body)) return c.json({ error: "preview activation must be an object" }, 400);
+		if (body.operationId !== undefined && (typeof body.operationId !== "string" || !body.operationId.trim())) return c.json({ error: "operationId must be a nonempty string" }, 400);
+		const id = crypto.randomUUID(), startedAt = new Date().toISOString();
+		const activation: GraphActivation = Object.keys(body).length ? {
+			...body as unknown as GraphActivation, operationId: body.operationId as string | undefined ?? id,
+		} : { eventType: "manual", event: { id }, operationId: id };
+		const graph = structuredClone(routine.graph);
+		graph.budget = { ...graph.budget,
+			max_duration_secs: Math.min(graph.budget?.max_duration_secs ?? 120, 120),
+			max_steps_executed: Math.min(graph.budget?.max_steps_executed ?? 10_000, 10_000),
+		};
+		try {
+			const result = await executeGraph(graph, activation, runner.graphRegistry, {
+				runId: id, routineId: routine.id, dryRun: true, signal: AbortSignal.timeout(120_000),
+			});
+			const trace: GraphRunRecord = { ...result, id, routineId: routine.id, startedAt,
+				endedAt: new Date().toISOString(), graph, activation, dryRun: true };
+			return c.body(encodeGraphTrace(trace), 200, { "content-type": "application/json" });
+		} catch (error) {
+			return c.json({ error: String(error), ...(error instanceof GraphValidationError ? { details: error.errors } : {}) }, 400);
+		}
 	});
 
 	app.post("/routines/:id/run", async (c) => {
@@ -269,6 +356,12 @@ export function buildRoutinesRouter(runner: RoutinesRunner): Hono {
 		return c.json(body);
 	});
 
+	app.get("/routines/:id/runs/:runId", (c) => {
+		const run = getRun(c.req.param("runId"));
+		if (!run || run.routineId !== c.req.param("id")) return c.json({ error: "not found" }, 404);
+		return c.json(run);
+	});
+
 	app.get("/routines/:id/runs/:runId/steps", (c) => {
 		const runId = c.req.param("runId");
 		const body: ListRoutineStepRunsResponse = { steps: listStepRuns(runId) };
@@ -290,21 +383,26 @@ export function buildRoutinesRouter(runner: RoutinesRunner): Hono {
 	app.post("/routines/:id/webhook-secret/rotate", (c) => {
 		const id = c.req.param("id");
 		const r = getRoutine(id);
-		if (!r || r.specVersion !== 1 || !r.specYaml) {
-			return c.json({ error: "V1 routine with webhook trigger required" }, 404);
+		if (!r || (r.specVersion !== 1 && r.specVersion !== 2)) {
+			return c.json({ error: "routine with webhook trigger required" }, 404);
 		}
-		const spec = (() => {
-			try { return parseYaml(r.specYaml) as RoutineSpec; } catch { return null; }
-		})();
-		if (!spec) return c.json({ error: "spec parse failure" }, 400);
-		const webhookTrigger = spec.trigger.find((t) => "webhook" in t) as { webhook: { path: string } } | undefined;
-		if (!webhookTrigger) {
-			return c.json({ error: "routine has no webhook trigger" }, 400);
+		let hookPath: string | undefined;
+		if (r.specVersion === 2) {
+			hookPath = graphWebhookPath(r.graph);
+		} else {
+			let spec: RoutineSpec;
+			try { spec = parseYaml(r.specYaml ?? "") as RoutineSpec; } catch {
+				return c.json({ error: "spec parse failure" }, 400);
+			}
+			if (!spec || !Array.isArray(spec.trigger)) return c.json({ error: "spec parse failure" }, 400);
+			const declared = spec.trigger.find((trigger) => "webhook" in trigger) as { webhook: { path: string } } | undefined;
+			hookPath = declared?.webhook.path;
 		}
+		if (!hookPath) return c.json({ error: "routine has no webhook trigger" }, 400);
 		const secret = randomBytes(32).toString("base64url");
-		const registered = upsertWebhookSecret({ routineId: id, path: webhookTrigger.webhook.path, secret });
+		const registered = upsertWebhookSecret({ routineId: id, path: hookPath, secret });
 		if (!registered) return c.json({ error: "webhook path already in use" }, 409);
-		return c.json({ ok: true, secret, path: webhookTrigger.webhook.path });
+		return c.json({ ok: true, secret, path: hookPath });
 	});
 
 	app.get("/routines/:id/webhook", (c) => {
@@ -422,21 +520,23 @@ export function buildRoutinesRouter(runner: RoutinesRunner): Hono {
 }
 
 function registerWebhookTriggers(spec: RoutineSpec, routineId: string): void {
-	// Keep the registration table in sync with the authored spec. Registering a
-	// trigger should be idempotent on save; only the explicit rotate endpoint
-	// replaces the stored secret.
 	const webhookTrigger = spec.trigger.find((t) => "webhook" in t) as { webhook: { path: string } } | undefined;
-	if (!webhookTrigger) {
+	registerWebhookPath(webhookTrigger?.webhook.path, routineId);
+}
+
+function registerWebhookPath(hookPath: string | undefined, routineId: string): void {
+	// Saving a declaration may move a registration, but never replaces its credentials.
+	if (!hookPath) {
 		deleteWebhookSecret(routineId);
 		return;
 	}
 
 	const registered = ensureWebhookSecret({
 		routineId,
-		path: webhookTrigger.webhook.path,
+		path: hookPath,
 		secret: randomBytes(32).toString("base64url"),
 	});
 	if (!registered) {
-		log.warn(`webhook path ${webhookTrigger.webhook.path} already in use; skipping registration for ${routineId}`);
+		log.warn(`webhook path ${hookPath} already in use; skipping registration for ${routineId}`);
 	}
 }

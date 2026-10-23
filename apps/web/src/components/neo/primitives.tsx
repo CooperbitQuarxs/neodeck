@@ -176,11 +176,11 @@ export interface SegmentedOption<T extends string> {
 	title?: string;
 }
 
-export function Segmented<T extends string>({ options, value, onChange, label }: { options: readonly SegmentedOption<T>[]; value: T; onChange: (value: T) => void; label?: string }) {
+export function Segmented<T extends string>({ options, value, onChange, label, disabled = false }: { options: readonly SegmentedOption<T>[]; value: T; onChange: (value: T) => void; label?: string; disabled?: boolean }) {
 	const selected = options.findIndex(option => option.value === value);
 	return (
-		<div className="neo-segmented" role="radiogroup" aria-label={label} onKeyDown={event => {
-			if (event.altKey || event.ctrlKey || event.metaKey || !options.length) return;
+		<div className="neo-segmented" role="radiogroup" aria-label={label} aria-disabled={disabled || undefined} onKeyDown={event => {
+			if (disabled || event.altKey || event.ctrlKey || event.metaKey || !options.length) return;
 			const buttons = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="radio"]'));
 			const index = buttons.indexOf(event.target as HTMLButtonElement);
 			if (index < 0) return;
@@ -201,6 +201,7 @@ export function Segmented<T extends string>({ options, value, onChange, label }:
 					type="button"
 					role="radio"
 					aria-checked={option.value === value}
+					disabled={disabled}
 					tabIndex={index === (selected < 0 ? 0 : selected) ? 0 : -1}
 					title={option.title}
 					className="neo-segmented-option"

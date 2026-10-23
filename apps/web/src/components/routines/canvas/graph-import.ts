@@ -32,7 +32,7 @@ import {
 	CANVAS_NODE_VERTICAL_GAP,
 	type SequentialEdge,
 	type StepNode,
-} from "./graph-types";
+} from "./legacy-graph-types";
 
 export interface ImportedGraph {
 	nodes: StepNode[];

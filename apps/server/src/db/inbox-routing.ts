@@ -1,13 +1,16 @@
 import { INBOX_CARD_ADDED_EVENT, type GraphRunRecord, type InboxDestination, type InboxHistoryEvent, type InboxItem, type InboxProposal, type InboxReceipt, type InboxRouting, type Task } from "@npi-deck/protocol";
 import { getDb, nowIso } from "./index.ts";
-import { listRoutines } from "./routines.ts";
+import { DEFAULT_INBOX_TICKET_ROUTINE_ID, getRoutine, listRoutines } from "./routines.ts";
 import { getDefaultState, listStates } from "./tasks.ts";
 
 export function inboxRouting(): InboxRouting {
+	const flow = getRoutine(DEFAULT_INBOX_TICKET_ROUTINE_ID);
+	const repository = flow?.graph?.nodes.find(node => node.type === "operation.inbox-route")?.config.repository;
 	return {
+		defaultFlow: { id: DEFAULT_INBOX_TICKET_ROUTINE_ID, enabled: flow?.enabled ?? true, repository: typeof repository === "string" ? repository : "", protected: true, url: `/studio?graph=${DEFAULT_INBOX_TICKET_ROUTINE_ID}` },
 		classifier: {
-			kind: "manual", name: "You choose where it goes",
-			description: "Captures stay in the inbox until you file them. No model classifier is connected. Enabled flows below also receive each new capture.",
+			kind: "manual", name: "Explicit kind and repository rules",
+			description: "Only original tickets follow the configured default GitHub route. Other kinds stay here. Model classification needs a NeoPi contract.",
 		},
 		flows: listRoutines().flatMap(routine => routine.specVersion === 2 && routine.graph
 			? routine.graph.nodes.filter(node => ["event.source", INBOX_CARD_ADDED_EVENT].includes(node.type) && node.config.eventType === INBOX_CARD_ADDED_EVENT)

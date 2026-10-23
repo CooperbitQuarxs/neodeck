@@ -16,7 +16,7 @@ import { Cron } from "croner";
 import { parse as parseYaml } from "yaml";
 import * as path from "node:path";
 
-import { INBOX_CARD_ADDED_EVENT, type GraphActivation, type GraphExecutionResult, type GraphObject, type Routine, type RoutineActionKind, type RoutineGraph, type RoutineRun, type RoutineSpec, type RoutineTrigger } from "@npi-deck/protocol";
+import { INBOX_CARD_ADDED_EVENT, type GraphActivation, type GraphExecutionResult, type GraphObject, type Routine, type RoutineGraph, type RoutineRun, type RoutineSpec, type RoutineTrigger } from "@npi-deck/protocol";
 
 import { logger } from "./log.ts";
 import {
@@ -31,17 +31,18 @@ import { ConcurrencyController } from "./routines/concurrency.ts";
 import { runV1Pipeline } from "./routines/v1-runner.ts";
 import { finalizeRun, insertAbortedRun } from "./db/routine-step-runs.ts";
 import { loadConfig } from "./config.ts";
-import { spawnOwned, terminateOwned } from "./owned-process.ts";
 import { routineAgentCommand } from "./routines/agent-command.ts";
 import { workRegistry } from "./work-registry.ts";
 import { executeGraph, GraphNodeRegistry } from "./routines/graph-runner.ts";
 import { admitInboxGraphEvent, discardInboxGraphEvent, inboxGraphEventsFor, pendingInboxGraphEvents, recoverInboxGraphEvents, subscribeInboxGraphEvents } from "./db/inbox-graph-events.ts";
 import { registerGraphActions } from "./routines/graph-actions.ts";
+import { registerGraphStepNodes } from "./routines/graph-step-nodes.ts";
+import { runV0Action } from "./routines/v0-action.ts";
+import { installDefaultInboxFlow, registerInboxFlowNodes } from "./inbox-flow.ts";
+import { registerGraphV0Node } from "./routines/graph-v0-node.ts";
 
 const log = logger("routines-runner");
 
-const MAX_EXCERPT = 8 * 1024;
-const MAX_RUNTIME_MS = 10 * 60_000;
 
 interface ScheduledCron {
 	cron: Cron;
@@ -68,6 +69,9 @@ export class RoutinesRunner {
 	readonly graphRegistry = new GraphNodeRegistry();
 	constructor(private readonly agentCommand: () => string[] = () => routineAgentCommand([])) {
 		registerGraphActions(this.graphRegistry);
+		registerGraphStepNodes(this.graphRegistry);
+		registerGraphV0Node(this.graphRegistry);
+		registerInboxFlowNodes(this.graphRegistry);
 	}
 	get busy(): boolean { return this.runs.size > 0; }
 	get workSnapshot(): Array<{ runId: string; routineId: string }> {
@@ -77,6 +81,7 @@ export class RoutinesRunner {
 
 	start(): void {
 		if (this.unsubscribeInbox || this.closing) return;
+		installDefaultInboxFlow(this.graphRegistry);
 		recoverInboxGraphEvents();
 		this.unsubscribeInbox = subscribeInboxGraphEvents(() => this.dispatchInboxEvents());
 		const routines = listRoutines();
@@ -154,7 +159,7 @@ export class RoutinesRunner {
 		routineId: string,
 		trigger: "cron" | "manual" | "webhook" | "event" = "manual",
 		payload: Record<string, unknown> = {},
-		options: { dryRun?: boolean; operationId?: string } = {},
+		options: { dryRun?: boolean; operationId?: string; sourceNodeId?: string } = {},
 	): Promise<void> {
 		if (this.closing) throw new Error("routine admissions closed");
 		const routine = getRoutine(routineId);
@@ -165,7 +170,12 @@ export class RoutinesRunner {
 		if (!routine.enabled && (trigger === "cron" || trigger === "webhook" || trigger === "event")) return;
 
 		if (routine.specVersion === 2) {
-			await this.fireGraph(routine, { eventType: trigger, event: payload as GraphObject, ...(options.operationId ? { operationId: options.operationId } : {}) }, trigger, options);
+			const nativeTrigger = routine.graph?.execution?.mode === "routine-v0" && trigger !== "cron" && trigger !== "manual" ? "manual" : trigger;
+			await this.fireGraph(routine, {
+				eventType: nativeTrigger, event: payload as GraphObject,
+				...(options.operationId ? { operationId: options.operationId } : {}),
+				...(options.sourceNodeId ? { sourceNodeId: options.sourceNodeId } : {}),
+			}, nativeTrigger, options);
 		} else if (routine.specVersion === 1 && routine.specYaml) {
 			await this.fireV1(routine, trigger, payload);
 		} else {
@@ -422,76 +432,3 @@ function collectCronExpressions(routine: Routine): Array<{ expression: string; a
 	return routine.cron ? [{ expression: routine.cron }] : [];
 }
 
-// ─── V0 single-action executor (preserved for backward compat) ────────────
-
-async function runV0Action(
-	kind: RoutineActionKind,
-	body: string,
-	cwd: string,
-	signal: AbortSignal,
-): Promise<{ exitCode?: number; stdoutExcerpt: string; stderrExcerpt: string; error?: string }> {
-	const cmd = buildV0Cmd(kind, body);
-	if (!cmd) {
-		return { error: `unsupported action kind: ${kind}`, stdoutExcerpt: "", stderrExcerpt: "" };
-	}
-	const proc = spawnOwned(cmd, {
-		cwd, stdin: "ignore", stdout: "pipe", stderr: "pipe", windowsHide: true,
-	});
-	const onAbort = () => { void terminateOwned(proc); };
-	signal.addEventListener("abort", onAbort, { once: true });
-	if (signal.aborted) onAbort();
-	const timer = setTimeout(() => { void terminateOwned(proc); }, MAX_RUNTIME_MS);
-	timer.unref?.();
-	const [stdout, stderr, exitCode] = await Promise.all([
-		readClipped(proc.stdout),
-		readClipped(proc.stderr),
-		proc.exited,
-	]);
-	clearTimeout(timer);
-	signal.removeEventListener("abort", onAbort);
-	return {
-		exitCode: typeof exitCode === "number" ? exitCode : undefined,
-		stdoutExcerpt: stdout,
-		stderrExcerpt: stderr,
-	};
-}
-
-function buildV0Cmd(kind: RoutineActionKind, body: string): string[] | null {
-	const isWin = process.platform === "win32";
-	switch (kind) {
-		case "bash":
-			return isWin ? ["cmd", "/c", body] : ["bash", "-lc", body];
-		case "script": {
-			const parts = body.trim().split(/\s+/);
-			if (parts.length === 0 || !parts[0]) return null;
-			return parts as string[];
-		}
-		case "prompt":
-			return routineAgentCommand(["-p", body]);
-		default:
-			return null;
-	}
-}
-
-async function readClipped(stream: ReadableStream<Uint8Array> | null): Promise<string> {
-	if (!stream) return "";
-	const reader = stream.getReader();
-	const decoder = new TextDecoder("utf-8");
-	let acc = "";
-	while (true) {
-		const { value, done } = await reader.read();
-		if (done) break;
-		acc += decoder.decode(value, { stream: true });
-		if (acc.length > MAX_EXCERPT) {
-			acc = acc.slice(0, MAX_EXCERPT) + "\n…(truncated)";
-			try {
-				await reader.cancel();
-			} catch {
-				/* ignore */
-			}
-			break;
-		}
-	}
-	acc += decoder.decode();
-	return acc;
-}

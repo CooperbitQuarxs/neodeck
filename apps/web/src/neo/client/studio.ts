@@ -123,19 +123,25 @@ const live: StudioClient = {
  async remove(id) { const list = await this.list(); if (list.find(graph => graph.id === id)?.kind === "flow") await routinesApi.remove(id); else await clientFor(id).remove(id); },
  async run(id, options = {}) {
   const list = await this.list(); if (list.find(graph => graph.id === id)?.kind !== "flow") return clientFor(id).run(id, options);
-  if (options.mode === "execute") await routinesApi.runNow(id);
+  const routine = await routinesApi.get(id);
+  if (options.mode === "execute") await routinesApi.runNow(id, routine.specVersion === 2 ? { id: crypto.randomUUID() } : undefined);
   else {
-   const routine = await routinesApi.get(id);
    if (routine.specVersion !== 2) throw new Error("This legacy flow has no write-free preview. Choose Execute explicitly to run its actions.");
-   const result = await fetch(`/api/routines/${encodeURIComponent(id)}/run?dryRun=true`, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
-   if (!result.ok) throw new Error(`Flow preview failed (${result.status}).`);
+   const trace = await routinesApi.previewGraph(id);
+   return { id: trace.id, graphId: id, startedAt: trace.startedAt, endedAt: trace.endedAt, ok: trace.status === "success", mode: "preview", trigger: "Manual preview", nodes: trace.nodeRuns.map(node => ({ nodeId: node.nodeId, startedAt: node.startedAt ?? trace.startedAt, endedAt: node.endedAt, status: node.status === "success" ? "ok" as const : node.status === "skipped" ? "skipped" as const : "failed" as const, note: node.error })) };
   }
   return { id: "queued", graphId: id, startedAt: new Date().toISOString(), ok: null, trigger: options.mode === "execute" ? "Manual" : "Manual preview", mode: options.mode ?? "preview", nodes: [] };
  },
  async runs(id) {
   const list = await this.list(); if (list.find(graph => graph.id === id)?.kind !== "flow") return clientFor(id).runs(id);
-  const { runs } = await routinesApi.runs(id);
-  return Promise.all(runs.map(async run => { const { steps } = await routinesApi.steps(id, run.id); return { id: run.id, graphId: id, startedAt: run.startedAt, endedAt: run.endedAt, ok: !run.endedAt && !run.abortedAt ? null : !run.error && !run.abortReason && !run.stepCountFailed, trigger: run.trigger, costUsd: run.totalLlmCostMicros / 1_000_000, nodes: steps.map(step => ({ nodeId: step.stepId, startedAt: step.startedAt, endedAt: step.endedAt, status: step.status === "success" ? "ok" as const : step.status === "failed" || step.status === "aborted" ? "failed" as const : step.status === "running" ? "running" as const : "skipped" as const, note: step.error ?? step.stdoutExcerpt })) }; }));
+  const [{ runs }, routine] = await Promise.all([routinesApi.runs(id), routinesApi.get(id)]);
+  return Promise.all(runs.map(async run => {
+   const running = !run.endedAt && !run.abortedAt;
+   const nodes: StudioRun["nodes"] = routine.specVersion === 2
+    ? running ? [] : (await routinesApi.graphRun(id, run.id)).nodeRuns.map(node => ({ nodeId: node.nodeId, startedAt: node.startedAt ?? run.startedAt, endedAt: node.endedAt, status: node.status === "success" ? "ok" as const : node.status === "skipped" ? "skipped" as const : "failed" as const, note: node.error }))
+    : (await routinesApi.steps(id, run.id)).steps.map(step => ({ nodeId: step.stepId, startedAt: step.startedAt, endedAt: step.endedAt, status: step.status === "success" ? "ok" as const : step.status === "failed" || step.status === "aborted" ? "failed" as const : step.status === "running" ? "running" as const : "skipped" as const, note: step.error ?? step.stdoutExcerpt }));
+   return { id: run.id, graphId: id, startedAt: run.startedAt, endedAt: run.endedAt, ok: running ? null : !run.error && !run.abortReason && !run.stepCountFailed, trigger: run.trigger, costUsd: run.totalLlmCostMicros / 1_000_000, nodes };
+  }));
  },
  source: id => clientFor(id).source(id), saveSource: (id, source) => clientFor(id).saveSource(id, source),
 };

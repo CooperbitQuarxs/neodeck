@@ -32,7 +32,7 @@ export function ConfigSection({ revision }: { revision: number }) {
 		<div className="neo-settings-advanced-heading"><p className="neo-settings-description">Every registered NeoPi setting. Saves write the global config and reload live chats. Provenance reflects the default workspace.</p><NeoButton size="sm" variant="ghost" disabled={loading} onClick={() => void refresh()}><RotateCcw size={13} />{loading ? "Loading…" : "Reload"}</NeoButton></div>
 		{data ? <>
 			<KeyValue items={[{ key: "Global config", value: data.configPath }, { key: "Workspace", value: data.cwd }, { key: "Registered settings", value: data.settings.length }]} />
-			<SearchInput value={query} onChange={setQuery} placeholder="Search all NeoPi settings" aria-label="Search all NeoPi settings" />
+			<SearchInput pageSearch value={query} onChange={setQuery} placeholder="Search all NeoPi settings" aria-label="Search all NeoPi settings" />
 			{!query.trim() && <Tabs label="NeoPi configuration groups" className="neo-settings-advanced-config-tabs" value={tab} onChange={setTab} options={data.tabs.map(item => ({ value: item.id, label: item.label, count: data.settings.filter(setting => setting.tab === item.id).length }))} />}
 			{groups.length === 0 && <Empty title="No matching settings" hint="Try another name, description or setting id." />}
 			{groups.map(group => <div key={group.key}><SectionLabel>{group.label}</SectionLabel>{group.rows.map(setting => <ConfigSettingRow key={setting.id} setting={setting} cwd={data.cwd} onSaved={replace} onNotice={notify} />)}</div>)}

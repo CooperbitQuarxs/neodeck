@@ -80,10 +80,10 @@ test("routing lists actual subscriptions and history follows durable flow delive
 	const item = createInbox({ title: "Follow the handoff", kind: "capture" });
 	const routing = await (await app.request("/inbox/routing")).json() as InboxRouting;
 	expect(routing.flows.map(flow => [flow.id, flow.enabled])).toEqual(expect.arrayContaining([[enabled.id, true], [disabled.id, false]]));
-	expect(pendingInboxGraphEvents().filter(delivery => delivery.activation.event.id === item.id)).toHaveLength(1);
+	expect(pendingInboxGraphEvents().filter(delivery => delivery.activation.event.id === item.id && delivery.routineId === enabled.id)).toHaveLength(1);
 	const history = async () => (await (await app.request(`/inbox/${item.id}/history`)).json() as { events: InboxHistoryEvent[] }).events;
 	expect((await history()).find(event => event.actor === "Live intake")?.text).toContain("queued");
-	const activation = pendingInboxGraphEvents()[0]!.activation;
+	const activation = pendingInboxGraphEvents().find(delivery => delivery.routineId === enabled.id)!.activation;
 	const run = admitInboxGraphEvent(enabled.id, activation, graph, () => startRun(enabled.id, "event"))!;
 	expect((await history()).find(event => event.actor === "Live intake")?.text).toContain("running");
 	finishGraphRun({ id: run.id, routineId: enabled.id, startedAt: run.startedAt, endedAt: new Date().toISOString(), status: "failed", error: "fixture failure", graph, activation, nodeRuns: [], outputs: [] });
@@ -109,7 +109,7 @@ test("issue preview makes no external writes, reservations or processing changes
 	const item = createInbox({ title: "Preview without sending", kind: "ticket", body: "Preserve this context." });
 	const response = await app.request(`/inbox/${item.id}/file`, json({ destination: { kind: "issue", repo: "owner/repo" }, dryRun: true }));
 	expect(response.status).toBe(200);
-	expect(await response.json()).toMatchObject({ plan: { destination: { kind: "issue", repo: "owner/repo" }, title: item.title } });
+	expect(await response.json()).toMatchObject({ plan: { destination: { kind: "issue", repo: "github.com/owner/repo" }, title: item.title } });
 	expect(transport).not.toHaveBeenCalled();
 	expect(getDb().query("SELECT item_id FROM inbox_filing_requests").all()).toHaveLength(0);
 	expect(getDb().query("SELECT logical_key FROM graph_actions").all()).toHaveLength(0);

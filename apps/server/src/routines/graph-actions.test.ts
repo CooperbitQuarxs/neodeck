@@ -305,7 +305,7 @@ test("isolated loopback subprocess runs all production actions through the nativ
 		reader.releaseLock();
 		expect(url).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/);
 		const types = await (await fetch(`${url}/api/routine-node-types`)).json() as { nodeTypes: Array<{ type: string }> };
-		expect(types.nodeTypes.filter(type => type.type.startsWith("action."))).toHaveLength(3);
+		expect(types.nodeTypes.filter(type => type.type.startsWith("action."))).toHaveLength(4);
 		for (const graph of [flow(), messageFlow(), flow("action.file-issue", { host: "github.com", owner: "isolated-owner", repo: "disposable", title: "Private fixture", body: "Simulated provider only" })]) {
 			expect((await fetch(`${url}/api/routine-graphs/validate`, json(graph))).status).toBe(200);
 			const saved = await (await fetch(`${url}/api/routines`, json({ name: "Subprocess actions", graph }))).json() as { id: string };
@@ -401,4 +401,56 @@ test("privacy-safe card receipts keep downstream requests identical after restar
 	expect(downstream.body).not.toContain("private-replay-password");
 	expect(listTasks().find(card => card.title === "Private source")!.body).toContain("private-replay-password");
 	expect(JSON.stringify(trace(routine.id))).not.toContain("private-replay-password");
+});
+
+function iterationActionFlow(nested: boolean): RoutineGraph {
+	const actionBody: GraphObject = { version: 2, nodes: [
+		{ id: "item", type: "iteration.input", config: { eventType: "iteration" } },
+		{ id: "action", type: "action.create-card", config: { request: { title: { $from: { nodeId: "item", path: ["result", "item"] } } } } },
+	], edges: [{ id: "item-action", from: { nodeId: "item", port: "item" }, to: { nodeId: "action", port: "in" } }] };
+	const body: GraphObject = nested ? { version: 2, nodes: [
+		{ id: "item", type: "iteration.input", config: { eventType: "iteration" } },
+		{ id: "loop", type: "iteration.each", config: { path: ["result", "item"], maxIterations: 2, body: actionBody } },
+	], edges: [{ id: "item-loop", from: { nodeId: "item", port: "item" }, to: { nodeId: "loop", port: "input" } }] } : actionBody;
+	return { version: 2, nodes: [
+		{ id: "source", type: "event.source", config: { eventType: "manual" } },
+		{ id: "loop", type: "iteration.each", config: { path: ["result", "items"], maxIterations: 2, body } },
+	], edges: [{ id: "source-loop", from: { nodeId: "source", port: "event" }, to: { nodeId: "loop", port: "input" } }] };
+}
+function iterationEffects(record: GraphRunRecord) {
+	const nodes = [...record.nodeRuns];
+	for (let index = 0; index < nodes.length; index++) for (const pass of nodes[index]!.passes ?? []) nodes.push(...pass.nodeRuns);
+	return nodes.flatMap(node => node.effects ?? []);
+}
+for (const nested of [false, true]) test(`iteration actions inherit original event/card identity through ${nested ? "nested" : "single"} bodies`, async () => {
+	setup();
+	for (const identity of [{ id: "event-id" }, { card: { id: "card-id" } }] as GraphObject[]) {
+		const graph = iterationActionFlow(nested);
+		const routine = createGraphRoutine({ name: "iteration identity", graph }, runner.graphRegistry);
+		const event: GraphObject = { ...identity, items: nested ? [["first", "second"]] : ["first", "second"] };
+		const count = listTasks({ includeArchived: true }).length;
+		const preview = await executeGraph(graph, { eventType: "manual", event }, runner.graphRegistry, { routineId: routine.id, dryRun: true });
+		expect(preview.status).toBe("success");
+		expect(listTasks({ includeArchived: true })).toHaveLength(count);
+		await runner.fireGraphEvent(routine.id, { eventType: "manual", event });
+		const first = trace(routine.id);
+		expect(first.status).toBe("success");
+		const receipts = iterationEffects(first);
+		expect(receipts).toHaveLength(2);
+		expect(new Set(receipts.map(effect => effect.logicalKey)).size).toBe(2);
+		expect(listTasks({ includeArchived: true })).toHaveLength(count + 2);
+		await runner.fireGraphEvent(routine.id, { eventType: "manual", event });
+		const replay = iterationEffects(trace(routine.id));
+		expect(replay.map(effect => effect.logicalKey)).toEqual(receipts.map(effect => effect.logicalKey));
+		expect(replay.every(effect => effect.replayed)).toBe(true);
+		expect(listTasks({ includeArchived: true })).toHaveLength(count + 2);
+		await runner.fireGraphEvent(routine.id, { eventType: "manual", event, operationId: "intentional-repeat" });
+		expect(trace(routine.id).status).toBe("success");
+		expect(listTasks({ includeArchived: true })).toHaveLength(count + 4);
+		graph.nodes[0]!.config.eventType = "other";
+		updateGraphRoutine(routine.id, { graph }, runner.graphRegistry);
+		await runner.fireGraphEvent(routine.id, { eventType: "other", event });
+		expect(trace(routine.id).status).toBe("success");
+		expect(listTasks({ includeArchived: true })).toHaveLength(count + 6);
+	}
 });
