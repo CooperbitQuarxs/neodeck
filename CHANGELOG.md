@@ -97,6 +97,7 @@ All notable changes to NPI deck (a fork of bjb2/omp-deck; entries before the for
 
 ### Fixed
 
+- Knowledge history Git commands now use the owned-process lifecycle, retain their timeout and output limits, and cannot outlive the server through an untracked child process. GPT-6.1 Sol, [#290](https://github.com/PsychedelicShayna/neodeck/issues/290).
 - Inbox compose slips focus the title first and keep empty notes ready to edit when switching fields ([#244](https://github.com/PsychedelicShayna/neodeck/issues/244)).
 - Inbox captures retain the current notes even when Capture activates before the editor loses focus ([#235](https://github.com/PsychedelicShayna/neodeck/issues/235)).
 - The SDK contract probe and server types support current NeoPi nightly alongside the documented pin, including role-level settings provenance ([#232](https://github.com/PsychedelicShayna/neodeck/issues/232)).
