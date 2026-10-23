@@ -18,6 +18,7 @@ export function runIsolatedCase(
 	extraEnv: Record<string, string> = {},
 ): { exitCode: number; output: string; root: string } {
 	const root = fs.mkdtempSync(path.join(os.tmpdir(), "npi-deck-isolated-test-"));
+	let result: { exitCode: number; output: string; root: string } | undefined;
 	try {
 		const home = path.join(root, "home");
 		const temp = path.join(root, "tmp");
@@ -70,10 +71,15 @@ export function runIsolatedCase(
 		const child = spawnOwnedSync([process.execPath, "test", path.resolve(file)], {
 			cwd: root, env, stdin: "ignore", stdout: "pipe", stderr: "pipe",
 		}, { replaceEnv: true });
-		return { exitCode: child.exitCode, output: `${child.stdout.toString()}${child.stderr.toString()}`, root };
+		return result = { exitCode: child.exitCode, output: `${child.stdout.toString()}${child.stderr.toString()}`, root };
 	} finally {
 		// The private worker has exited and both streams are drained before removal.
-		fs.rmSync(root, { recursive: true, force: true });
+		try { fs.rmSync(root, { recursive: true, force: true }); }
+		catch (error) {
+			if (result) throw new AggregateError([new Error(`Isolated worker exited ${result.exitCode}\n${result.output}`), error],
+				"Isolated worker fixture cleanup failed");
+			throw error;
+		}
 	}
 }
 

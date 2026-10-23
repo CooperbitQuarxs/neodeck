@@ -170,8 +170,9 @@ export function spawnOwned<
 		}
 		const record: WindowsOwned = { reference, release: releaseWork, retained: policy.retainUntilDrained === true };
 		windowsActive.set(proc.pid, record);
-		// Also covers a child which exited before its onExit callback found us.
-		void proc.exited.then(() => terminateWindows(record)).catch(error => console.error(error));
+		// Bun's exited/onExit can wait for inherited stdio. Observe the kernel
+		// handle independently so a dead shell cannot strand its pipe holders.
+		void reference.waitForExit().then(() => terminateWindows(record)).catch(error => console.error(error));
 		return proc;
 	}
 	const begun = identity(proc.pid);
