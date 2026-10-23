@@ -9,13 +9,14 @@ export interface ShellFixtureConfig {
 	newline?: boolean;
 	exitCode?: number;
 	expectedCwd?: string;
+	leaderExits?: boolean;
 }
 
 /** Test-only commands for the unchanged bash -lc / cmd /c production boundary. */
 export function shellFixtureCommand(
 	runtime: string,
 	script: string,
-	mode: "write" | "hold" | "success",
+	mode: "write" | "hold" | "success" | "tree",
 	config: ShellFixtureConfig,
 	renderedValue?: string,
 	platform: NodeJS.Platform = process.platform,
@@ -44,7 +45,7 @@ export function createShellFixture(home: string) {
 	fs.copyFileSync(path.join(import.meta.dir, "shell-fixture-runtime.cjs"), script);
 	return {
 		cwd,
-		command(mode: "write" | "hold" | "success", config: ShellFixtureConfig = {}, renderedValue?: string): string {
+		command(mode: "write" | "hold" | "success" | "tree", config: ShellFixtureConfig = {}, renderedValue?: string): string {
 			return shellFixtureCommand(process.execPath, script, mode, { ...config, expectedCwd: cwd }, renderedValue);
 		},
 	};

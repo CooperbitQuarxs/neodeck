@@ -260,6 +260,17 @@ export function activeBackend(): LoadedBackend | undefined {
 	return active?.backend;
 }
 
+/** Load only native process support, without importing the agent SDK or a session. */
+export function nativeProcessClass(): typeof import("@oh-my-pi/pi-natives").Process {
+	const tree = active?.backend.identity.path ?? resolveBackendSelection()?.path;
+	if (!tree) throw new BackendConfigError("owned Windows processes require a configured NeoPi native backend");
+	const module = require(Bun.resolveSync("@oh-my-pi/pi-natives", tree)) as typeof import("@oh-my-pi/pi-natives");
+	if (typeof module.Process?.fromPid !== "function") {
+		throw new BackendConfigError(`backend ${tree} has no stable native Process support`);
+	}
+	return module.Process;
+}
+
 function requireActive(): NonNullable<typeof active> {
 	if (!active) throw new BackendConfigError("no NeoPi backend loaded; loadBackend() must run before SDK access");
 	return active;

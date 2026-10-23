@@ -9,6 +9,7 @@ import { createRoutine, createV1Routine, getRoutine, listRuns, updateV1Routine }
 import { RoutineTestFixtures } from "./test-fixture.ts";
 import { createIsolatedTest, isIsolatedCase } from "../test-isolation.ts";
 import { createShellFixture } from "./shell-fixture.ts";
+import { observeProcessTree, unrelatedProcess } from "./process-fixture.ts";
 
 const isolatedTest = createIsolatedTest(import.meta.path);
 const fixtures = new RoutineTestFixtures();
@@ -46,36 +47,46 @@ test("queue holds second invocation until first finishes, then releases the busy
 	expect(runner.busy).toBe(false);
 });
 
-test("deadline kills shell grandchild and records timeout", async ({ home, runner }) => {
-	const pidFile = path.join(home, "grandchild.pid");
-	const r = routine(spec([{ id: "slow", type: "run", timeout_secs: 1, command: `sleep 30 & echo $! > '${pidFile}'; wait` }]));
-	const start = Date.now();
-	await runner.fire(r.id);
-	expect(Date.now() - start).toBeLessThan(4000);
-	const pid = Number(fs.readFileSync(pidFile, "utf8").trim());
-	await Bun.sleep(100);
-	const ps = Bun.spawnSync(["ps", "-p", String(pid), "-o", "stat="], { stdout: "pipe", stderr: "ignore" });
-	const status = new TextDecoder().decode(ps.stdout).trim();
-	// PID 1 may take a moment to reap a killed child; a zombie has no executable process.
-	expect(status === "" || status.startsWith("Z")).toBe(true);
-	expect(listRuns(r.id)[0]?.abortReason).toBe("timeout");
-});
-
-test("run-duration budget preempts a longer step deadline and its child group", async ({ home, runner }) => {
-	const pidFile = path.join(home, "budget-grandchild.pid");
-	const s = spec([{ id: "slow", type: "run", timeout_secs: 20,
-		command: `sleep 30 & echo $! > '${pidFile}'; wait` }]);
-	s.budget = { max_duration_secs: 1 };
+async function assertTimedTree({ home, runner }: RoutineTestFixture, budget: boolean): Promise<void> {
+	const marker = path.join(home, "process-tree.json");
+	const shell = createShellFixture(home);
+	const s = spec([{ id: "slow", type: "run", cwd: shell.cwd,
+		timeout_secs: budget ? 20 : 1, command: shell.command("tree", { marker }) }]);
+	if (budget) s.budget = { max_duration_secs: 1 };
 	const r = routine(s);
+	const control = unrelatedProcess();
 	const start = Date.now();
-	await runner.fire(r.id);
-	expect(Date.now() - start).toBeLessThan(4000);
-	const pid = Number(fs.readFileSync(pidFile, "utf8").trim());
-	const ps = Bun.spawnSync(["ps", "-p", String(pid), "-o", "stat="], { stdout: "pipe", stderr: "ignore" });
-	const status = new TextDecoder().decode(ps.stdout).trim();
-	expect(status === "" || status.startsWith("Z")).toBe(true);
-	expect(listRuns(r.id)[0]?.abortReason).toBe("timeout");
-});
+	let tree: Awaited<ReturnType<typeof observeProcessTree>> | undefined;
+	let observation: ReturnType<typeof setTimeout> | undefined;
+	try {
+		const fired = runner.fire(r.id);
+		tree = await observeProcessTree(marker);
+		observation = setTimeout(() => console.log(JSON.stringify({
+			event: "after-deadline", elapsed: Date.now() - start, states: tree!.states(),
+		})), 1500);
+		await fired;
+		const elapsed = Date.now() - start;
+		const states = tree.states();
+		console.log(JSON.stringify({ event: "tree-finished", budget, elapsed, states, control: control.status() }));
+		expect(elapsed).toBeLessThan(4000);
+		expect(states.every(process => process.status === "exited")).toBe(true);
+		expect(control.status()).toBe("running");
+		const run = listRuns(r.id)[0]!;
+		expect(run.abortReason).toBe("timeout");
+		const [step] = listStepRuns(run.id);
+		expect(step?.status).toBe("aborted");
+		expect(step?.stdoutExcerpt).toContain("tree stdout ready");
+		expect(step?.stderrExcerpt).toContain("tree stderr ready");
+	} finally {
+		clearTimeout(observation);
+		tree?.kill();
+		await control.close();
+	}
+}
+
+test("deadline kills shell grandchild and records timeout", fixture => assertTimedTree(fixture, false));
+
+test("run-duration budget preempts a longer step deadline and its child group", fixture => assertTimedTree(fixture, true));
 
 test("disabled webhook does not execute, successful webhook persists payload", async ({ home, runner }) => {
 	const marker = path.join(home, "webhook");
