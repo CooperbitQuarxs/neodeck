@@ -703,3 +703,53 @@ test("a graph-created card gets its own new event, and failing intake is not suc
 	expect(getGraphRun(record.id)).toMatchObject({ status: "failed", nodeRuns: [{ status: "success" }, { status: "failed", inputs: [{ result: failed }], inputPorts: ["in"] }] });
 	expect(getInbox(failed.id)?.processedAt).toBeUndefined();
 });
+
+test("production iteration gates persist distinct passes and the executed snapshot through the HTTP trace route", async () => {
+	const run = setup(), api = buildRoutinesRouter(run);
+	const body: GraphObject = { version: 2, nodes: [
+		{ id: "item", type: "iteration.input", config: { eventType: "iteration" } },
+		{ id: "gate", type: "gate.if", config: { path: ["result", "item"] } },
+		{ id: "truthy", type: "gate.compare", config: { path: ["result", "value"], operator: "ne", right: true } },
+		{ id: "falsy", type: "gate.member", config: { path: ["result", "value"], values: [false, 0] } },
+	], edges: [
+		{ id: "i-g", from: { nodeId: "item", port: "item" }, to: { nodeId: "gate", port: "input" } },
+		{ id: "g-t", from: { nodeId: "gate", port: "true" }, to: { nodeId: "truthy", port: "input" } },
+		{ id: "g-f", from: { nodeId: "gate", port: "false" }, to: { nodeId: "falsy", port: "input" } },
+	] };
+	const native = graph();
+	native.nodes.push({ id: "loop", type: "iteration.each", config: { path: ["result", "items"], maxIterations: 3, body } });
+	connect(native, "s-l", "source", "loop", "event", "input");
+	const response = await api.request("/routines", request({ name: "real gates and iteration", graph: native, enabled: false }));
+	expect(response.status).toBe(201);
+	const saved = await response.json() as Routine;
+	const event = { items: ["truthy-not-true", true, 0], original: { message: "original event" } };
+	expect((await api.request(`/routines/${saved.id}/run`, request(event))).status).toBe(202);
+	let trace: GraphRunRecord | undefined;
+	const deadline = Date.now() + 3000;
+	while (!trace && Date.now() < deadline) {
+		await Bun.sleep(10);
+		const record = listRuns(saved.id)[0];
+		if (record) trace = getGraphRun(record.id);
+	}
+	expect(trace?.status).toBe("success");
+	const loop = trace!.nodeRuns[1]!;
+	expect(loop.passes).toHaveLength(3);
+	for (const [index, pass] of loop.passes!.entries()) {
+		expect(pass.outputs[0]?.result).toEqual({ item: event.items[index], index, count: 3 });
+		expect(pass.outputs[0]?.iteration).toEqual([{ nodeId: "loop", index }]);
+		const gate = pass.nodeRuns.find(node => node.nodeId === "gate")!.outputs[0]!;
+		expect(gate.port).toBe(index === 2 ? "false" : "true");
+		expect(gate.result).toEqual({ value: event.items[index]! });
+		expect(findGraphOutput(pass.outputs.at(-1)!, "source")?.result).toEqual(event);
+	}
+	expect(loop.passes![0]!.nodeRuns[2]!.outputs[0]!.port).toBe("true");
+	expect(loop.passes![1]!.nodeRuns[2]!.outputs[0]!.port).toBe("false");
+	expect(loop.passes![2]!.nodeRuns[3]!.outputs[0]!.result).toEqual({ value: 0 });
+	updateGraphRoutine(saved.id, { graph: graph("edited") }, run.graphRegistry);
+	const persistedResponse = await api.request(`/routines/${saved.id}/runs/${trace!.id}/graph`);
+	expect(persistedResponse.status).toBe(200);
+	const persisted = await persistedResponse.json() as GraphRunRecord;
+	expect(persisted.graph).toEqual(native);
+	expect(findGraphOutput(persisted.nodeRuns[1]!.outputs[0]!, "gate", undefined, [{ nodeId: "loop", index: 1 }])?.result).toEqual({ value: true });
+	expect(persisted.nodeRuns[1]!.passes).toEqual(loop.passes);
+});

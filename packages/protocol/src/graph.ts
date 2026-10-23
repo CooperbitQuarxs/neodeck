@@ -74,6 +74,8 @@ export interface GraphActivation {
 	operationId?: string;
 }
 
+export interface GraphIterationAddress extends GraphObject { nodeId: string; index: number }
+
 /**
  * Golden-rule envelope. Object results are retained under result without copying;
  * scalars and arrays become result.value. Inputs retain the same envelopes emitted
@@ -84,6 +86,8 @@ export interface GraphOutput {
 	port: string;
 	result: GraphObject;
 	inputs: GraphOutput[];
+	/** Outer-to-inner iterator IDs and zero-based pass indexes. */
+	iteration?: GraphIterationAddress[];
 }
 
 export interface GraphNodeInput {
@@ -119,6 +123,18 @@ export interface GraphNodeRun {
 	outputs: GraphOutput[];
 	error?: string;
 	effects?: GraphEffect[];
+	/** Non-routing handler details, retained even when execution fails or aborts. */
+	diagnostics?: GraphObject;
+	iteration?: GraphIterationAddress[];
+	/** Each body trace is scoped to its pass, including failed/aborted passes. */
+	passes?: GraphIterationPass[];
+}
+
+export interface GraphIterationPass {
+	index: number;
+	status: GraphExecutionResult["status"];
+	nodeRuns: GraphNodeRun[];
+	outputs: GraphOutput[];
 }
 
 export interface GraphExecutionResult {

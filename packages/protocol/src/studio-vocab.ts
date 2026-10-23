@@ -38,6 +38,17 @@ export const NODE_TYPES: readonly NodeType[] = [
  node("logic.join", "pipeline", "Join branches", "Collect all branches, or take the first connected result in edge order.", "Logic", "Shuffle", [port("a", "any", "First"), port("b", "any", "Second"), port("c", "any", "Third")], [port("output", "json", "Result")], [field("mode", "Collect", "select", ["all", "first"])]),
  node("logic.delay", "pipeline", "Wait", "Pause an explicitly executed run for a bounded duration.", "Logic", "Clock", input, output, [field("seconds", "Seconds, at most 60", "number")]),
  node("logic.approval", "pipeline", "Wait for approval", "Plan a human approval checkpoint. No approval is inferred during a preview.", "Logic", "ShieldCheck", input, [port("approved", "any"), port("rejected", "any"), port("timeout", "any")], [field("who", "Approver"), field("timeout", "Timeout in seconds", "number")]),
+ ...[
+  ["gate.if", "If value", "Route by truthiness without replacing the selected value."],
+  ["gate.compare", "Compare values", "Compare typed JSON values, then pass the selected value to true or false."],
+  ["gate.member", "Set membership", "Match a value against a typed JSON set without coercion."],
+ ].map(([type, label, blurb]) => node(type!, "pipeline", label!, blurb!, "Logic", "GitFork", input, [port("true", "any", "True"), port("false", "any", "False")], [
+  { ...field("path", "Envelope path as JSON", "textarea"), help: "For example [\"result\",\"value\",\"priority\"]. Each output retains its input envelopes." },
+  ...(type === "gate.compare" ? [field("operator", "Comparison", "select", ["eq", "ne", "lt", "lte", "gt", "gte"]), field("right", "Compare with, as JSON", "textarea")] : type === "gate.member" ? [field("values", "Set values as JSON", "textarea")] : []),
+ ])),
+ node("operation.number", "pipeline", "Read number", "Read an exact numeric value for arithmetic. No string or boolean conversion.", "Transform", "Shuffle", input, [port("value", "any", "Number")], [field("path", "Envelope path as JSON", "textarea")]),
+ node("operation.arithmetic", "pipeline", "Arithmetic", "Calculate with two numbers and retain both input envelopes.", "Transform", "Shuffle", [port("left", "any", "Left number"), port("right", "any", "Right number")], [port("value", "any", "Number")], [field("operator", "Operation", "select", ["add", "subtract", "multiply", "divide", "remainder", "power"])]),
+ node("iteration.each", "pipeline", "For each item", "Run a bounded graph body once per item, with separate pass traces. Preview never writes.", "Logic", "Shuffle", input, [port("completed", "json", "Completed")], [field("path", "List envelope path as JSON", "textarea"), field("maxIterations", "Maximum items, at most 100", "number"), { ...field("body", "Native body graph as JSON", "textarea"), help: "Use exactly one iteration.input event source. See docs/graph-iteration.md for the body format and pass addresses." }]),
  node("logic.each", "pipeline", "List items", "Read the items of a JSON list as one collection. This does not repeat downstream actions.", "Logic", "Shuffle", [port("input", "json", "List")], [port("items", "json", "Items")], [field("path", "List path")]),
  node("logic.retry", "pipeline", "Retry plan", "Describe retries for a task. Preview does not repeat external work.", "Logic", "Route", input, output, [field("attempts", "Maximum attempts", "number"), field("delay", "Delay in seconds", "number")]),
  node("logic.stop", "pipeline", "Stop", "End this branch without sending output.", "Logic", "OctagonX", input, [], [field("message", "Run note")]),
@@ -93,11 +104,18 @@ export function defaultConfig(type: NodeType): Record<string, unknown> {
  const config: Record<string, unknown> = { name: type.label };
  for (const f of type.fields) config[f.key] = f.control === "boolean" ? false : f.control === "number" || f.control === "percent" ? 0 : f.control === "model" ? "@default" : f.options?.[0] ?? "";
  if (type.fields.some(f => f.key === "labels")) config.labels = "yes,no,unsure";
+ if (["gate.if", "gate.compare", "gate.member", "operation.number", "iteration.each"].includes(type.type)) config.path = '["result","value"]';
+ if (type.type === "gate.compare") config.right = "null";
+ if (type.type === "gate.member") config.values = "[]";
+ if (type.type === "iteration.each") {
+  config.maxIterations = 100;
+  config.body = JSON.stringify({ version: 2, nodes: [{ id: "item", type: "iteration.input", config: { eventType: "iteration" } }], edges: [] }, null, 2);
+ }
  return config;
 }
 
 /** A planned node can be authored and safely inspected, but cannot dispatch work. */
-const localTypes = new Set(["transform.template", "transform.extract_json", "transform.merge", "transform.set", "transform.pick", "transform.filter", "transform.replace", "transform.split", "transform.stringify", "route.if", "route.switch", "route.fanout", "logic.join", "logic.each", "logic.delay", "logic.stop", "logic.fail", "cls.input", "cls.rule", "cls.normalize", "cls.switch", "cls.output", "bf.input", "bf.column", "bf.gate", "bf.parallel", "bf.done"]);
+const localTypes = new Set(["gate.if", "gate.compare", "gate.member", "operation.number", "operation.arithmetic", "iteration.each", "transform.template", "transform.extract_json", "transform.merge", "transform.set", "transform.pick", "transform.filter", "transform.replace", "transform.split", "transform.stringify", "route.if", "route.switch", "route.fanout", "logic.join", "logic.each", "logic.delay", "logic.stop", "logic.fail", "cls.input", "cls.rule", "cls.normalize", "cls.switch", "cls.output", "bf.input", "bf.column", "bf.gate", "bf.parallel", "bf.done"]);
 const actionTypes = new Set(["out.create_card", "out.file_issue", "out.notify", "out.move_card", "out.handle_inbox", "bf.move"]);
 export function studioNodeExecution(type: string): "local" | "action" | "preview" {
  return type.startsWith("event.") || localTypes.has(type) ? "local" : actionTypes.has(type) ? "action" : "preview";

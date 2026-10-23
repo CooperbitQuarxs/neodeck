@@ -128,3 +128,35 @@ describe("Studio graph runs", () => {
   const graph = await create(); expect((await app.request(`/graphs/${graph.id}/run`, json("POST", { mode: "automatic" }))).status).toBe(400); expect((await app.request(`/graphs/${graph.id}/run`, { method: "POST" })).status).toBe(400);
  });
 });
+
+test("Studio exposes and executes native numeric operations and exact gate branches", async () => {
+	const graph = await create();
+	graph.nodes = [node("start", "event.manual"), node("left", "operation.number", { path: '["result","value","left"]' }), node("right", "operation.number", { path: '["result","value","right"]' }), node("math", "operation.arithmetic", { operator: "multiply" }), node("gate", "gate.compare", { path: '["result","value"]', operator: "eq", right: "12" }), node("yes", "transform.template", { template: "Exact {{input}}" }), node("no", "logic.fail")];
+	graph.edges = [edge("start", "event", "left"), edge("start", "event", "right"), edge("left", "value", "math", "left"), edge("right", "value", "math", "right"), edge("math", "value", "gate"), edge("gate", "true", "yes"), edge("gate", "false", "no")];
+	await save(graph);
+	const result = await run(graph, { input: { left: 3, right: 4 } });
+	expect(result.ok).toBe(true);
+	expect(result.nodes.find(node => node.nodeId === "math")?.output).toEqual([{ port: "value", value: 12 }]);
+	expect(result.nodes.find(node => node.nodeId === "yes")?.output).toEqual([{ port: "text", value: "Exact 12" }]);
+	expect(result.nodes.find(node => node.nodeId === "no")?.status).toBe("skipped");
+});
+
+test("Studio iteration preview is write-free and explicit execution gives each pass a separate action identity", async () => {
+	const graph = await create();
+	const body = { version: 2, nodes: [
+		{ id: "item", type: "iteration.input", config: { eventType: "iteration" } },
+		{ id: "card", type: "action.create-card", config: { request: { title: { $from: { nodeId: "item", path: ["result", "item"] } }, body: "isolated iteration" } } },
+	], edges: [{ id: "item-card", from: { nodeId: "item", port: "item" }, to: { nodeId: "card", port: "in" } }] };
+	graph.nodes = [node("start", "event.manual"), node("loop", "iteration.each", { path: '["result","value"]', maxIterations: 2, body: JSON.stringify(body) })];
+	graph.edges = [edge("start", "event", "loop")];
+	await save(graph);
+	const count = listTasks().length;
+	const preview = await run(graph, { input: ["first pass", "second pass"] });
+	expect(preview.ok).toBe(true);
+	expect(preview.nodes.find(node => node.nodeId === "loop")?.output).toEqual([{ port: "completed", value: { count: 2, completed: true } }]);
+	expect(listTasks()).toHaveLength(count);
+	const executed = await run(graph, { mode: "execute", input: ["first pass", "second pass"] });
+	expect(executed.ok).toBe(true);
+	expect(listTasks()).toHaveLength(count + 2);
+	expect(listTasks().filter(card => ["first pass", "second pass"].includes(card.title))).toHaveLength(2);
+});

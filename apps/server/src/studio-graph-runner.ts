@@ -21,6 +21,17 @@ function emit(port: string, value: unknown): GraphEmission[] {
 	return [{ port, value: { value } }];
 }
 function required(value: unknown, label: string): string { if (typeof value !== "string" || !value.trim()) throw new Error(`${label} is required.`); return value; }
+const nativeStudioTypes = new Set(["gate.if", "gate.compare", "gate.member", "operation.number", "operation.arithmetic", "iteration.each"]);
+function nativeConfig(node: StudioNode): GraphObject {
+	const config: GraphObject = {};
+	const keys = node.type === "iteration.each" ? ["path", "maxIterations", "body"] : node.type === "gate.compare" ? ["path", "operator", "right"] : node.type === "gate.member" ? ["path", "values"] : node.type === "operation.arithmetic" ? ["operator"] : ["path"];
+	for (const key of keys) {
+		const value = node.config[key];
+		config[key] = ["path", "body", "right", "values"].includes(key) && typeof value === "string" ? JSON.parse(value) : value as GraphValue;
+	}
+	return config;
+}
+function studioValue(result: GraphObject): GraphValue { return Object.hasOwn(result, "value") ? result.value! : result; }
 
 async function local(node: StudioNode, values: GraphValue[], options: StudioRunOptions, context: GraphNodeContext): Promise<GraphEmission[]> {
 	const value = values[0] ?? null, config = node.config;
@@ -116,11 +127,17 @@ export async function runStudioGraph(graph: StudioGraph, options: StudioRunOptio
 	if (mode === "execute" && disconnected.length) throw new StudioRunValidationError(disconnected.map(node => ({ nodeId: node.id, message: `Connect ${nodeLabel(node)} to a trigger before executing.` })));
 	const runId = crypto.randomUUID(), startedAt = new Date().toISOString();
 	const registry = new GraphNodeRegistry(), actions = new GraphNodeRegistry(); registerGraphActions(actions);
+	registerGraphActions(registry);
 	const skipped = new Map<string, string>();
-	const definition: RoutineGraph = { version: 2, nodes: [], edges: graph.edges.filter(edge => !disconnectedIds.has(edge.from.node) && !disconnectedIds.has(edge.to.node)).map(edge => ({ ...edge, from: { nodeId: edge.from.node, port: edge.from.port }, to: { nodeId: edge.to.node, port: edge.to.port } })), budget: { max_duration_secs: 120, max_steps_executed: graph.nodes.length } };
+	const definition: RoutineGraph = { version: 2, nodes: [], edges: graph.edges.filter(edge => !disconnectedIds.has(edge.from.node) && !disconnectedIds.has(edge.to.node)).map(edge => ({ ...edge, from: { nodeId: edge.from.node, port: edge.from.port }, to: { nodeId: edge.to.node, port: edge.to.port } })), budget: { max_duration_secs: 120, max_steps_executed: 10_000 } };
 	for (const [index, node] of graph.nodes.entries()) {
 		if (disconnectedIds.has(node.id)) continue;
 		const ports = nodePorts(node), source = isSource(graph, node);
+		if (nativeStudioTypes.has(node.type)) {
+			try { definition.nodes.push({ id: node.id, type: node.type, config: nativeConfig(node) }); }
+			catch (error) { throw new StudioRunValidationError([{ nodeId: node.id, message: `${nodeLabel(node)}: ${error instanceof Error ? error.message : String(error)}` }]); }
+			continue;
+		}
 		const type = `studio.${index}`;
 		definition.nodes.push({ id: node.id, type, config: { eventType: "manual" } });
 		registry.register({
@@ -128,7 +145,7 @@ export async function runStudioGraph(graph: StudioGraph, options: StudioRunOptio
 			execute: async context => {
 				const capability = studioNodeExecution(node.type);
 				if (capability !== "local" && mode === "preview") { skipped.set(node.id, "Not executed. Preview never sends inference requests or output actions."); return []; }
-				const values = context.inputs.map(input => input.output.result.value!);
+				const values = context.inputs.map(input => studioValue(input.output.result));
 				return capability === "action" ? action(node, values[0] ?? null, context, actions) : local(node, values, options, context);
 			},
 		});
@@ -154,7 +171,7 @@ export async function runStudioGraph(graph: StudioGraph, options: StudioRunOptio
 		ok: result.status === "success", trigger: mode === "preview" ? "Manual preview" : "Manual execution", mode,
 		nodes: [...result.nodeRuns.map(node => {
 			const original = authored.get(node.nodeId)!;
-			const output: unknown[] = node.outputs.map(output => ({ port: output.port, value: output.result.value }));
+			const output: unknown[] = node.outputs.map(output => ({ port: output.port, value: studioValue(output.result) }));
 			for (const effect of node.effects ?? []) output.push({ effect: effect.status, receipt: effect.receipt, destination: effect.destination });
 			return {
 				nodeId: node.nodeId, startedAt: node.startedAt ?? node.endedAt, endedAt: node.endedAt,

@@ -18,6 +18,7 @@ export type { ModelSelectorFacts, ModelSelectorItem, ModelSelectorResult } from 
 export { compileStructuredOutputSchema, validateRoutineSpec } from "./validate";
 export type { ValidationError, ValidationResult } from "./validate";
 export * from "./graph";
+export * from "./graph-builtins";
 export type { AgentTemplate, AgentTemplateInput, AgentInstance, AgentCapabilities } from "./agents";
 export { isGraphValue, validateRoutineGraph } from "./graph-validation";
 import type { RoutineGraph } from "./graph";
