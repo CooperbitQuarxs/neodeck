@@ -3,11 +3,11 @@
    edge to edge. The inspector docks beside the panel only while in use. */
 .neo-studio { display: flex; flex-direction: column; height: 100%; min-height: 0; padding: 14px 16px 16px; gap: 10px; }
 .neo-studio-bar { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px 12px; padding: 0 2px; }
-.neo-studio-ident { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 0; flex: 0 1 auto; }
+.neo-studio-ident { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 0; max-width: 100%; flex: 0 1 auto; }
 .neo-studio-back { display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; color: rgb(var(--ink-3)); padding: 2px 0; border-radius: var(--r-control); }
 .neo-studio-back:hover { color: rgb(var(--ink)); }
 .neo-studio-back:focus-visible { outline: 2px solid var(--neo-focus); outline-offset: 2px; }
-.neo-studio-title { display: flex; align-items: center; gap: 4px; min-width: 0; }
+.neo-studio-title { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; min-width: 0; max-width: 100%; }
 .neo-studio-title > svg { flex: none; color: rgb(var(--ink-3)); }
 .neo-studio-kind { font-size: 12.5px; color: rgb(var(--ink-3)); padding-right: 6px; }
 .neo-studio-name { min-width: 8ch; max-width: 40ch; height: 34px; font-size: 19px; font-weight: 600; letter-spacing: -0.015em; background: transparent; border: 1px solid transparent; border-radius: var(--r-control); padding: 0 6px; margin-left: -1px; color: rgb(var(--ink)); text-overflow: ellipsis; }
