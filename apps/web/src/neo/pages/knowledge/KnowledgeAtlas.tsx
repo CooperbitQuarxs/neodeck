@@ -12,7 +12,7 @@ export function KnowledgeAtlas({ graph, focus, onOpen }: { graph: KbGraphRespons
 	const matches = useMemo(() => (graph?.nodes ?? []).filter(node => (!directory || (node.dir || "(root)") === directory) && (!hideOrphans || node.inbound + node.outbound > 0) && `${node.title} ${node.path} ${node.tags.join(" ")}`.toLowerCase().includes(query.trim().toLowerCase())), [graph, directory, hideOrphans, query]);
 	return <section className="neo-knowledge-atlas" aria-label="Knowledge map">
 		<div className="neo-knowledge-atlas-toolbar">
-			<SearchInput value={query} onChange={setQuery} placeholder="Find a note on the map" aria-label="Find a note on the map" />
+			<SearchInput pageSearch value={query} onChange={setQuery} placeholder="Find a note on the map" aria-label="Find a note on the map" />
 			<label><input type="checkbox" checked={hideOrphans} onChange={event => setHideOrphans(event.target.checked)} /> Connected notes only</label>
 			<NeoButton size="sm" onClick={() => setFit(value => value + 1)}>Fit map</NeoButton>
 			<NeoLinkButton size="sm" variant="ghost" to={`/studio?graph=map${focus ? `&note=${encodeURIComponent(focus)}` : ""}`}>Open in Studio</NeoLinkButton>

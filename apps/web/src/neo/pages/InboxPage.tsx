@@ -69,7 +69,7 @@ export function InboxPage() {
 		<RoutingPanel routing={routing} error={routingError} retry={refresh} />
 		<div className="neo-inbox-body">
 			<aside className="neo-inbox-list" aria-label="Inbox items">
-				<div className="neo-inbox-list-head"><SearchInput value={search} onChange={setSearch} placeholder="Search the inbox" size="sm" aria-label="Search the inbox" /><Segmented label="Show" value={filter} onChange={setFilter} options={[
+				<div className="neo-inbox-list-head"><SearchInput pageSearch value={search} onChange={setSearch} placeholder="Search the inbox" size="sm" aria-label="Search the inbox" /><Segmented label="Show" value={filter} onChange={setFilter} options={[
 					{ value: "waiting", label: <>Waiting <span className="neo-num">{waiting}</span></> },
 					{ value: "all", label: "All" }, { value: "done", label: "Done" },
 				]} /></div>

@@ -63,12 +63,20 @@ test("backs up WAL, migrates companion files and rewrites only legacy-root paths
 		expect(output).toContain("Dry run");
 		expect(readdirSync(base)).not.toContain("new-deck");
 		await migrate(["--from", home, "--apply"], { NPI_DECK_HOME: target });
+		// The published snapshot must stand alone even on persistent-WAL SQLite.
+		const installedDb = path.join(target, "deck.db");
+		expect([...readFileSync(installedDb).subarray(18, 20)]).toEqual([1, 1]);
+		expect(existsSync(`${installedDb}-wal`)).toBe(false);
+		expect(existsSync(`${installedDb}-shm`)).toBe(false);
 		const migrated = new Database(path.join(target, "deck.db"), { readonly: true });
 		try {
 			expect(migrated.query("SELECT body, cwd FROM tasks WHERE id='t1'").get()).toEqual({ body: `![image](${target}/uploads/image.png) and /home/someone/wiki`, cwd: `${target}/routine-runs/run-1` });
 			expect(migrated.query("SELECT spec_yaml FROM routines WHERE id='r1'").get()).toEqual({ spec_yaml: `steps:\n  - file: ${target}/routine-runs/run-1/result.json\n` });
 			expect(migrated.query("SELECT body FROM inbox_items WHERE id='i1'").get()).toEqual({ body: `see ${target}/onboarding.json` });
 		} finally { migrated.close(); }
+		expect(existsSync(`${installedDb}-wal`)).toBe(false);
+		expect(existsSync(`${installedDb}-shm`)).toBe(false);
+		expect([...readFileSync(dbFile).subarray(18, 20)]).toEqual([2, 2]);
 		expect(readFileSync(path.join(target, "uploads", "image.png"), "utf8")).toBe("image bytes");
 		expect(readFileSync(path.join(target, "routine-runs", "run-1", "result.json"), "utf8")).toBe("result");
 		const settings = readManagedEnvFile(path.join(target, ".env")).values;

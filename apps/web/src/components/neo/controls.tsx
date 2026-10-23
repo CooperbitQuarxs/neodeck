@@ -5,8 +5,9 @@
  * need in the same measurements.
  */
 import { Search, X } from "lucide-react";
-import { type InputHTMLAttributes, type TextareaHTMLAttributes, type ReactNode, forwardRef, useId } from "react";
+import { type InputHTMLAttributes, type TextareaHTMLAttributes, type ReactNode, forwardRef, useId, useImperativeHandle, useRef } from "react";
 import { cn } from "@/lib/utils";
+import { usePageShortcuts } from "@/neo/shortcuts";
 import { NeoButton } from "./primitives";
 
 export interface SearchInputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, "onChange" | "value" | "size"> {
@@ -15,14 +16,19 @@ export interface SearchInputProps extends Omit<InputHTMLAttributes<HTMLInputElem
 	width?: number | string;
 	/** Compact 26 px variant for card headers. */
 	size?: "sm";
+	/** Register this field as the current page's `/` search target. */
+	pageSearch?: boolean;
 }
 
 /** Text filter with a leading search glyph and a clear button once there is text. */
-export const SearchInput = forwardRef<HTMLInputElement, SearchInputProps>(function SearchInput({ value, onChange, placeholder = "Filter…", width, size, className, ...rest }, ref) {
+export const SearchInput = forwardRef<HTMLInputElement, SearchInputProps>(function SearchInput({ value, onChange, placeholder = "Filter…", width, size, className, pageSearch = false, ...rest }, ref) {
+	const input = useRef<HTMLInputElement>(null);
+	useImperativeHandle(ref, () => input.current!, []);
+	usePageShortcuts({ search: input }, pageSearch);
 	return (
 		<label className={cn("neo-search", className)} style={width !== undefined ? { width } : undefined} data-size={size}>
 			<Search size={14} />
-			<input ref={ref} className="neo-input" type="search" value={value} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} data-size={size} {...rest} />
+			<input ref={input} className="neo-input" type="search" value={value} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} data-size={size} {...rest} />
 			{value !== "" && (
 				<button type="button" className="neo-search-clear" aria-label="Clear" onClick={() => onChange("")}>
 					<X size={12} />

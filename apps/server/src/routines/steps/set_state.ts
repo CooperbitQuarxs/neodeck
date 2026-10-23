@@ -25,6 +25,7 @@ export async function executeSetStateStep(
 			}
 		}
 		saveState(routineId, resolved);
+		Object.assign(context.state, resolved);
 		return {
 			status: "success",
 			stdoutExcerpt: `persisted ${Object.keys(resolved).length} key(s)`,

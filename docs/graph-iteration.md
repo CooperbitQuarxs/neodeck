@@ -61,7 +61,7 @@ A failure or abort emits no `completed` output. Completed passes, the interrupte
 - Run-wide duration, steps, input/output tokens and cost budgets apply across all bodies and passes. The iterator itself and every executed body source and body node count as steps. Skipped nodes do not. A cap is not reset when a pass starts.
 - Studio runs use one 120-second duration cap and a 10,000-step cap, including their iteration bodies.
 - The existing run cancellation signal reaches active body nodes. Cancellation or a budget stopping logical completion preserves completed-pass evidence and records an aborted run.
-- Actions include the full pass address in their durable operation identity. Two passes with the same action node ID are distinct operations; a retry of that same pass retains its identity.
+- Actions include the original trigger event type and full pass address in their durable operation identity. Identity keeps the ordinary explicit operation ID, event ID, then event.card.id precedence. Iteration does not require a new explicit operation ID: the executor retains the original activation separately from the current pass event. Two passes with the same action node ID are distinct operations; a retry of that same pass retains its identity.
 - Preview carries `dryRun` through every pass. Supported action nodes plan effects without dispatching or writing domain state. Studio's body registry has no inference executor. Explicit execution remains required for actions.
 
 Existing persisted-trace size and privacy bounds still apply. Iteration does not remove those limits or invent missing work when a trace is too large to persist.

@@ -163,7 +163,7 @@ function StudioEditor({ requested }: { requested: string }) {
     <div className="neo-studio-title"><KindIcon size={16} aria-hidden="true" /><input className="neo-studio-name" aria-label="Graph name" value={title} readOnly={Boolean(trace) || isMap || loading || (!flow && !graph)} onChange={event => rename(event.target.value)} size={Math.max(6, Math.min(40, title.length))} />{isMap ? null : <span className="neo-studio-kind">{KIND_LABELS[kind]}</span>}{!isMap && !flow ? <PreviewChip domains={[router ? "studioRouters" : "studioGraphs"]} what={router ? "This router" : "This graph"} /> : null}</div>
    </div>
    {isMap ? <div className="neo-studio-bar-tools">
-    <SearchInput size="sm" value={mapSearch} onChange={setMapSearch} placeholder="Search notes on the map" aria-label="Search notes on the map" width={260} />
+    <SearchInput pageSearch size="sm" value={mapSearch} onChange={setMapSearch} placeholder="Search notes on the map" aria-label="Search notes on the map" width={260} />
     <Check checked={hideOrphans} onChange={setHideOrphans}>Hide unlinked notes</Check>
     <Link className="neo-btn" data-size="sm" to="/knowledge?view=map"><MapIcon size={13} />Open in Knowledge</Link>
    </div> : <>

@@ -42,7 +42,6 @@
 .neo-board-markdown-editor { border: 1px solid var(--neo-line-2); border-radius: var(--r-control); background: var(--neo-card); padding: 12px; }
 .neo-board-markdown-editor textarea { font-size: 13px; }
 .neo-board-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
-.neo-board-drawer-footer { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px; width: 100%; }
 .neo-board-run { display: flex; flex-direction: column; gap: 10px; }
 .neo-board-model { color: rgb(var(--ink-3)); font-size: 12px; overflow-wrap: anywhere; }
 .neo-board-since { font-size: 11.5px; color: rgb(var(--ink-3)); }
