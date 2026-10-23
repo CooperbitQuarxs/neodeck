@@ -6,6 +6,7 @@ All notable changes to NPI deck (a fork of bjb2/omp-deck; entries before the for
 ## [Unreleased]
 
 ### Changed
+- Page changes now move keyboard focus into the new content, including after mobile navigation closes. The advertised G G chord opens GitHub instead of re-arming navigation ([#288](https://github.com/PsychedelicShayna/neodeck/issues/288)). GPT-6.1 Sol on behalf of PsychedelicShayna.
 
 - Telegram setup now lives in Integrations, with masked bot credentials, one-use account pairing, per-chat thread and intake choices, polling status, and opt-in needs-you notifications. Streaming replies and inbox capture use the existing live bridge; plan proposals are no longer automatically rejected. Bridge restarts retain the replacement process when an older exit callback arrives late ([#282](https://github.com/PsychedelicShayna/neodeck/pull/282), GPT-6 Astra on behalf of PsychedelicShayna).
 - Inbox capture now has a docked multiline composer with image attachments and Ctrl/Cmd+Enter. Routing names the actual handler and subscribed flows, and every item shows durable board or GitHub filing receipts and routine delivery history. GitHub filing reuses the existing reconciled issue action and has a write-free preview. Unavailable model classification and agent-only destinations are explained instead of reporting preview success. Related to [#237](https://github.com/PsychedelicShayna/neodeck/issues/237).

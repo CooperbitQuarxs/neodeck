@@ -26,6 +26,7 @@ export function Shell() {
 	const navRef = useRef<HTMLElement>(null);
 	const mainRef = useRef<HTMLElement>(null);
 	const dockRef = useRef<HTMLElement>(null);
+	const focusedPath = useRef(location.pathname);
 	useEffect(() => {
 		const media = window.matchMedia("(max-width: 899px)");
 		const update = () => { setMobile(media.matches); setNavOpen(false); };
@@ -63,6 +64,11 @@ export function Shell() {
 	}, [mobile, navOpen]);
 	useJumpShortcuts();
 	useEffect(() => setNavOpen(false), [location.pathname]);
+	useEffect(() => {
+		if (focusedPath.current === location.pathname || (mobile && navOpen)) return;
+		focusedPath.current = location.pathname;
+		mainRef.current?.focus();
+	}, [location.pathname, mobile, navOpen]);
 	useEffect(() => {
 		function onKey(e: KeyboardEvent): void {
 			if (e.key === "Escape") setNavOpen(false);
@@ -107,7 +113,7 @@ export function Shell() {
 					<SideNav />
 				</nav>
 
-				<main ref={mainRef} id="deck-content" className="neo-panel">
+				<main ref={mainRef} id="deck-content" className="neo-panel" tabIndex={-1}>
 					<div className="relative flex min-w-0 flex-1 flex-col">
 						<Outlet />
 					</div>
@@ -218,10 +224,6 @@ function useJumpShortcuts(): void {
 				return;
 			}
 			const now = Date.now();
-			if (e.key === "g" || e.key === "G") {
-				armed = now;
-				return;
-			}
 			if (armed && now - armed < 1200) {
 				const item = NAV_ITEMS.find((i) => i.hotkey === e.key.toLowerCase());
 				armed = 0;
@@ -229,6 +231,11 @@ function useJumpShortcuts(): void {
 					e.preventDefault();
 					navigate(item.to);
 				}
+				return;
+			}
+			if (e.key === "g" || e.key === "G") {
+				armed = now;
+				return;
 			}
 		}
 		window.addEventListener("keydown", onKey);
