@@ -402,6 +402,36 @@ await check("sessions: create, list", ["createAgentSession", "SessionManager"], 
 	return `session ${sessionB.sessionId} persisted and listed`;
 });
 
+await check("model selector: native search and CLI resolution agree without selecting or persisting", [
+	"resolveCliModel", "getRpcModelSelector", "queryModelSelector", "createModelBrowserSource",
+], async () => {
+	assert(sessionB && cheapModel, "no session / fixture model");
+	const selector = `${cheapModel.provider}/${cheapModel.id}`;
+	const settings = await core.Settings.loadReadOnly({ cwd: rootB, agentDir });
+	settings.overrideModelRoles({ default: selector });
+	const configPath = path.join(agentDir, "config.yml");
+	const before = await Bun.file(configPath).exists() ? await Bun.file(configPath).text() : undefined;
+	const search = feature("model-selector");
+	const source = search.createModelBrowserSource(settings);
+	const result = search.queryModelSelector(source, registry, [], cheapModel.id);
+	assert(result.error === null && result.items.some(item => item.selector === selector), `native search omitted ${selector}: ${result.error}`);
+	const role = search.queryModelSelector(source, registry, [], "@default").roles.find(item => item.selector === "@default");
+	assert(role?.resolvedSelector === selector, `native role resolved to ${role?.resolvedSelector}`);
+	const resolve = feature("model-selection").resolveCliModel;
+	for (const cliModel of [selector, "@default"]) {
+		const resolved = resolve({ cliModel, modelRegistry: registry, settings });
+		assert(!resolved.error && resolved.model?.provider === cheapModel.provider && resolved.model.id === cheapModel.id,
+			`CLI selector ${cliModel} disagrees with native search: ${resolved.error}`);
+	}
+	const selected = sessionB.model;
+	const live = await search.getRpcModelSelector(sessionB, cheapModel.id);
+	assert(live.error === null && live.items.some(item => item.selector === selector), `session search omitted ${selector}: ${live.error}`);
+	assert(sessionB.model === selected, "search selected a different session model");
+	const after = await Bun.file(configPath).exists() ? await Bun.file(configPath).text() : undefined;
+	assert(before === after, "search or CLI resolution persisted settings");
+	return `standalone and live search list ${selector}; @default resolves through native search and CLI; model and config unchanged`;
+});
+
 await check("multi-root: duplicate root identity leaves original registered", ["AgentIdConflictError"], async () => {
 	assert(sessionB, "no root session");
 	const existing = subagents.AgentRegistry.global().get("Contract-root-b");

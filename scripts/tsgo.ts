@@ -1,9 +1,9 @@
 #!/usr/bin/env bun
 /**
- * Run the NeoPi tree's own `tsgo` with the given arguments. The server's
- * program includes NeoPi's .ts sources, so it is checked with the compiler
- * that tree is developed against. The tree is the one tsconfig.neopi.json
- * extends (written by scripts/neopi-setup.ts).
+ * Run the NeoPi tree's own `tsgo` with the given arguments. The server and
+ * Telegram bridge include NeoPi's .ts sources, so both use the compiler that
+ * tree is developed against. The tree is the one tsconfig.neopi.json extends
+ * (written by scripts/neopi-setup.ts).
  *
  *   bun scripts/tsgo.ts --noEmit -p apps/server
  */
