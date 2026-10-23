@@ -109,6 +109,7 @@ All notable changes to NPI deck (a fork of bjb2/omp-deck; entries before the for
 
 ### Fixed
 
+- Legacy migration publishes self-contained SQLite snapshots instead of WAL-mode main files without their staging sidecars, so macOS readonly opens can read every migrated row. Source writers remain untouched, and staged statements finalize before publication. GPT-6.1 Sol, [#150](https://github.com/PsychedelicShayna/neodeck/issues/150).
 - Knowledge history Git commands now use the owned-process lifecycle, retain their timeout and output limits, and cannot outlive the server through an untracked child process. GPT-6.1 Sol, [#290](https://github.com/PsychedelicShayna/neodeck/issues/290).
 - Read-only card workers start when temporary runtime or worktree paths have symlinked parents. Bubblewrap mounts the same directories by their canonical paths, retaining read-only host access and the existing namespace isolation ([#273](https://github.com/PsychedelicShayna/neodeck/issues/273)).
 - Inbox compose slips focus the title first and keep empty notes ready to edit when switching fields ([#244](https://github.com/PsychedelicShayna/neodeck/issues/244)).
