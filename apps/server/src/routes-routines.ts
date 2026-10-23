@@ -5,6 +5,8 @@ import { parse as parseYaml } from "yaml";
 
 import type {
 	CreateRoutineRequest,
+	GraphActivation,
+	GraphRunRecord,
 	ListRoutineRunsResponse,
 	ListRoutineStepRunsResponse,
 	ListRoutinesResponse,
@@ -12,7 +14,7 @@ import type {
 	RoutineWebhookStatus,
 	UpdateRoutineRequest,
 } from "@npi-deck/protocol";
-import { validateRoutineSpec } from "@npi-deck/protocol";
+import { isGraphValue, validateRoutineSpec } from "@npi-deck/protocol";
 
 import { logger } from "./log.ts";
 import {
@@ -22,6 +24,8 @@ import {
 	deleteRoutine,
 	getRoutine,
 	getGraphRun,
+	getRun,
+	encodeGraphTrace,
 	listRoutines,
 	listRuns,
 	updateRoutine,
@@ -39,6 +43,7 @@ import {
 } from "./db/routine-step-runs.ts";
 import type { RoutinesRunner } from "./routines-runner.ts";
 import { listTemplates, loadTemplate } from "./routines/templates.ts";
+import { executeGraph, GraphValidationError } from "./routines/graph-runner.ts";
 import { exportRoutineMigration, inspectRoutineMigrations, migrateRoutines, restoreRoutineDefinition } from "./routines/graph-migration.ts";
 import { graphWebhookPath } from "./routines/graph-triggers.ts";
 
@@ -279,6 +284,38 @@ export function buildRoutinesRouter(runner: RoutinesRunner): Hono {
 		return c.json({ ok });
 	});
 
+	/** Simulations return a transient trace without admission, journal or domain writes. */
+	app.post("/routines/:id/preview", async (c) => {
+		const routine = getRoutine(c.req.param("id"));
+		if (!routine) return c.json({ error: "not found" }, 404);
+		if (routine.specVersion !== 2 || !routine.graph) return c.json({ error: "native graph required for write-free preview" }, 400);
+		const validation = runner.graphRegistry.validate(routine.graph);
+		if (!validation.valid) return c.json({ error: "invalid graph", details: validation.errors }, 400);
+		let body: unknown;
+		try { body = await c.req.json(); } catch { return c.json({ error: "invalid json" }, 400); }
+		if (!isGraphValue(body) || !body || typeof body !== "object" || Array.isArray(body)) return c.json({ error: "preview activation must be an object" }, 400);
+		if (body.operationId !== undefined && (typeof body.operationId !== "string" || !body.operationId.trim())) return c.json({ error: "operationId must be a nonempty string" }, 400);
+		const id = crypto.randomUUID(), startedAt = new Date().toISOString();
+		const activation: GraphActivation = Object.keys(body).length ? {
+			...body as unknown as GraphActivation, operationId: body.operationId as string | undefined ?? id,
+		} : { eventType: "manual", event: { id }, operationId: id };
+		const graph = structuredClone(routine.graph);
+		graph.budget = { ...graph.budget,
+			max_duration_secs: Math.min(graph.budget?.max_duration_secs ?? 120, 120),
+			max_steps_executed: Math.min(graph.budget?.max_steps_executed ?? 10_000, 10_000),
+		};
+		try {
+			const result = await executeGraph(graph, activation, runner.graphRegistry, {
+				runId: id, routineId: routine.id, dryRun: true, signal: AbortSignal.timeout(120_000),
+			});
+			const trace: GraphRunRecord = { ...result, id, routineId: routine.id, startedAt,
+				endedAt: new Date().toISOString(), graph, activation, dryRun: true };
+			return c.body(encodeGraphTrace(trace), 200, { "content-type": "application/json" });
+		} catch (error) {
+			return c.json({ error: String(error), ...(error instanceof GraphValidationError ? { details: error.errors } : {}) }, 400);
+		}
+	});
+
 	app.post("/routines/:id/run", async (c) => {
 		const id = c.req.param("id");
 		const r = getRoutine(id);
@@ -315,6 +352,12 @@ export function buildRoutinesRouter(runner: RoutinesRunner): Hono {
 		const limit = Number(c.req.query("limit") ?? "20");
 		const body: ListRoutineRunsResponse = { runs: listRuns(id, limit) };
 		return c.json(body);
+	});
+
+	app.get("/routines/:id/runs/:runId", (c) => {
+		const run = getRun(c.req.param("runId"));
+		if (!run || run.routineId !== c.req.param("id")) return c.json({ error: "not found" }, 404);
+		return c.json(run);
 	});
 
 	app.get("/routines/:id/runs/:runId/steps", (c) => {

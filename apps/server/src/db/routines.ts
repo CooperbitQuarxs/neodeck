@@ -527,7 +527,7 @@ class GraphTraceLimitError extends Error {
 }
 
 /** Redact user data during serialization, without copying or changing live envelopes. */
-function encodeGraphTrace(record: GraphRunRecord): string {
+export function encodeGraphTrace(record: GraphRunRecord): string {
 	const ancestors: object[] = [];
 	const payloadScopes: boolean[] = [];
 	let bytes = 0;

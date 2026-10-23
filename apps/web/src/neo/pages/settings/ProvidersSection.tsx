@@ -60,7 +60,7 @@ export function ProvidersSection({ admin }: { admin: boolean }) {
  return <Card id="providers" title="Inference providers" description="Credentials used by the connected NeoPi runtime, separate from Deck sign-in and NeoProxy accounts.">
   <div className="neo-settings-stack">
    {notice && <Notice>{notice}</Notice>}
-   <SearchInput value={query} onChange={setQuery} placeholder="Find an inference provider" aria-label="Find an inference provider" />
+   <SearchInput pageSearch value={query} onChange={setQuery} placeholder="Find an inference provider" aria-label="Find an inference provider" />
    <div className="neo-settings-provider-list">
     {visible.map(provider => <div className="neo-settings-provider" key={provider.id} data-configured={configured(provider)}>
      <div className="neo-settings-provider-identity">

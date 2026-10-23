@@ -24,6 +24,8 @@ export interface GraphNodeContext {
 	node: GraphNode;
 	inputs: GraphNodeInput[];
 	activation: GraphActivation;
+	/** Original trigger, unchanged when activation describes an iteration pass. */
+	rootActivation?: GraphActivation;
 	signal: AbortSignal;
 	runId: string;
 	routineId?: string;
@@ -201,6 +203,7 @@ export async function executeGraph(graph: RoutineGraph, activation: GraphActivat
 	if (!routineMode && graph.budget?.max_duration_secs !== undefined) scheduleDeadline();
 	const runId = options.runId ?? crypto.randomUUID();
 	const runBudget = graph.budget;
+	const rootActivation = activation;
 	const runScope = async (graph: RoutineGraph, activation: GraphActivation, sourceInputs: GraphOutput[] = [], iteration: GraphIterationAddress[] = []): Promise<Pick<GraphExecutionResult, "status" | "nodeRuns" | "outputs">> => {
 	const nodeRuns: GraphNodeRun[] = [], outputs: GraphOutput[] = [];
 	const incoming = new Map<string, RoutineGraph["edges"]>();
@@ -253,7 +256,7 @@ export async function executeGraph(graph: RoutineGraph, activation: GraphActivat
 							for (const input of values) if (!valueMatches(emittedValues.get(input.output)!, port.type)) throw new Error(`Input port ${port.id} expected ${port.type}`);
 						}
 						const context: GraphNodeContext = {
-							node, inputs, activation, signal: controller.signal, runId, iteration, priorNodeRuns: nodeRuns,
+							node, inputs, activation, rootActivation, signal: controller.signal, runId, iteration, priorNodeRuns: nodeRuns,
 							routineId: options.routineId, dryRun: options.dryRun === true,
 							startedAt,
 							remainingDurationMs: () => runBudget?.max_duration_secs === undefined ? Infinity : state.startedAtMs + runBudget.max_duration_secs * 1000 - Date.now(),

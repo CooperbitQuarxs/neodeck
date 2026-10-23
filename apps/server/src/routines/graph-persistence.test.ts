@@ -753,3 +753,58 @@ test("production iteration gates persist distinct passes and the executed snapsh
 	expect(findGraphOutput(persisted.nodeRuns[1]!.outputs[0]!, "gate", undefined, [{ nodeId: "loop", index: 1 }])?.result).toEqual({ value: true });
 	expect(persisted.nodeRuns[1]!.passes).toEqual(loop.passes);
 });
+
+test("native preview returns real per-pass provenance and planned actions without database writes", async () => {
+	const run = setup(), api = buildRoutinesRouter(run), native = graph("inbox.card_added");
+	const body: GraphObject = { version: 2, nodes: [
+		{ id: "item", type: "iteration.input", config: { eventType: "iteration" } },
+		{ id: "gate", type: "gate.if", config: { path: ["result", "item"] } },
+		{ id: "card", type: "action.create-card", config: { request: { title: "Preview only", body: "Never written" } } },
+	], edges: [
+		{ id: "item-gate", from: { nodeId: "item", port: "item" }, to: { nodeId: "gate", port: "input" } },
+		{ id: "gate-card", from: { nodeId: "gate", port: "true" }, to: { nodeId: "card", port: "in" } },
+	] };
+	native.nodes.push({ id: "loop", type: "iteration.each", config: { path: ["result", "items"], maxIterations: 3, body } });
+	connect(native, "source-loop", "source", "loop", "event", "input");
+	const saved = createGraphRoutine({ name: "write-free preview", graph: native, enabled: false }, run.graphRegistry);
+	const changes = () => getDb().query<{ count: number }, []>("SELECT total_changes() AS count").get()!.count;
+	const before = changes(), beforeRoutine = getRoutine(saved.id);
+	const event = { id: "preview-event", items: ["truthy-not-true", true, 0], token: "do-not-disclose" };
+	const response = await api.request(`/routines/${saved.id}/preview`, request({
+		eventType: "inbox.card_added", event, sourceNodeId: "source",
+	}));
+	expect(response.status).toBe(200);
+	const trace = await response.json() as GraphRunRecord;
+	expect(trace).toMatchObject({ status: "success", dryRun: true, routineId: saved.id, graph: native });
+	expect(trace.graph.budget).toEqual({ max_duration_secs: 120, max_steps_executed: 10_000 });
+	const passes = trace.nodeRuns[1]!.passes!;
+	expect(passes).toHaveLength(3);
+	expect(passes.map(pass => pass.nodeRuns[1]!.outputs[0]!.result)).toEqual([
+		{ value: "truthy-not-true" }, { value: true }, { value: 0 },
+	]);
+	expect(passes[0]!.nodeRuns[2]!.effects?.[0]?.status).toBe("planned");
+	expect(passes[1]!.nodeRuns[2]!.effects?.[0]?.status).toBe("planned");
+	expect(passes[2]!.nodeRuns[2]!.status).toBe("skipped");
+	expect(JSON.stringify(trace)).not.toContain("do-not-disclose");
+	expect(listRuns(saved.id)).toEqual([]);
+	expect(getRoutine(saved.id)).toEqual(beforeRoutine);
+	expect(changes()).toBe(before);
+	expect((await api.request(`/routines/${saved.id}/preview`, request({ eventType: "inbox.card_added", event: {}, sourceNodeId: "missing" }))).status).toBe(400);
+});
+
+test("requested historical run lookup is independent of summary limits and checks routine ownership", async () => {
+	const run = setup(), api = buildRoutinesRouter(run);
+	const saved = createGraphRoutine({ name: "history", graph: graph() }, run.graphRegistry);
+	const other = createGraphRoutine({ name: "other", graph: graph() }, run.graphRegistry);
+	const oldest = startRun(saved.id, "manual");
+	for (let index = 0; index < 55; index++) {
+		const record = startRun(saved.id, "manual");
+		getDb().query("UPDATE routine_runs SET started_at = ? WHERE id = ?").run(`2099-01-01T00:00:${String(index).padStart(2, "0")}.000Z`, record.id);
+	}
+	expect(listRuns(saved.id, 50).some(record => record.id === oldest.id)).toBe(false);
+	const response = await api.request(`/routines/${saved.id}/runs/${oldest.id}`);
+	expect(response.status).toBe(200);
+	expect(await response.json()).toEqual(oldest);
+	expect((await api.request(`/routines/${other.id}/runs/${oldest.id}`)).status).toBe(404);
+	expect((await api.request(`/routines/${saved.id}/runs/missing`)).status).toBe(404);
+});

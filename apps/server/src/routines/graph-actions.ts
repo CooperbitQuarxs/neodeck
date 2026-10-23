@@ -44,11 +44,12 @@ export function resolveGraphActionValue(value: GraphValue, context: GraphNodeCon
 	return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, resolveGraphActionValue(item, context)]));
 }
 function identity(context: GraphNodeContext): string {
-	const explicit = context.node.config.operationId === undefined ? context.activation.operationId : resolveGraphActionValue(context.node.config.operationId, context);
-	const event = Array.isArray(context.activation.event) ? undefined : context.activation.event;
+	const activation = context.rootActivation ?? context.activation;
+	const explicit = context.node.config.operationId === undefined ? activation.operationId : resolveGraphActionValue(context.node.config.operationId, context);
+	const event = Array.isArray(activation.event) ? undefined : activation.event;
 	const card = event?.card;
 	const originalId = explicit ?? event?.id ?? (card && typeof card === "object" && !Array.isArray(card) ? card.id : undefined);
-	return graphDigest({ routine: text(context.routineId, "routineId"), node: context.node.id, eventType: context.activation.eventType, operation: text(originalId, "event.id or operationId"), ...(context.iteration?.length ? { iteration: context.iteration } : {}) });
+	return graphDigest({ routine: text(context.routineId, "routineId"), node: context.node.id, eventType: activation.eventType, operation: text(originalId, "event.id or operationId"), ...(context.iteration?.length ? { iteration: context.iteration } : {}) });
 }
 function effectValue(effect: GraphEffect): GraphObject {
 	// Downstream bindings see the same privacy-safe receipt before and after replay.

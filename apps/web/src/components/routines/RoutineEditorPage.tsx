@@ -30,7 +30,7 @@ export function RoutineEditorPage({ routine, onSaved, onDeleted }: Props) {
 			<header className="neo-page-header shrink-0 !pb-3">
 				<div className="min-w-0">
 					<h1 className="neo-page-title">{isNew ? "New routine" : routine.name}</h1>
-					<p className="neo-page-description">{isNew ? "Choose what happens and when. Arrange it on the canvas." : routine.description || "No description yet."}</p>
+					<p className="neo-page-description">{isNew ? "Start with an event source. Connect the values each node receives." : routine.description || "No description yet."}</p>
 				</div>
 				{!isNew ? (
 					<div className="neo-page-actions">
@@ -43,9 +43,7 @@ export function RoutineEditorPage({ routine, onSaved, onDeleted }: Props) {
 			</header>
 			{error ? <div role="alert" className="mb-3 rounded-[var(--r-control)] border border-danger/30 bg-[var(--neo-bad-soft)] px-3 py-2 text-[12.5px] text-danger">{error}</div> : null}
 			<div className="flex min-h-0 flex-1 flex-col">
-				{!isNew && routine.specVersion === 2 ? (
-					<p className="px-1 py-3 text-[13.5px] text-ink-2">This routine executes a native graph. Its definition is managed through the routine API, not this editor.</p>
-				) : <RoutineBuilder routine={isNew ? undefined : routine} onSaved={(saved) => { setError(undefined); onSaved(saved); }} onError={setError} />}
+				<RoutineBuilder routine={isNew ? undefined : routine} onSaved={(saved) => { setError(undefined); onSaved(saved); }} onError={setError} />
 			</div>
 		</div>
 	);
