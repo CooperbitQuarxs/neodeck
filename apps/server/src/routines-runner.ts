@@ -37,6 +37,7 @@ import { workRegistry } from "./work-registry.ts";
 import { executeGraph, GraphNodeRegistry } from "./routines/graph-runner.ts";
 import { admitInboxGraphEvent, discardInboxGraphEvent, inboxGraphEventsFor, pendingInboxGraphEvents, recoverInboxGraphEvents, subscribeInboxGraphEvents } from "./db/inbox-graph-events.ts";
 import { registerGraphActions } from "./routines/graph-actions.ts";
+import { registerGraphStepNodes } from "./routines/graph-step-nodes.ts";
 
 const log = logger("routines-runner");
 
@@ -68,6 +69,7 @@ export class RoutinesRunner {
 	readonly graphRegistry = new GraphNodeRegistry();
 	constructor(private readonly agentCommand: () => string[] = () => routineAgentCommand([])) {
 		registerGraphActions(this.graphRegistry);
+		registerGraphStepNodes(this.graphRegistry);
 	}
 	get busy(): boolean { return this.runs.size > 0; }
 	get workSnapshot(): Array<{ runId: string; routineId: string }> {

@@ -168,6 +168,75 @@ On first boot against an empty `tasks` table the deck seeds a single
 "Welcome to npi-deck" backlog task — see `apps/server/src/db/index.ts`
 `seedWelcomeTaskIfEmpty`.
 
+### One-shot routine conversion
+
+`GET /api/routine-migrations` inventories raw database columns and YAML, not
+the normalized routine reader. `POST /api/routine-migrations/:id` explicitly
+converts one supported original in place. Neither listing, server startup nor
+conversion invokes an action. Active or queued routine work blocks the API
+operation. A blocked original remains enabled or disabled exactly as it was.
+
+Before the first changed row, conversion serializes the complete SQLite
+database, including committed WAL pages, into `routine-migration-backups`
+beside the configured database. The directory is owner-only and snapshots
+are mode 0600. A temporary file, file fsync, rename and directory fsync publish
+the snapshot before any definition changes. Backups contain credentials and
+must not be attached to issues, ordinary reports or exports.
+
+The `routine_graph_conversions` journal saves the raw row, converted graph,
+source digest and backup path in the same transaction as the definition.
+Routine ids, enabled state, timestamps, schedules, state, credential
+registrations and historical relationships are not rewritten. A converted
+row has `spec_version=2`, `graph_json` populated and `spec_yaml=NULL`. Execution
+never consults the original backup. Repeating conversion after restart is a
+no-op for a native row.
+
+Reports identify each original by digest and exact field path without
+including its value. Supported fields have a native configuration or
+unchanged metadata mapping. Informational state declarations and visual
+legacy edges remain in the protected original. Those visual edges do not
+become executable connections. Semantic export does not reproduce YAML
+comments, anchors, formatting or key order, which the report names as a
+syntax loss. The raw snapshot retains them exactly.
+
+The current safe subset is V1, manual and cron triggers, with straight-line
+`run`, `write`, `http`, `deck`, `mcp`, `transform`, `wait` and `set_state` actions.
+The production registry validates every mapped `step.*` node against the
+existing action schema. Unknown step fields are refused rather than dropped.
+Common action handlers retain interpolation, bounded expressions, filesystem
+and transport behavior. Actual returned values and recursive input envelopes
+use native graph outputs. Diagnostics retain the legacy `steps.<id>` context.
+Disabled routines still allow explicit manual runs, as before.
+
+Conversion deliberately blocks V0 actions, agent steps, `when`, retry and
+continued-failure controls, nonempty execution budgets, webhook registrations
+and event triggers, manual parameter schemas, duplicate ids, malformed or
+divergent raw mirrors and ambiguous write cwd overrides. These require
+additional native behavior, not a hidden YAML execution adapter. The bundled
+daily briefing and census templates currently contain blocked features.
+Timeouts and failures have native trace records; their legacy run-aggregate
+cause and per-attempt presentation are not a completed compatibility contract.
+MCP schemas/configs can migrate, but live MCP equivalence is not established
+by the conversion tests.
+
+`GET /api/routine-migrations/:id/:sourceDigest/export` returns the original's
+semantic YAML for one-shot round trips, only while its native definition is
+unchanged. It is not an authoring source. `POST
+/api/routine-migrations/:id/:sourceDigest/restore` restores that definition,
+refusing later native or metadata edits. State and history remain as they
+are; restoration never claims to undo external actions. For a complete
+point-in-time rollback, stop the server, preserve the current database and
+its WAL/SHM files separately, replace the database with the protected snapshot
+and remove the old WAL/SHM files before restarting. A full rollback also
+rewinds unrelated database changes since the snapshot.
+
+This is not the completed #163 cutover. V0/V1 readers and YAML authoring,
+templates, the old builder/compiler and legacy runtime dispatch still serve
+unconverted callers and rows. They must be removed only after that dependency
+count reaches zero. Studio TOML documents in `studio_graphs` are a distinct
+model; conversion here targets the executable `/api/routines` native graph,
+not a lossy copy into Studio.
+
 ## Native routine graphs
 
 `packages/protocol/src/graph.ts` owns the shared V2 contracts. A `RoutineGraph`
