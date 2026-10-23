@@ -6,6 +6,7 @@ All notable changes to NPI deck (a fork of bjb2/omp-deck; entries before the for
 ## [Unreleased]
 
 ### Changed
+- Routine conversion now preserves native condition skips, retries, continued failures, per-attempt budgets, signed webhook admission, manual schema declarations and generic event admission. Non-agent V0 processes also convert without changing argv or interpolation. The bundled census is convertible; agent routines and ambiguous originals stay blocked with field-level reasons. Backups, idempotency and guarded restoration remain mandatory. Part of [#163](https://github.com/PsychedelicShayna/neodeck/issues/163). GPT-6.1 Sol.
 - Studio keeps graph kind and preview status visible when its title wraps on narrow canvases. Its empty map directs you to ask an agent for a note, matching Knowledge's agent-authored workflow ([#305](https://github.com/PsychedelicShayna/neodeck/issues/305)). GPT-6.1 Sol on behalf of PsychedelicShayna.
 - Fixed settings choices now stay visible as segments: account access, MCP scope and transport, dictation engine and language, and record entry type. Disabled groups keep their keyboard and pointer actions disabled ([#299](https://github.com/PsychedelicShayna/neodeck/issues/299)). GPT-6.1 Sol on behalf of PsychedelicShayna.
 - Page changes now move keyboard focus into the new content, including after mobile navigation closes. The advertised G G chord opens GitHub instead of re-arming navigation ([#288](https://github.com/PsychedelicShayna/neodeck/issues/288)). GPT-6.1 Sol on behalf of PsychedelicShayna.
