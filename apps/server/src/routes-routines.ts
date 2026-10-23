@@ -246,10 +246,11 @@ export function buildRoutinesRouter(runner: RoutinesRunner): Hono {
 		let body: unknown;
 		try { body = await c.req.json(); } catch { return c.json({ error: "invalid json" }, 400); }
 		if (!isGraphValue(body) || !body || typeof body !== "object" || Array.isArray(body)) return c.json({ error: "preview activation must be an object" }, 400);
-		const activation = Object.keys(body).length ? body as unknown as GraphActivation : {
-			eventType: "manual", event: { id: crypto.randomUUID() },
-		};
+		if (body.operationId !== undefined && (typeof body.operationId !== "string" || !body.operationId.trim())) return c.json({ error: "operationId must be a nonempty string" }, 400);
 		const id = crypto.randomUUID(), startedAt = new Date().toISOString();
+		const activation: GraphActivation = Object.keys(body).length ? {
+			...body as unknown as GraphActivation, operationId: body.operationId as string | undefined ?? id,
+		} : { eventType: "manual", event: { id }, operationId: id };
 		const graph = structuredClone(routine.graph);
 		graph.budget = { ...graph.budget,
 			max_duration_secs: Math.min(graph.budget?.max_duration_secs ?? 120, 120),
