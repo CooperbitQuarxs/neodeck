@@ -11,13 +11,14 @@ import type { ListTasksResponse, Task } from "@npi-deck/protocol";
 
 import { closeDb, getDb, openDb } from "./db/index.ts";
 import { buildTasksRouter } from "./routes-tasks.ts";
+import { removeTestPath } from "./test-cleanup.ts";
 
 let dbDir: string | null = null;
 
 afterEach(() => {
 	closeDb();
 	if (dbDir) {
-		fs.rmSync(dbDir, { recursive: true, force: true });
+		removeTestPath(dbDir);
 		dbDir = null;
 	}
 });
