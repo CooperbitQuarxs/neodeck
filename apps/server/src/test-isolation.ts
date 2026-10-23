@@ -76,8 +76,8 @@ export function runIsolatedCase(
 		// The private worker has exited and both streams are drained before removal.
 		try { fs.rmSync(root, { recursive: true, force: true }); }
 		catch (error) {
-			if (result) throw new AggregateError([new Error(`Isolated worker exited ${result.exitCode}\n${result.output}`), error],
-				"Isolated worker fixture cleanup failed");
+			if (result) throw new AggregateError([error],
+				`Isolated worker fixture cleanup failed after exit ${result.exitCode}: ${String(error)}\n${result.output}`);
 			throw error;
 		}
 	}

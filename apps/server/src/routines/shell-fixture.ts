@@ -30,7 +30,7 @@ export function shellFixtureCommand(
 		const command = [runtime, script, mode, encoded].map(arg => `"${arg}"`).join(" ");
 		const release = [runtime, script, "release", encoded].map(arg => `"${arg}"`).join(" ");
 		const body = mode === "tree" && config.leaderExits
-			? `start "" /b ${command}\r\n${release}\r\nexit /b 0`
+			? `start "" /b ${command}\r\n${release}\r\nexit 0`
 			: command + (renderedValue === undefined ? "" : ' "%*"');
 		fs.writeFileSync(path.join(path.dirname(script), launcher), `@echo off\r\n${body}\r\n`);
 		// Rendered fixture values are controlled literals/templates, not shell input.

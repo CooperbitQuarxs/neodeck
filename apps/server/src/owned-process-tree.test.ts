@@ -29,11 +29,16 @@ for (const leaderExits of [false, true]) {
 				const stderr = new Response(proc.stderr).text();
 				const control = unrelatedProcess();
 				let tree: Awaited<ReturnType<typeof observeProcessTree>> | undefined;
+				let observation: ReturnType<typeof setTimeout> | undefined;
 				try {
 					tree = await observeProcessTree(marker);
 					if (leaderExits) {
 						fs.writeFileSync(release, "exit");
+						observation = setTimeout(() => console.log(JSON.stringify({
+							event: "leader-release-pending", states: tree!.states(),
+						})), 250);
 						await proc.exited;
+						clearTimeout(observation);
 						if (process.platform === "win32") expect(workRegistry.snapshot().some(item => item.kind === "process")).toBe(true);
 					}
 					const start = Date.now();
@@ -50,6 +55,7 @@ for (const leaderExits of [false, true]) {
 					expect(workRegistry.snapshot()).toEqual([]);
 					expect(control.status() === "running").toBe(true);
 				} finally {
+					clearTimeout(observation);
 					tree?.kill();
 					await control.close();
 					await completeOwned(proc);
