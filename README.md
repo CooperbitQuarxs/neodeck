@@ -96,7 +96,9 @@ The existing CI workflow publishes a **stable GitHub release on each push to
 errors and failed compiler/guard invocations fail CI and prevent publication.
 Diagnostics inside the pinned NeoPi tree are printed and reported separately
 as informational. Nightly tests remain informational, with failure counts and
-names in each platform's job summary and warning annotations. A successful
+names in each platform's job summary and warning annotations. Workspace
+typechecks run serially with a 4 GiB Node heap limit for the SDK-inclusive
+Telegram program. A successful
 Ubuntu typecheck, web build and package can publish despite those test failures.
 Stable releases, including manual dispatches, require the Ubuntu tests to pass
 too. Release notes report Ubuntu outcomes and link the CI run. Other matrix
