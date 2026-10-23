@@ -6,6 +6,7 @@ All notable changes to NPI deck (a fork of bjb2/omp-deck; entries before the for
 ## [Unreleased]
 
 ### Changed
+- The standalone legacy-state migration script typechecks with a supported structural path type, retaining POSIX, Windows drive and UNC containment checks ([#314](https://github.com/PsychedelicShayna/neodeck/issues/314)). GPT-6.1 Sol.
 - Iteration actions retain the original trigger's event type and event or card identity, including through nested bodies. Ordinary event-driven loops no longer need an explicit operation ID to preview or execute; pass identities and replay protection remain distinct ([#159](https://github.com/PsychedelicShayna/neodeck/issues/159)). GPT-6.1 Sol.
 - Every page shares G navigation, `/` page search, and a keyboard-accessible `?` shortcut guide. Page actions register alongside the global keys, and typing, IME composition and open overlays suppress them. The sidebar teaches the same contract ([#300](https://github.com/PsychedelicShayna/neodeck/issues/300)). GPT-6.1 Sol on behalf of PsychedelicShayna.
 - Board cards and GitHub items open in the shell's docked inspector instead of blocking the page with a modal sheet. Selection moves focus into the inspector, Escape or its close button returns to the selected row, and card assignment and destructive actions stay in its footer ([#294](https://github.com/PsychedelicShayna/neodeck/issues/294)). GPT-6.1 Sol on behalf of PsychedelicShayna.
