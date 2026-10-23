@@ -19,7 +19,7 @@ import { describe, expect, test } from "bun:test";
 
 import type { RoutineSpec, RoutineStep } from "@npi-deck/protocol";
 
-import { applyEdgeConnection, applyEdgeRemoval } from "./graph-connect";
+import { applyEdgeConnection, applyEdgeRemoval } from "./legacy-graph-connect";
 
 function wait(id: string): RoutineStep {
 	return { id, type: "wait", duration_secs: 1 };

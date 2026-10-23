@@ -302,6 +302,40 @@ the JavaScript engine's stack behavior. Other JSON serialization failures use
 the same terminal-history path without discarding execution aggregates.
 History error excerpts are capped at 8,192 characters, including the diagnostic.
 
+Studio's Flows section opens native routines in the existing canvas. New flows
+start as V2 JSON. Palette entries, typed handles and configuration fields consume
+the production registry, with shared connection validation during authoring and
+server configuration validation before saving or running. Incomplete local drafts
+can be wired progressively; saved executable graphs must pass full validation.
+Source view deliberately exposes the same native JSON, not generated YAML.
+Existing legacy routines retain their editor until explicit migration.
+
+The Runs panel and node inspector read the selected run's `trace.graph`, never
+the current draft. Expandable result and input trees retain output occurrences,
+consuming ports and iteration addresses. Successful executions with no emissions,
+inactive branches, failed nodes and aborted nodes remain distinct. Connection
+associations reconstructed from a snapshot are marked as derived; unavailable
+associations are not guessed. `GET /api/routines/:id/runs/:runId` retrieves a run
+directly, including older runs outside the recent-summary limit. Both run and
+trace endpoints verify routine ownership. Full traces finalize at completion;
+running, missing-completed and failed-fetch states are shown separately.
+
+`POST /api/routines/:id/preview` returns a transient `GraphRunRecord` from the
+production executor with `dryRun: true`. Its body is a `GraphActivation` selecting
+an actual source and a sample event, or `{}` for a manual event with a generated
+identity. Each preview has a transient operation identity unless the caller
+supplies one. It does not create a run row, update schedules, claim inbox
+deliveries, reserve effects or dispatch actions. Response serialization shares persisted
+traces' credential redaction, size and depth bounds. Preview caps the copied
+graph at 120 seconds and 10,000 executed nodes, or its lower configured limits.
+The trace includes those effective controls and remains in the current editor
+session, not durable history. The existing `/run` endpoint still admits a manual
+event and returns HTTP 202; it does not let a caller turn a manual run into an
+inbox delivery. Enabled inbox sources run when a new capture is committed.
+
+Studio's TOML graph documents remain a separate `/api/graphs` store. Editing a
+native flow does not translate or merge those documents.
+
 ### Inbox intake
 
 Fresh navigation opens Inbox (`/inbox`); Chat is `/chat` and Kanban remains
