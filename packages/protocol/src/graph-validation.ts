@@ -1,4 +1,5 @@
 import type { GraphNode, GraphNodeType, GraphObject, GraphValue, RoutineGraph } from "./graph";
+import { MAX_GRAPH_ITERATIONS, MAX_GRAPH_ITERATION_DEPTH } from "./graph-builtins";
 import type { ValidationError, ValidationResult } from "./validate";
 
 /** Reject values JSON would drop, coerce, invoke, or fail to serialize; shared objects are fine. */
@@ -40,7 +41,7 @@ function id(value: unknown): value is string { return typeof value === "string" 
 const VALUE_TYPES = new Set(["object", "array", "string", "number", "boolean", "null"]);
 
 /** Pure structural/type validation. Config JSON Schemas are enforced by the server registry. */
-export function validateRoutineGraph(graph: unknown, nodeTypes: readonly GraphNodeType[]): ValidationResult {
+export function validateRoutineGraph(graph: unknown, nodeTypes: readonly GraphNodeType[], iterationDepth = 0): ValidationResult {
 	const errors: ValidationError[] = [];
 	const fail = (path: string, keyword: string, message: string) => errors.push({ path, keyword, message, params: {} });
 	if (!isGraphValue(graph) || !object(graph)) {
@@ -103,6 +104,21 @@ export function validateRoutineGraph(graph: unknown, nodeTypes: readonly GraphNo
 		nodes.set(node.id, node as unknown as GraphNode);
 		if (!types.has(node.type)) fail(`${path}/type`, "registeredType", `unregistered node type: ${node.type}`);
 		if (types.get(node.type)?.kind === "event" && !id(node.config.eventType)) fail(`${path}/config/eventType`, "required", "event sources require a nonempty eventType");
+		if (node.type === "iteration.input" && iterationDepth === 0) fail(path, "iterationSource", "iteration.input is only valid inside an iteration body");
+		if (iterationDepth > 0 && types.get(node.type)?.kind === "event" && node.type !== "iteration.input") fail(path, "iterationSource", "an iteration body can only use iteration.input as its event source");
+		if (node.type === "iteration.each") {
+			const config = node.config;
+			if (iterationDepth >= MAX_GRAPH_ITERATION_DEPTH) fail(`${path}/config/body`, "iterationDepth", `iteration nesting is limited to ${MAX_GRAPH_ITERATION_DEPTH}`);
+			if (!Number.isInteger(config.maxIterations) || typeof config.maxIterations !== "number" || config.maxIterations < 1 || config.maxIterations > MAX_GRAPH_ITERATIONS) fail(`${path}/config/maxIterations`, "iterationBound", `maxIterations must be an integer between 1 and ${MAX_GRAPH_ITERATIONS}`);
+			if (!Array.isArray(config.path) || config.path.length > 64 || config.path.some(key => typeof key !== "string" && !(typeof key === "number" && Number.isInteger(key) && key >= 0))) fail(`${path}/config/path`, "iterationPath", "path must contain at most 64 string or nonnegative integer keys");
+			if (!object(config.body)) fail(`${path}/config/body`, "iterationBody", "iteration requires a graph body");
+			else if (iterationDepth < MAX_GRAPH_ITERATION_DEPTH) {
+				for (const key of Object.keys(config.body)) if (!["version", "nodes", "edges", "layout"].includes(key)) fail(`${path}/config/body/${key}`, "iterationBody", "body inherits run-wide settings and budgets");
+				const validation = validateRoutineGraph(config.body, nodeTypes, iterationDepth + 1);
+				for (const error of validation.errors ?? []) errors.push({ ...error, path: `${path}/config/body${error.path}` });
+				if (Array.isArray(config.body.nodes) && config.body.nodes.filter(item => object(item) && item.type === "iteration.input").length !== 1) fail(`${path}/config/body/nodes`, "iterationSource", "body requires exactly one iteration.input source");
+			}
+		}
 	}
 	const edgeIds = new Set<string>();
 	const incoming = new Map<string, Map<string, number>>();

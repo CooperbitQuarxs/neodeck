@@ -48,7 +48,7 @@ function identity(context: GraphNodeContext): string {
 	const event = context.activation.event;
 	const card = event.card;
 	const originalId = explicit ?? event.id ?? (card && typeof card === "object" && !Array.isArray(card) ? card.id : undefined);
-	return graphDigest({ routine: text(context.routineId, "routineId"), node: context.node.id, eventType: context.activation.eventType, operation: text(originalId, "event.id or operationId") });
+	return graphDigest({ routine: text(context.routineId, "routineId"), node: context.node.id, eventType: context.activation.eventType, operation: text(originalId, "event.id or operationId"), ...(context.iteration?.length ? { iteration: context.iteration } : {}) });
 }
 function effectValue(effect: GraphEffect): GraphObject {
 	// Downstream bindings see the same privacy-safe receipt before and after replay.
