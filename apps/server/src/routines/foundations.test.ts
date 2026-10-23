@@ -72,7 +72,7 @@ async function assertTimedTree({ home, runner }: RoutineTestFixture, budget: boo
 		console.log(JSON.stringify({ event: "tree-finished", budget, elapsed, states, control: control.status() }));
 		expect(elapsed).toBeLessThan(4000);
 		expect(states.every(process => process.status === "exited")).toBe(true);
-		expect(control.status()).toBe("running");
+		expect(control.status() === "running").toBe(true);
 		const run = listRuns(r.id)[0]!;
 		expect(run.abortReason).toBe("timeout");
 		const [step] = listStepRuns(run.id);

@@ -48,7 +48,7 @@ for (const leaderExits of [false, true]) {
 					expect(output[0]).toContain("tree stdout ready");
 					expect(output[1]).toContain("tree stderr ready");
 					expect(workRegistry.snapshot()).toEqual([]);
-					expect(control.status()).toBe("running");
+					expect(control.status() === "running").toBe(true);
 				} finally {
 					tree?.kill();
 					await control.close();
