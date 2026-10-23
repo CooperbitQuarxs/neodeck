@@ -164,7 +164,7 @@ function StudioEditor({ requested }: { requested: string }) {
   <div className="neo-studio-stage">
    <div className="neo-studio-view">
    {loading ? <Empty icon={Workflow} title="Loading graph" /> : isMap ? map ? <KnowledgeMap graph={map} focus={params.get("note") ?? undefined} query={mapSearch} hideOrphans={hideOrphans} onOpen={path => navigate(`/knowledge?note=${encodeURIComponent(path)}`)} />
-    : <Empty icon={BookOpen} title="The map is empty" hint="Write a note in Knowledge to start linking ideas." /> : flow ? <div className="neo-studio-flow"><RoutineBuilder key={id} routine={routine} onSaved={savedRoutine} onError={setError} embedded view={view} editorRef={builder} onStateChange={setFlowState} /></div>
+    : <Empty icon={BookOpen} title="The map is empty" hint="Ask an agent to write a note in Knowledge to start linking ideas." /> : flow ? <div className="neo-studio-flow"><RoutineBuilder key={id} routine={routine} onSaved={savedRoutine} onError={setError} embedded view={view} editorRef={builder} onStateChange={setFlowState} /></div>
     : graph ? view === "canvas" ? <StudioCanvas key={id} graph={graph} selected={selected} onSelect={next => { setSelected(next); if (next && panel === "settings") setPanel(null); }} onChange={change} run={runState} /> : <SourceView graph={graph} onChange={change} onPending={setSourcePending} />
     : <Empty icon={Workflow} title="This graph could not be opened" hint={<>It may have been deleted. <Link to="/studio">Back to Studio</Link> lists every graph.</>} />}
    {notice ? <div className="neo-studio-notice" role="status">{notice}</div> : null}
