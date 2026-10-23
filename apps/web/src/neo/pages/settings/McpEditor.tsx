@@ -1,6 +1,5 @@
 import { type ReactNode, useState } from "react";
-import type { McpServerScope, McpTransport } from "@npi-deck/protocol";
-import { NeoBadge, NeoButton, NeoSelect, SectionLabel, NeoInput } from "@/components/neo";
+import { NeoBadge, NeoButton, Segmented, SectionLabel, NeoInput } from "@/components/neo";
 import type { McpDraft } from "./McpDraft";
 
 export function McpEditor({ initial, creating, busy, formId, onSave }: {
@@ -20,9 +19,9 @@ export function McpEditor({ initial, creating, busy, formId, onSave }: {
 			<div className="neo-settings-mcp-grid">
 				{creating && <>
 					<Field label="Name"><NeoInput className="neo-input" required value={draft.name} onChange={event => set("name", event.target.value)} placeholder="my-server" /></Field>
-					<Field label="Scope"><NeoSelect value={draft.scope} onChange={event => set("scope", event.target.value as McpServerScope)}><option value="user">User</option><option value="project">Project</option></NeoSelect></Field>
+					<div className="neo-settings-field"><span>Scope</span><Segmented label="MCP server scope" value={draft.scope} onChange={value => set("scope", value)} disabled={busy} options={[{ value: "user", label: "User" }, { value: "project", label: "Project" }]} /></div>
 				</>}
-				<Field label="Transport"><NeoSelect value={draft.transport} onChange={event => set("transport", event.target.value as McpTransport)}><option value="stdio">stdio</option><option value="http">http</option><option value="sse">sse</option></NeoSelect></Field>
+				<div className="neo-settings-field"><span>Transport</span><Segmented label="MCP server transport" value={draft.transport} onChange={value => set("transport", value)} disabled={busy} options={[{ value: "stdio", label: "stdio" }, { value: "http", label: "http" }, { value: "sse", label: "sse" }]} /></div>
 				<Field label="Timeout in milliseconds"><NeoInput className="neo-input" type="number" min="0" step="1" placeholder="NeoPi default" value={draft.timeout} onChange={event => set("timeout", event.target.value)} /></Field>
 			</div>
 			{draft.transport === "stdio" ? <>
