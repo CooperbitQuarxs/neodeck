@@ -51,11 +51,18 @@ export function validateRoutineGraph(graph: unknown, nodeTypes: readonly GraphNo
 	const fields = (value: GraphObject, allowed: readonly string[], path: string) => {
 		for (const key of Object.keys(value)) if (!allowed.includes(key)) fail(`${path}/${key}`, "additionalProperties", "unknown property");
 	};
-	fields(graph, ["version", "nodes", "edges", "concurrency", "budget", "timezone", "tags", "layout"], "");
+	fields(graph, ["version", "nodes", "edges", "concurrency", "budget", "execution", "timezone", "tags", "layout"], "");
 	if (graph.version !== 2) fail("/version", "const", "graph version must be 2");
 	if (!Array.isArray(graph.nodes) || graph.nodes.length === 0) fail("/nodes", "type", "nodes must be a nonempty array");
 	if (!Array.isArray(graph.edges)) fail("/edges", "type", "edges must be an array");
 	if (graph.concurrency !== undefined && !["skip", "queue", "cancel-previous", "parallel"].includes(graph.concurrency as string)) fail("/concurrency", "enum", "invalid concurrency policy");
+	if (graph.execution !== undefined) {
+		if (!object(graph.execution)) fail("/execution", "type", "execution must be an object");
+		else {
+			fields(graph.execution, ["mode"], "/execution");
+			if (graph.execution.mode !== "routine-v1" && graph.execution.mode !== "routine-v0") fail("/execution/mode", "enum", "execution mode must be routine-v1 or routine-v0");
+		}
+	}
 	if (graph.timezone !== undefined) {
 		try {
 			if (!id(graph.timezone)) throw new Error();

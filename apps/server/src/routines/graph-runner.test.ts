@@ -458,7 +458,7 @@ test("iteration shares the run-wide step budget and never reports partial comple
 test("cancellation during real-node passes retains the completed pass and stops the next", async () => {
 	const abort = new AbortController(), registry = new GraphNodeRegistry();
 	const implementation = registry.get("gate.if")!, execute = implementation.execute;
-	implementation.execute = context => { const result = execute(context); if (context.activation.event.index === 1) abort.abort(new Error("stop passes")); return result; };
+	implementation.execute = context => { const result = execute(context); if ((context.activation.event as Record<string, unknown>).index === 1) abort.abort(new Error("stop passes")); return result; };
 	const result = await executeGraph(loopGraph(), { eventType: "manual", event: { items: [1, 2, 3] } }, registry, { signal: abort.signal });
 	expect(result.status).toBe("aborted");
 	expect(result.abortReason).toBe("cancelled");
@@ -504,7 +504,7 @@ for (const budget of [{ max_llm_tokens_input: 1 }, { max_llm_tokens_output: 1 },
 }
 test("iteration shares one duration deadline across passes", async () => {
 	const registry = new GraphNodeRegistry(), implementation = registry.get("gate.if")!, execute = implementation.execute;
-	implementation.execute = async context => { if (context.activation.event.index === 1) await Bun.sleep(1200); return execute(context); };
+	implementation.execute = async context => { if ((context.activation.event as Record<string, unknown>).index === 1) await Bun.sleep(1200); return execute(context); };
 	const spec = loopGraph(); spec.budget = { max_duration_secs: 1 };
 	const result = await executeGraph(spec, { eventType: "manual", event: { items: [1, 2, 3] } }, registry);
 	expect(result.status).toBe("aborted");

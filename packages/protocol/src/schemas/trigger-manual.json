@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://npi-deck.app/schemas/trigger-manual.json",
   "title": "RoutineTrigger — manual",
-  "description": "User-invoked trigger. The dashboard 'Run now' button uses this path; manual params are validated against params_schema if present.",
+  "description": "User-invoked trigger. params_schema is authoring metadata; the manual-run admission route does not validate payloads against it.",
   "type": "object",
   "required": ["manual"],
   "properties": {
@@ -10,7 +10,7 @@
       "type": "object",
       "properties": {
         "params_schema": {
-          "description": "Optional JSON Schema for the manual-run dashboard form. When omitted, manual runs accept an empty params object."
+          "description": "Optional manual-run form declaration. Preserved as metadata and not enforced by routine admission."
         }
       },
       "additionalProperties": false

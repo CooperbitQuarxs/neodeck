@@ -45,9 +45,9 @@ export function resolveGraphActionValue(value: GraphValue, context: GraphNodeCon
 }
 function identity(context: GraphNodeContext): string {
 	const explicit = context.node.config.operationId === undefined ? context.activation.operationId : resolveGraphActionValue(context.node.config.operationId, context);
-	const event = context.activation.event;
-	const card = event.card;
-	const originalId = explicit ?? event.id ?? (card && typeof card === "object" && !Array.isArray(card) ? card.id : undefined);
+	const event = Array.isArray(context.activation.event) ? undefined : context.activation.event;
+	const card = event?.card;
+	const originalId = explicit ?? event?.id ?? (card && typeof card === "object" && !Array.isArray(card) ? card.id : undefined);
 	return graphDigest({ routine: text(context.routineId, "routineId"), node: context.node.id, eventType: context.activation.eventType, operation: text(originalId, "event.id or operationId"), ...(context.iteration?.length ? { iteration: context.iteration } : {}) });
 }
 function effectValue(effect: GraphEffect): GraphObject {

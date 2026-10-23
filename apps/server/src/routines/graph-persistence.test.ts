@@ -460,8 +460,8 @@ test("native cron activates its configured source and never falls back to the le
 		status: "success",
 		activation: { eventType: "tick", sourceNodeId: "source" },
 	});
-	expect(trace?.nodeRuns.find((node) => node.nodeId === "source")?.outputs[0]?.result)
-		.toEqual(trace?.activation.event);
+	expect(trace?.activation.event)
+		.toEqual(trace?.nodeRuns.find((node) => node.nodeId === "source")?.outputs[0]?.result);
 	expect(trace?.nodeRuns.find((node) => node.nodeId === "manual-only")?.status).toBe("skipped");
 	expect(listRuns(saved.id)[0]?.trigger).toBe("cron");
 	expect(listRuns(manual.id)).toEqual([]);
@@ -517,7 +517,7 @@ test("production inbox source catalogue and config validation expose one native 
 test("HTTP and internal card creation fan out once per source with committed original provenance", async () => {
 	const run = setup();
 	run.graphRegistry.register({ definition: definition("intake"), execute: ({ activation, inputs, recordUsage }) => {
-		expect(inputs[0]!.output.result).toBe(activation.event);
+		expect(activation.event).toBe(inputs[0]!.output.result);
 		recordUsage({ llmTokensIn: 2, llmTokensOut: 3 });
 		return [{ port: "out", value: "truthy-not-true" }];
 	} });
@@ -558,7 +558,7 @@ test("HTTP and internal card creation fan out once per source with committed ori
 		const response = await fetch(`${url}/routines/${saved.id}/runs/${record.id}/graph`);
 		expect(response.status).toBe(200);
 		const trace = await response.json() as GraphRunRecord;
-		const card = trace.activation.event.id === first.id ? first : second;
+		const card = (trace.activation.event as GraphObject).id === first.id ? first : second;
 		expect(trace.activation.event).toEqual(card);
 		expect(trace.graph).toEqual(native);
 		expect(trace.status).toBe("success");
@@ -681,8 +681,8 @@ test("pending work disabled before dispatch is discarded and admission rollback 
 test("a graph-created card gets its own new event, and failing intake is not successful filing", async () => {
 	const run = setup();
 	run.graphRegistry.register({ definition: definition("create-child"), execute: ({ activation }) => {
-		if (activation.event.source !== "child") createInbox({ kind: "capture", title: "child", source: "child" });
-		return [{ port: "out", value: activation.event.id }];
+		if ((activation.event as GraphObject).source !== "child") createInbox({ kind: "capture", title: "child", source: "child" });
+		return [{ port: "out", value: (activation.event as GraphObject).id! }];
 	} });
 	const native = inboxGraph();
 	native.nodes.push({ id: "child", type: "create-child", config: {} });
@@ -692,14 +692,14 @@ test("a graph-created card gets its own new event, and failing intake is not suc
 	const parent = createInbox({ kind: "capture", title: "parent" });
 	await settleInbox(run);
 	expect(listRuns(saved.id)).toHaveLength(2);
-	expect(new Set(listRuns(saved.id).map((record) => getGraphRun(record.id)!.activation.event.id)).size).toBe(2);
+	expect(new Set(listRuns(saved.id).map((record) => (getGraphRun(record.id)!.activation.event as GraphObject).id)).size).toBe(2);
 	expect(getInbox(parent.id)?.processedAt).toBeUndefined();
 	run.graphRegistry.register({ definition: definition("fail-intake"), execute: () => { throw new Error("intake failed"); } });
 	native.nodes[1]!.type = "fail-intake";
 	updateGraphRoutine(saved.id, { graph: native }, run.graphRegistry);
 	const failed = createInbox({ kind: "ticket", title: "do not infer filed" });
 	await settleInbox(run);
-	const record = listRuns(saved.id).find((record) => getGraphRun(record.id)!.activation.event.id === failed.id)!;
+	const record = listRuns(saved.id).find((record) => (getGraphRun(record.id)!.activation.event as GraphObject).id === failed.id)!;
 	expect(getGraphRun(record.id)).toMatchObject({ status: "failed", nodeRuns: [{ status: "success" }, { status: "failed", inputs: [{ result: failed }], inputPorts: ["in"] }] });
 	expect(getInbox(failed.id)?.processedAt).toBeUndefined();
 });

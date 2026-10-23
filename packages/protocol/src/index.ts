@@ -2095,7 +2095,9 @@ export type RoutineStep =
 export type RoutineTrigger =
 	| { cron: string }
 	| { webhook: { path: string; secret_env: string } }
+	/** Form metadata only; legacy manual admission does not enforce params_schema. */
 	| { manual: { params_schema?: unknown } }
+	/** Legacy generic admission does not subscribe, select or filter by these declarations. */
 	| { event: { source: string; type?: string; filter?: string } };
 
 /** The parsed V1 routine spec. Source-of-truth lives in routines.spec_yaml. */
