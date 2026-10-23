@@ -6,6 +6,7 @@ All notable changes to NPI deck (a fork of bjb2/omp-deck; entries before the for
 ## [Unreleased]
 
 ### Changed
+- Page changes now move keyboard focus into the new content, including after mobile navigation closes. The advertised G G chord opens GitHub instead of re-arming navigation ([#288](https://github.com/PsychedelicShayna/neodeck/issues/288)). GPT-6.1 Sol on behalf of PsychedelicShayna.
 
 - Development hot reload keeps card-agent recovery in the same module graph as the opened database, avoiding a fatal `db not opened` after server edits. Production startup still opens the database and recovers unfinished cards in the same order ([#262](https://github.com/PsychedelicShayna/neodeck/issues/262)).
 
