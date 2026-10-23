@@ -7,6 +7,8 @@ All notable changes to NPI deck (a fork of bjb2/omp-deck; entries before the for
 
 ### Changed
 
+- Development hot reload keeps card-agent recovery in the same module graph as the opened database, avoiding a fatal `db not opened` after server edits. Production startup still opens the database and recovers unfinished cards in the same order ([#262](https://github.com/PsychedelicShayna/neodeck/issues/262)).
+
 - Telegram setup now lives in Integrations, with masked bot credentials, one-use account pairing, per-chat thread and intake choices, polling status, and opt-in needs-you notifications. Streaming replies and inbox capture use the existing live bridge; plan proposals are no longer automatically rejected. Bridge restarts retain the replacement process when an older exit callback arrives late ([#282](https://github.com/PsychedelicShayna/neodeck/pull/282), GPT-6 Astra on behalf of PsychedelicShayna).
 - Inbox capture now has a docked multiline composer with image attachments and Ctrl/Cmd+Enter. Routing names the actual handler and subscribed flows, and every item shows durable board or GitHub filing receipts and routine delivery history. GitHub filing reuses the existing reconciled issue action and has a write-free preview. Unavailable model classification and agent-only destinations are explained instead of reporting preview success. Related to [#237](https://github.com/PsychedelicShayna/neodeck/issues/237).
 - Uploaded Markdown images now render through the development and preview web servers instead of receiving the app's HTML document. Inbox reader navigation and successful capture restore keyboard focus after React commits.
