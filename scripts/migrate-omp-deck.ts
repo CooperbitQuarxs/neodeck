@@ -156,7 +156,7 @@ function physical(file: string): string {
 }
 
 /** Lexical containment only; callers resolve symlinks with `physical` where required. */
-export function within(inner: string, outer: string, paths: path.PlatformPath = path): boolean {
+export function within(inner: string, outer: string, paths: Pick<typeof path, "relative" | "isAbsolute" | "sep"> = path): boolean {
 	const relative = paths.relative(outer, inner);
 	return relative === "" || (!paths.isAbsolute(relative) && relative !== ".." && !relative.startsWith(`..${paths.sep}`));
 }
