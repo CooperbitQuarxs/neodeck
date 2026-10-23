@@ -15,7 +15,7 @@ import type { NodePositionChange } from "@xyflow/react";
 
 import type { RoutineSpec } from "@npi-deck/protocol";
 
-import { applyPositionCommits } from "./RoutineCanvas";
+import { applyPositionCommits } from "./LegacyRoutineCanvas";
 
 function commit(id: string, x: number, y: number): NodePositionChange {
 	return { type: "position", id, position: { x, y }, dragging: false };

@@ -14,11 +14,11 @@ const GROUPS = [
  * graph it shows what each step will do and refuses when a step only exists as
  * a plan; for a flow it hands off to the routine runner.
  */
-export function ExecuteDialog({ open, graph, flowName, busy, onClose, onExecute }: { open: boolean; graph?: StudioGraph; flowName?: string; busy: boolean; onClose: () => void; onExecute: () => void }) {
+export function ExecuteDialog({ open, graph, flowName, flowExplanation, busy, onClose, onExecute }: { open: boolean; graph?: StudioGraph; flowName?: string; flowExplanation?: string; busy: boolean; onClose: () => void; onExecute: () => void }) {
  const steps = graph?.nodes.map(node => ({ node, support: studioNodeExecution(node.type) })) ?? [];
  const blocked = steps.filter(step => step.support === "preview");
  const name = graph?.name ?? flowName ?? "this graph";
- return <NeoDialog open={open} onClose={onClose} title={`Execute ${name}?`} description={graph ? "Execute runs the graph once for real, with its sample input. Preview run walks it without acting." : "Execute runs the flow once now, with its real actions, the same as its trigger would."} width={540}
+ return <NeoDialog open={open} onClose={onClose} title={`Execute ${name}?`} description={graph ? "Execute runs the graph once for real, with its sample input. Preview run walks it without acting." : flowExplanation ?? "Execute runs the flow once now, with its real actions, the same as its trigger would."} width={540}
   footer={<><NeoButton variant="ghost" onClick={onClose}>Cancel</NeoButton><NeoButton variant="danger" onClick={onExecute} disabled={busy || blocked.length > 0}>{blocked.length ? "Cannot execute" : "Execute"}</NeoButton></>}>
   {graph ? <div className="neo-studio-execute">
    {GROUPS.map(group => { const items = steps.filter(step => step.support === group.support); return items.length ? <section key={group.support} data-support={group.support}>
