@@ -113,6 +113,7 @@ All notable changes to NPI deck (a fork of bjb2/omp-deck; entries before the for
 
 ### Fixed
 
+- Windows fixture cleanup unlinks directory symlinks instead of passing them to bare `rmSync`, and restores the shared skills directory before removing the replacement link. A failed cleanup no longer leaves the following skill test with a dangling root. Backend and routine fixture helpers share the same removal routine, after their existing resource shutdown; errors remain visible and no removal retries are added. GPT-6.1 Sol, [#171](https://github.com/PsychedelicShayna/neodeck/issues/171).
 - Legacy migration publishes self-contained SQLite snapshots instead of WAL-mode main files without their staging sidecars, so macOS readonly opens can read every migrated row. Source writers remain untouched, and staged statements finalize before publication. GPT-6.1 Sol, [#150](https://github.com/PsychedelicShayna/neodeck/issues/150).
 - Knowledge history Git commands now use the owned-process lifecycle, retain their timeout and output limits, and cannot outlive the server through an untracked child process. GPT-6.1 Sol, [#290](https://github.com/PsychedelicShayna/neodeck/issues/290).
 - Read-only card workers start when temporary runtime or worktree paths have symlinked parents. Bubblewrap mounts the same directories by their canonical paths, retaining read-only host access and the existing namespace isolation ([#273](https://github.com/PsychedelicShayna/neodeck/issues/273)).

@@ -3,6 +3,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { spawnOwnedSync } from "./owned-process.ts";
+import { removeTestPath } from "./test-cleanup.ts";
 
 const FILE_ENV = "NPI_DECK_ISOLATED_TEST_FILE";
 const CASE_ENV = "NPI_DECK_ISOLATED_TEST_CASE";
@@ -73,7 +74,7 @@ export function runIsolatedCase(
 		return { exitCode: child.exitCode, output: `${child.stdout.toString()}${child.stderr.toString()}`, root };
 	} finally {
 		// The private worker has exited and both streams are drained before removal.
-		fs.rmSync(root, { recursive: true, force: true });
+		removeTestPath(root);
 	}
 }
 
