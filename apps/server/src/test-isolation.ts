@@ -19,6 +19,7 @@ export function runIsolatedCase(
 	extraEnv: Record<string, string> = {},
 ): { exitCode: number; output: string; root: string } {
 	const root = fs.mkdtempSync(path.join(os.tmpdir(), "npi-deck-isolated-test-"));
+	let result: { exitCode: number; output: string; root: string } | undefined;
 	try {
 		const home = path.join(root, "home");
 		const temp = path.join(root, "tmp");
@@ -71,14 +72,19 @@ export function runIsolatedCase(
 		const child = spawnOwnedSync([process.execPath, "test", path.resolve(file)], {
 			cwd: root, env, stdin: "ignore", stdout: "pipe", stderr: "pipe",
 		}, { replaceEnv: true });
-		return { exitCode: child.exitCode, output: `${child.stdout.toString()}${child.stderr.toString()}`, root };
+		return result = { exitCode: child.exitCode, output: `${child.stdout.toString()}${child.stderr.toString()}`, root };
 	} finally {
 		// The private worker has exited and both streams are drained before removal.
-		removeTestPath(root);
+		try { removeTestPath(root); }
+		catch (error) {
+			if (result) throw new AggregateError([error],
+				`Isolated worker fixture cleanup failed after exit ${result.exitCode}: ${String(error)}\n${result.output}`);
+			throw error;
+		}
 	}
 }
 
-export function createIsolatedTest(file: string): (name: string, body: () => void | Promise<void>, timeout?: number) => void {
+export function createIsolatedTest(file: string, extraEnv: Record<string, string> = {}): (name: string, body: () => void | Promise<void>, timeout?: number) => void {
 	const isolated = isIsolatedCase(file);
 	let selected = false;
 	return (name, body, timeout) => {
@@ -92,7 +98,7 @@ export function createIsolatedTest(file: string): (name: string, body: () => voi
 		// The child retains the original case/hook deadlines. This outer envelope
 		// additionally covers cold worker startup, teardown and output draining.
 		test(name, () => {
-			const child = runIsolatedCase(file, name);
+			const child = runIsolatedCase(file, name, extraEnv);
 			if (child.exitCode !== 0) throw new Error(`Isolated test ${JSON.stringify(name)} exited ${child.exitCode}\n${child.output}`);
 			if (!/^\s*1 pass\s*$/m.test(child.output) || !/^\s*0 fail\s*$/m.test(child.output)) {
 				throw new Error(`Isolated test ${JSON.stringify(name)} did not execute exactly one passing case\n${child.output}`);

@@ -6,7 +6,7 @@
 import type { RoutineStep } from "@npi-deck/protocol";
 import { renderString } from "../template.ts";
 import type { RunContext, StepResult } from "../types.ts";
-import { spawnOwned, terminateOwned } from "../../owned-process.ts";
+import { completeOwned, spawnOwned, terminateOwned } from "../../owned-process.ts";
 
 const MAX_EXCERPT = 8 * 1024;
 
@@ -31,8 +31,13 @@ export async function executeRunStep(
 			stdout: "pipe",
 			stderr: "pipe",
 			windowsHide: true,
-		});
-		const onAbort = () => { void terminateOwned(proc); };
+		}, { retainUntilDrained: true });
+		let termination: Promise<void> | undefined;
+		const onAbort = () => {
+			termination ??= terminateOwned(proc);
+			// Keep the rejection observed until the pipe/exit join reaches finally.
+			void termination.catch(() => {});
+		};
 		signal.addEventListener("abort", onAbort, { once: true });
 		if (signal.aborted) onAbort();
 		try {
@@ -61,6 +66,8 @@ export async function executeRunStep(
 			};
 		} finally {
 			signal.removeEventListener("abort", onAbort);
+			await termination;
+			await completeOwned(proc);
 		}
 	} catch (err) {
 		return {
