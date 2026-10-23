@@ -6,6 +6,9 @@ All notable changes to NPI deck (a fork of bjb2/omp-deck; entries before the for
 ## [Unreleased]
 
 ### Changed
+- Page changes now move keyboard focus into the new content, including after mobile navigation closes. The advertised G G chord opens GitHub instead of re-arming navigation ([#288](https://github.com/PsychedelicShayna/neodeck/issues/288)). GPT-6.1 Sol on behalf of PsychedelicShayna.
+
+- Development hot reload keeps card-agent recovery in the same module graph as the opened database, avoiding a fatal `db not opened` after server edits. Production startup still opens the database and recovers unfinished cards in the same order ([#262](https://github.com/PsychedelicShayna/neodeck/issues/262)).
 
 - Telegram setup now lives in Integrations, with masked bot credentials, one-use account pairing, per-chat thread and intake choices, polling status, and opt-in needs-you notifications. Streaming replies and inbox capture use the existing live bridge; plan proposals are no longer automatically rejected. Bridge restarts retain the replacement process when an older exit callback arrives late ([#282](https://github.com/PsychedelicShayna/neodeck/pull/282), GPT-6 Astra on behalf of PsychedelicShayna).
 - Inbox capture now has a docked multiline composer with image attachments and Ctrl/Cmd+Enter. Routing names the actual handler and subscribed flows, and every item shows durable board or GitHub filing receipts and routine delivery history. GitHub filing reuses the existing reconciled issue action and has a write-free preview. Unavailable model classification and agent-only destinations are explained instead of reporting preview success. Related to [#237](https://github.com/PsychedelicShayna/neodeck/issues/237).
@@ -98,6 +101,7 @@ All notable changes to NPI deck (a fork of bjb2/omp-deck; entries before the for
 ### Fixed
 
 - Knowledge history Git commands now use the owned-process lifecycle, retain their timeout and output limits, and cannot outlive the server through an untracked child process. GPT-6.1 Sol, [#290](https://github.com/PsychedelicShayna/neodeck/issues/290).
+- Read-only card workers start when temporary runtime or worktree paths have symlinked parents. Bubblewrap mounts the same directories by their canonical paths, retaining read-only host access and the existing namespace isolation ([#273](https://github.com/PsychedelicShayna/neodeck/issues/273)).
 - Inbox compose slips focus the title first and keep empty notes ready to edit when switching fields ([#244](https://github.com/PsychedelicShayna/neodeck/issues/244)).
 - Inbox captures retain the current notes even when Capture activates before the editor loses focus ([#235](https://github.com/PsychedelicShayna/neodeck/issues/235)).
 - The SDK contract probe and server types support current NeoPi nightly alongside the documented pin, including role-level settings provenance ([#232](https://github.com/PsychedelicShayna/neodeck/issues/232)).
