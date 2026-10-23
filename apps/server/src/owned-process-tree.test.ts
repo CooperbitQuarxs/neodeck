@@ -7,7 +7,7 @@ import { createIsolatedTest } from "./test-isolation.ts";
 import { workRegistry } from "./work-registry.ts";
 import { RoutineTestFixtures } from "./routines/test-fixture.ts";
 import { createShellFixture } from "./routines/shell-fixture.ts";
-import { observeProcessTree, unrelatedProcess } from "./routines/process-fixture.ts";
+import { observeProcessTree, unrelatedProcess } from "../test-fixtures/process-fixture.ts";
 import { createV1Routine, listRuns } from "./db/routines.ts";
 import { listStepRuns } from "./db/routine-step-runs.ts";
 

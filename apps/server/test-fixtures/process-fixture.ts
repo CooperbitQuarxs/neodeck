@@ -1,5 +1,5 @@
 import * as fs from "node:fs";
-import { nativeProcessClass } from "../backend/runtime.ts";
+import { nativeProcessClass } from "../src/backend/runtime.ts";
 
 export async function observeProcessTree(marker: string) {
 	for (let i = 0; i < 150 && !fs.existsSync(marker); i++) await Bun.sleep(10);
@@ -18,6 +18,7 @@ export async function observeProcessTree(marker: string) {
 	};
 }
 
+// This control must stay outside Deck ownership to detect overly broad cleanup.
 export function unrelatedProcess() {
 	const proc = Bun.spawn([process.execPath, "-e", "setTimeout(() => {}, 30000)"], { stdout: "ignore", stderr: "ignore" });
 	const reference = nativeProcessClass().fromPid(proc.pid);
