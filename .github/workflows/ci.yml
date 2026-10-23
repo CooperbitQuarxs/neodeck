@@ -149,6 +149,8 @@ jobs:
 
       - name: test (all workspaces)
         id: tests
+        # Keep independent test evidence even when the preceding gate failed.
+        if: ${{ !cancelled() }}
         continue-on-error: ${{ github.event_name == 'push' && github.ref == 'refs/heads/nightly' }}
         shell: bash
         run: |
