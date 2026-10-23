@@ -38,6 +38,7 @@ import {
 } from "./db/routine-step-runs.ts";
 import type { RoutinesRunner } from "./routines-runner.ts";
 import { listTemplates, loadTemplate } from "./routines/templates.ts";
+import { exportRoutineMigration, inspectRoutineMigrations, migrateRoutines, restoreRoutineDefinition } from "./routines/graph-migration.ts";
 
 const log = logger("routes:routines");
 
@@ -72,6 +73,42 @@ export function buildRoutinesRouter(runner: RoutinesRunner): Hono {
 			return c.json(result, result.valid ? 200 : 400);
 		} catch {
 			return c.json({ error: "invalid json" }, 400);
+		}
+	});
+	// Explicit one-shot conversion only. Loading, listing and startup never migrate or run actions.
+	app.get("/routine-migrations", (c) => c.json({ reports: inspectRoutineMigrations(runner.graphRegistry) }));
+	app.post("/routine-migrations/:id", (c) => {
+		if (runner.busy) return c.json({ error: "wait for active routines to finish before migrating" }, 409);
+		const id = c.req.param("id");
+		const report = inspectRoutineMigrations(runner.graphRegistry, id)[0];
+		if (!report) return c.json({ error: "not found" }, 404);
+		if (report.status === "blocked") return c.json({ reports: [report] }, 409);
+		try {
+			const result = migrateRoutines(runner.graphRegistry, { routineId: id });
+			const routine = getRoutine(id);
+			if (routine) runner.schedule(routine);
+			return c.json(result);
+		} catch {
+			return c.json({ error: "conversion failed; inspect the protected backup and retry" }, 500);
+		}
+	});
+	app.get("/routine-migrations/:id/:digest/export", (c) => {
+		try {
+			return c.text(exportRoutineMigration(c.req.param("id"), c.req.param("digest")), 200, { "Content-Type": "application/yaml", "Cache-Control": "no-store" });
+		} catch {
+			return c.json({ error: "conversion missing or native definition changed" }, 409);
+		}
+	});
+	app.post("/routine-migrations/:id/:digest/restore", (c) => {
+		if (runner.busy) return c.json({ error: "wait for active routines to finish before restoring" }, 409);
+		const id = c.req.param("id");
+		try {
+			restoreRoutineDefinition(id, c.req.param("digest"));
+			const routine = getRoutine(id);
+			if (routine) runner.schedule(routine);
+			return c.json({ ok: true });
+		} catch {
+			return c.json({ error: "conversion missing or definition/metadata changed; restore the protected backup offline" }, 409);
 		}
 	});
 
