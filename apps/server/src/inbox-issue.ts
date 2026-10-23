@@ -6,6 +6,7 @@ import { GraphNodeRegistry } from "./routines/graph-runner.ts";
 import { registerGraphActions } from "./routines/graph-actions.ts";
 import { validateGithubIssueRequest, type GithubIssueReceipt } from "./routines/github-issues.ts";
 import { parseInboxRepository } from "./inbox-flow.ts";
+import { getGraphEffect, graphDigest } from "./db/graph-actions.ts";
 
 const registry = new GraphNodeRegistry();
 registerGraphActions(registry);
@@ -24,6 +25,13 @@ export async function fileInboxIssue(item: InboxItem, repository: string, dryRun
 		if (prior) { updateInbox(item.id, { processed: true }); return { receipt: prior.receipt }; }
 	}
 	const request = requestFor(item);
+	// Recovery reuses the graph's exact request, including its configured labels.
+	const priorEffect = !dryRun ? getGraphEffect(graphDigest({ eventType: "inbox.file", operation: item.id })) : undefined;
+	if (priorEffect) {
+		const { operationId: _operationId, ...savedRequest } = priorEffect.request;
+		validateGithubIssueRequest({ ...savedRequest, operationId: item.id });
+		Object.assign(request, savedRequest);
+	}
 	const effects: GraphEffect[] = [];
 	try {
 		await registry.get("action.file-issue")!.execute({

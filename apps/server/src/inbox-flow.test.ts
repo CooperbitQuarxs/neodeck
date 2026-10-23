@@ -132,6 +132,6 @@ test("automatic listener settles captures and retains confirmed issue evidence w
 	expect(record.nodeRuns.find(node => node.nodeId === "acknowledge")!.status).toBe("failed");
 	expect(getInbox(item.id)?.processedAt).toBeUndefined(); expect(getInbox(item.id)?.filing).toBeUndefined();
 	getDb().exec("DROP TRIGGER reject_inbox_ack");
-	const repaired = await executeGraph(getRoutine(ID)!.graph!, { eventType: "inbox.card_added", sourceNodeId: "inbox", event: { ...item } }, runner.graphRegistry, { routineId: ID });
-	expect(repaired.status).toBe("success"); expect(getInbox(item.id)?.filing?.issueNumber).toBe(1); expect(recorded.posts()).toBe(1);
+	const repaired = await app.request(`/api/inbox/${item.id}/file`, json({ destination: { kind: "issue", repo: "outside-owner/disposable" } }));
+	expect(repaired.status).toBe(200); expect(getInbox(item.id)?.filing?.issueNumber).toBe(1); expect(recorded.posts()).toBe(1);
 });
