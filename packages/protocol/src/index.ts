@@ -1712,6 +1712,8 @@ export interface InboxItem {
 	source?: string;
 	createdAt: string;
 	processedAt?: string;
+	/** Confirmed filing association, independent of the processed marker. */
+	filing?: InboxReceipt;
 }
 
 export interface CreateInboxItemRequest {
@@ -1749,11 +1751,14 @@ export interface InboxProposal {
 	classifier: "manual";
 }
 
-export interface InboxReceipt {
+export type InboxReceipt = {
 	kind: InboxDestination["kind"];
 	ref: string;
 	url: string;
 	label: string;
+	repository?: string;
+	issueNumber?: number;
+	logicalKey?: string;
 }
 
 export interface InboxHistoryEvent {
@@ -1766,6 +1771,7 @@ export interface InboxHistoryEvent {
 
 export interface InboxRouting {
 	classifier: { kind: "manual"; name: string; description: string };
+	defaultFlow: { id: string; enabled: boolean; repository: string; url: string; protected: true };
 	flows: { id: string; name: string; enabled: boolean; sourceNodeId: string; url: string }[];
 	columns: { id: string; name: string }[];
 	defaultColumn: string;
@@ -1809,6 +1815,8 @@ export interface Routine {
 	actionBody: string;
 	actionCwd?: string;
 	enabled: boolean;
+	/** Bundled default can be disabled or edited, but not deleted. */
+	protectedDefault?: true;
 	createdAt: string;
 	updatedAt: string;
 	lastRunAt?: string;

@@ -305,7 +305,7 @@ test("isolated loopback subprocess runs all production actions through the nativ
 		reader.releaseLock();
 		expect(url).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/);
 		const types = await (await fetch(`${url}/api/routine-node-types`)).json() as { nodeTypes: Array<{ type: string }> };
-		expect(types.nodeTypes.filter(type => type.type.startsWith("action."))).toHaveLength(3);
+		expect(types.nodeTypes.filter(type => type.type.startsWith("action."))).toHaveLength(4);
 		for (const graph of [flow(), messageFlow(), flow("action.file-issue", { host: "github.com", owner: "isolated-owner", repo: "disposable", title: "Private fixture", body: "Simulated provider only" })]) {
 			expect((await fetch(`${url}/api/routine-graphs/validate`, json(graph))).status).toBe(200);
 			const saved = await (await fetch(`${url}/api/routines`, json({ name: "Subprocess actions", graph }))).json() as { id: string };

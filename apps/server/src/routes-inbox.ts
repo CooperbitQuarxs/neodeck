@@ -13,6 +13,10 @@ import { createTask, getDefaultState, getState, listStates } from "./db/tasks.ts
 import { getDb } from "./db/index.ts";
 import { InboxFilingConflictError, inboxFiling, inboxHistory, inboxProposal, inboxRouting, recordInboxFiling, reserveInboxFiling } from "./db/inbox-routing.ts";
 import { fileInboxIssue } from "./inbox-issue.ts";
+import { installDefaultInboxFlow, parseInboxRepository, registerInboxFlowNodes } from "./inbox-flow.ts";
+import { DEFAULT_INBOX_TICKET_ROUTINE_ID, getRoutine, updateGraphRoutine } from "./db/routines.ts";
+import { executeGraph, GraphNodeRegistry } from "./routines/graph-runner.ts";
+import { registerGraphActions } from "./routines/graph-actions.ts";
 
 const KINDS: ReadonlySet<InboxKind> = new Set([
 	"email",
@@ -25,6 +29,10 @@ const KINDS: ReadonlySet<InboxKind> = new Set([
 
 export function buildInboxRouter(): Hono {
 	const app = new Hono();
+	const registry = new GraphNodeRegistry();
+	registerGraphActions(registry);
+	registerInboxFlowNodes(registry);
+	installDefaultInboxFlow(registry);
 
 	app.get("/inbox", (c) => {
 		const kindParam = c.req.query("kind");
@@ -53,6 +61,39 @@ export function buildInboxRouter(): Hono {
 	});
 
 	app.get("/inbox/routing", (c) => c.json(inboxRouting()));
+
+	app.patch("/inbox/routing", async (c) => {
+		try {
+			const body = await c.req.json();
+			if (!body || typeof body !== "object" || Array.isArray(body) || Object.keys(body).some(key => !["enabled", "repository"].includes(key))
+				|| (body.enabled !== undefined && typeof body.enabled !== "boolean") || (body.repository !== undefined && typeof body.repository !== "string")) return c.json({ error: "Use enabled boolean and repository string." }, 400);
+			const flow = getRoutine(DEFAULT_INBOX_TICKET_ROUTINE_ID)!;
+			const graph = structuredClone(flow.graph!);
+			if (body.repository !== undefined) {
+				const route = graph.nodes.find(node => node.type === "operation.inbox-route");
+				if (!route) return c.json({ error: "This flow was edited. Configure its route in Studio." }, 409);
+				route.config.repository = body.repository.trim() ? Object.values(parseInboxRepository(body.repository)).join("/") : "";
+			}
+			updateGraphRoutine(flow.id, { graph, enabled: body.enabled }, registry);
+			return c.json(inboxRouting());
+		} catch (error) { return c.json({ error: String(error) }, 400); }
+	});
+
+	app.post("/inbox/routing/preview", async (c) => {
+		try {
+			const body = await c.req.json();
+			if (!body || !KINDS.has(body.kind) || typeof body.title !== "string" || !body.title.trim() || (body.body !== undefined && typeof body.body !== "string")) return c.json({ error: "A valid kind, title and body are required." }, 400);
+			const flow = getRoutine(DEFAULT_INBOX_TICKET_ROUTINE_ID)!;
+			const source = flow.graph!.nodes.find(node => node.config.eventType === "inbox.card_added" && registry.get(node.type)?.definition.kind === "event");
+			if (!source) return c.json({ error: "The default graph has no inbox event source. Restore one in Studio." }, 409);
+			const activation = { eventType: "inbox.card_added", sourceNodeId: source.id, event: { id: "preview", kind: body.kind, title: body.title, body: body.body ?? "", createdAt: new Date().toISOString() } };
+			const startedAt = new Date().toISOString();
+			const result = flow.enabled
+				? await executeGraph(flow.graph!, activation, registry, { routineId: flow.id, runId: "preview", dryRun: true, signal: c.req.raw.signal })
+				: { status: "aborted" as const, error: "Default route is paused; no new item would be dispatched.", nodeRuns: [], outputs: [] };
+			return c.json({ ...result, id: "preview", routineId: flow.id, startedAt, endedAt: new Date().toISOString(), graph: flow.graph, activation, dryRun: true });
+		} catch (error) { return c.json({ error: String(error) }, 400); }
+	});
 
 	app.get("/inbox/:id/proposal", (c) => {
 		const item = getInbox(c.req.param("id"));

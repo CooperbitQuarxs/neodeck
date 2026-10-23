@@ -1,5 +1,6 @@
 import type {
 	CreateInboxItemRequest,
+	GraphRunRecord,
 	InboxItem,
 	InboxDestination,
 	InboxHistoryEvent,
@@ -30,6 +31,12 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
 export const inboxApi = {
 	routing(): Promise<InboxRouting> {
 		return req<InboxRouting>("/inbox/routing");
+	},
+	updateRouting(body: Partial<Pick<InboxRouting["defaultFlow"], "enabled" | "repository">>): Promise<InboxRouting> {
+		return req<InboxRouting>("/inbox/routing", { method: "PATCH", body: JSON.stringify(body) });
+	},
+	previewRouting(body: Pick<CreateInboxItemRequest, "kind" | "title" | "body">): Promise<GraphRunRecord> {
+		return req<GraphRunRecord>("/inbox/routing/preview", { method: "POST", body: JSON.stringify(body) });
 	},
 	proposal(id: string): Promise<InboxProposal> {
 		return req<InboxProposal>(`/inbox/${encodeURIComponent(id)}/proposal`);
