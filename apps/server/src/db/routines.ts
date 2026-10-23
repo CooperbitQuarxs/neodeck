@@ -22,6 +22,7 @@ import { encodeTriggerPayload } from "./trigger-payload.ts";
 import { finalizeRun } from "./routine-step-runs.ts";
 import { getGraphEffect, redactGraphActionField } from "./graph-actions.ts";
 
+export const DEFAULT_INBOX_TICKET_ROUTINE_ID = "r_default_inbox_tickets";
 interface RoutineRow {
 	id: string;
 	name: string;
@@ -83,6 +84,7 @@ function rowToRoutine(r: RoutineRow): Routine {
 		specVersion,
 		concurrency: r.concurrency as RoutineConcurrency,
 	};
+	if (r.id === DEFAULT_INBOX_TICKET_ROUTINE_ID) out.protectedDefault = true;
 	if (r.action_cwd !== null) out.actionCwd = r.action_cwd;
 	if (r.last_run_at !== null) out.lastRunAt = r.last_run_at;
 	if (r.next_run_at !== null) out.nextRunAt = r.next_run_at;
@@ -338,13 +340,15 @@ function graphCron(graph: RoutineGraph): string {
 }
 
 export function createGraphRoutine(input: {
+	/** Reserved identity used only when installing a bundled native default. */
+	id?: string;
 	name: string;
 	description?: string;
 	graph: RoutineGraph;
 	enabled?: boolean;
 }, registry: GraphRoutineValidator): Routine {
 	assertValidGraph(input.graph, registry);
-	const routineId = `r_${id().toLowerCase().slice(0, 18)}`;
+	const routineId = input.id ?? `r_${id().toLowerCase().slice(0, 18)}`;
 	const now = nowIso();
 	const graph = input.graph;
 	getDb().query(
@@ -424,6 +428,7 @@ export function updateRoutine(
 }
 
 export function deleteRoutine(routineId: string): boolean {
+	if (routineId === DEFAULT_INBOX_TICKET_ROUTINE_ID) return false;
 	const r = getDb().query<unknown, [string]>("DELETE FROM routines WHERE id = ?").run(routineId);
 	return Number(r.changes ?? 0) > 0;
 }

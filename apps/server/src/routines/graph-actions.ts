@@ -6,6 +6,8 @@ import { createTask, getDefaultState, getState, updateTask } from "../db/tasks.t
 import { notificationService, validateNotificationPayload } from "../notifications/service.ts";
 import { githubIssuesAdapter, validateGithubIssueRequest } from "./github-issues.ts";
 import { findGraphOutput, readGraphPath, type GraphNodeContext, type GraphNodeRegistry } from "./graph-runner.ts";
+import { reserveInboxFiling } from "../db/inbox-routing.ts";
+import type { InboxItem } from "@npi-deck/protocol";
 
 const inFlight = new Map<string, Promise<void>>();
 
@@ -49,6 +51,10 @@ function identity(context: GraphNodeContext): string {
 	const event = Array.isArray(activation.event) ? undefined : activation.event;
 	const card = event?.card;
 	const originalId = explicit ?? event?.id ?? (card && typeof card === "object" && !Array.isArray(card) ? card.id : undefined);
+	// One captured item owns one logical issue write, across flows, node edits and replay.
+	if (context.node.type === "action.file-issue" && ["inbox.card_added", "inbox.file"].includes(activation.eventType)) {
+		return graphDigest({ eventType: "inbox.file", operation: text(event?.id, "original inbox id") });
+	}
 	return graphDigest({ routine: text(context.routineId, "routineId"), node: context.node.id, eventType: activation.eventType, operation: text(originalId, "event.id or operationId"), ...(context.iteration?.length ? { iteration: context.iteration } : {}) });
 }
 function effectValue(effect: GraphEffect): GraphObject {
@@ -125,6 +131,12 @@ export function registerGraphActions(registry: GraphNodeRegistry): void {
 			} else {
 				keys(request, ["host", "owner", "repo", "title", "body", "labels", "assignees", "milestone", "attribution"], "issue");
 				const issue = validateGithubIssueRequest({ ...request, operationId: logicalKey });
+				const original = (context.rootActivation ?? context.activation).event;
+				if (!context.dryRun && !Array.isArray(original) && (context.rootActivation ?? context.activation).eventType === "inbox.card_added") {
+					if (original.kind !== "ticket") throw new Error("Only original inbox tickets can file automatically.");
+					const snapshot = reserveInboxFiling(original as unknown as InboxItem, { kind: "issue", repo: `${issue.host}/${issue.owner}/${issue.repo}` });
+					if (snapshot.title !== issue.title || snapshot.body !== issue.body) throw new Error("Inbox filing conflicts with the original reserved title or body.");
+				}
 				normalized = object(issue, "issue request"); destination = { host: issue.host, owner: issue.owner, repo: issue.repo };
 				send = async () => object(await githubIssuesAdapter.create(issue, context.signal), "issue receipt");
 				reconcile = async () => {

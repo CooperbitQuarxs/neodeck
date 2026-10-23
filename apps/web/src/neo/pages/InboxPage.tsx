@@ -7,7 +7,7 @@ import { Markdown } from "@/lib/markdown";
 import { inboxApi } from "@/lib/inbox-api";
 import { useStore } from "@/lib/store";
 import { CaptureComposer } from "./inbox/CaptureComposer";
-import { SOURCES } from "../client/source";
+import { InboxRoutingStrip } from "@/components/inbox/InboxRoutingStrip";
 import "./inbox.css";
 
 type Filter = "waiting" | "all" | "done";
@@ -90,16 +90,12 @@ export function InboxPage() {
 
 function RoutingPanel({ routing, error, retry }: { routing: InboxRouting | null; error: string | null; retry: () => Promise<void> }) {
 	const [expanded, setExpanded] = useState(false);
-	const enabled = routing?.flows.filter(flow => flow.enabled) ?? [];
+	const flow = routing?.defaultFlow;
+	const summary = flow ? `Tickets · ${flow.repository || "repository not configured"} · ${flow.enabled ? "enabled" : "paused"}` : "Checking active handlers…";
 	return <section className="inbox-routing" aria-label="Inbox routing">
-		<button type="button" className="inbox-routing-toggle" aria-expanded={expanded} aria-controls="inbox-routing-details" onClick={() => setExpanded(value => !value)}><Route size={15} /><span>Routing</span><span className="inbox-routing-summary">{error ? "Routing unavailable" : routing ? `${routing.classifier.name} · ${enabled.length ? `${enabled.length} active flow${enabled.length === 1 ? "" : "s"}` : "No automatic flows"}` : "Checking active handlers…"}</span><ChevronDown size={14} data-open={expanded} /></button>
+		<button type="button" className="inbox-routing-toggle" aria-expanded={expanded} aria-controls="inbox-routing-details" onClick={() => setExpanded(value => !value)}><Route size={15} /><span>Routing</span><span className="inbox-routing-summary">{error ? "Routing unavailable" : summary}</span><ChevronDown size={14} data-open={expanded} /></button>
 		{expanded ? <div className="inbox-routing-details" id="inbox-routing-details">
-			{error ? <ErrorState error={error} onRetry={() => void retry()} /> : routing ? <>
-				<p>{routing.classifier.description}</p>
-				<div className="inbox-routing-flows">{routing.flows.length ? routing.flows.map(flow => <Link key={`${flow.id}:${flow.sourceNodeId}`} to={flow.url}><span>{flow.name}</span><span>{flow.enabled ? "Active for new captures" : "Disabled"}</span><ArrowUpRight size={13} /></Link>) : <p>No routine subscribes to new inbox captures. Add an <strong>inbox: card added</strong> source in Studio to connect a flow.</p>}</div>
-				{SOURCES.classifierInference === "preview" ? <p className="neo-dim">Studio classifier documents are not automatically active inbox handlers. Model suggestions are not connected to NeoPi yet.</p> : null}
-				<Link to="/studio" className="inbox-text-link">Inspect flows in Studio <ArrowUpRight size={13} /></Link>
-			</> : <p>Loading routing…</p>}
+			<InboxRoutingStrip onChanged={() => { void retry(); }} />
 		</div> : null}
 	</section>;
 }
@@ -138,7 +134,7 @@ function ItemView({ item, routing, onBack, onChanged }: { item: InboxItem; routi
 		return () => { cancelled = true; window.clearInterval(timer); };
 	}, [item.id, item.processedAt, revision]);
 	const receipts = events?.filter(event => event.receipt) ?? [];
-	const receipt = receipts.at(-1)?.receipt;
+	const receipt = item.filing ?? receipts.at(-1)?.receipt;
 	const selectedColumn = column || routing?.defaultColumn || "";
 	const columnName = routing?.columns.find(state => state.id === selectedColumn)?.name ?? selectedColumn;
 	async function previewIssue(): Promise<void> {

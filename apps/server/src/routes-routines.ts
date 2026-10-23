@@ -22,6 +22,7 @@ import {
 	createV1Routine,
 	createGraphRoutine,
 	deleteRoutine,
+	DEFAULT_INBOX_TICKET_ROUTINE_ID,
 	getRoutine,
 	getGraphRun,
 	getRun,
@@ -279,6 +280,7 @@ export function buildRoutinesRouter(runner: RoutinesRunner): Hono {
 
 	app.delete("/routines/:id", (c) => {
 		const id = c.req.param("id");
+		if (id === DEFAULT_INBOX_TICKET_ROUTINE_ID) return c.json({ error: "The default inbox flow cannot be deleted. Disable it instead." }, 409);
 		runner.unschedule(id);
 		const ok = deleteRoutine(id);
 		return c.json({ ok });

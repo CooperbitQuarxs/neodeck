@@ -1,4 +1,4 @@
-import type { InboxItem, InboxKind } from "@npi-deck/protocol";
+import type { InboxItem, InboxKind, InboxReceipt } from "@npi-deck/protocol";
 
 import { getDb, id, nowIso } from "./index.ts";
 import { enqueueInboxGraphEvents } from "./inbox-graph-events.ts";
@@ -32,6 +32,8 @@ function rowTo(r: Row): InboxItem {
 	};
 	if (r.source !== null) out.source = r.source;
 	if (r.processed_at !== null) out.processedAt = r.processed_at;
+	const filing = getDb().query<{ receipt_json: string }, [string]>("SELECT receipt_json FROM inbox_filing_receipts WHERE item_id = ? ORDER BY filed_at DESC LIMIT 1").get(r.id);
+	if (filing) out.filing = JSON.parse(filing.receipt_json) as InboxReceipt;
 	return out;
 }
 

@@ -38,6 +38,7 @@ import { admitInboxGraphEvent, discardInboxGraphEvent, inboxGraphEventsFor, pend
 import { registerGraphActions } from "./routines/graph-actions.ts";
 import { registerGraphStepNodes } from "./routines/graph-step-nodes.ts";
 import { runV0Action } from "./routines/v0-action.ts";
+import { installDefaultInboxFlow, registerInboxFlowNodes } from "./inbox-flow.ts";
 import { registerGraphV0Node } from "./routines/graph-v0-node.ts";
 
 const log = logger("routines-runner");
@@ -70,6 +71,7 @@ export class RoutinesRunner {
 		registerGraphActions(this.graphRegistry);
 		registerGraphStepNodes(this.graphRegistry);
 		registerGraphV0Node(this.graphRegistry);
+		registerInboxFlowNodes(this.graphRegistry);
 	}
 	get busy(): boolean { return this.runs.size > 0; }
 	get workSnapshot(): Array<{ runId: string; routineId: string }> {
@@ -79,6 +81,7 @@ export class RoutinesRunner {
 
 	start(): void {
 		if (this.unsubscribeInbox || this.closing) return;
+		installDefaultInboxFlow(this.graphRegistry);
 		recoverInboxGraphEvents();
 		this.unsubscribeInbox = subscribeInboxGraphEvents(() => this.dispatchInboxEvents());
 		const routines = listRoutines();
