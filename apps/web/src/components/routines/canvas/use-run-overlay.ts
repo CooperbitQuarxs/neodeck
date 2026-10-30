@@ -1,30 +1,9 @@
-/**
- * T-71: run-status overlay state for the visual builder.
- *
- * This hook fans out the work needed to paint per-step run status on top of
- * the canvas:
- *  - Fetches the routine's recent runs (descending; the head is the most
- *    recent) so the user can scrub through history.
- *  - Selects a default run (the most recent) and fetches its per-step
- *    records.
- *  - Subscribes to the WS firehose so a live run paints status changes in
- *    real time without polling. The store owns the singleton `WsClient`.
- *
- * Returned state is intentionally minimal — `stepRunsByStepId` is what the
- * canvas wants for ring colors and badges, `runs` powers the last-run picker,
- * `selectedRunId` is bidirectional so the picker can swap the overlay.
- *
- * Lifecycle:
- *  - When `routineId` changes (or becomes undefined), the hook clears state
- *    and refetches.
- *  - The component using this hook is mounted inside the routine editor; the
- *    WS client survives unmount via the zustand store, so we never tear it
- *    down here.
- */
+/** Legacy step overlays and native finalized graph traces remain separate. */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type {
+	GraphRunRecord,
 	RoutineRun,
 	RoutineStepRun,
 	ServerFrame,
@@ -32,6 +11,7 @@ import type {
 
 import { routinesApi } from "@/lib/routines-api";
 import { useStore } from "@/lib/store";
+import { routineRunActive, useGraphRunTrace, type GraphTraceState } from "../use-graph-run-trace";
 
 export interface RunOverlayState {
 	/** Most-recent N runs for the routine, descending by `startedAt`. */
@@ -46,16 +26,22 @@ export interface RunOverlayState {
 	refreshing: boolean;
 	/** Manual refetch for the runs list + the current run's steps. */
 	refresh(): Promise<void>;
+	/** Native stored provenance. Never populated from legacy steps or websocket frames. */
+	graphTrace: GraphRunRecord | null;
+	traceState: GraphTraceState;
+	traceError: string | null;
 }
 
 const RUNS_LIMIT = 30;
 
-export function useRunOverlay(routineId: string | undefined): RunOverlayState {
+export function useRunOverlay(routineId: string | undefined, options: { nativeGraph?: boolean } = {}): RunOverlayState {
 	const [runs, setRuns] = useState<RoutineRun[]>([]);
 	const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
 	const [stepRuns, setStepRuns] = useState<RoutineStepRun[]>([]);
 	const [refreshing, setRefreshing] = useState(false);
 	const ws = useStore((s) => s.ws);
+	const native = options.nativeGraph === true;
+	const graphInspection = useGraphRunTrace(routineId, selectedRunId, { enabled: native });
 
 	// Keep refs of the latest values so the WS subscription handler can read
 	// them without re-binding (which would tear the subscription down on every
@@ -99,6 +85,7 @@ export function useRunOverlay(routineId: string | undefined): RunOverlayState {
 			setStepRuns([]);
 			return;
 		}
+		if (native) { setStepRuns([]); return; }
 		let cancelled = false;
 		setRefreshing(true);
 		void routinesApi
@@ -115,11 +102,11 @@ export function useRunOverlay(routineId: string | undefined): RunOverlayState {
 		return () => {
 			cancelled = true;
 		};
-	}, [routineId, selectedRunId]);
+	}, [routineId, selectedRunId, native]);
 
 	// WS subscription for live run events scoped to this routine.
 	useEffect(() => {
-		if (!ws || !routineId) return;
+		if (!ws || !routineId || native) return;
 		return ws.subscribe((frame: ServerFrame) => {
 			switch (frame.type) {
 				case "routine_run_started": {
@@ -152,7 +139,19 @@ export function useRunOverlay(routineId: string | undefined): RunOverlayState {
 					return;
 			}
 		});
-	}, [ws, routineId, fetchRunsList]);
+	}, [ws, routineId, native, fetchRunsList]);
+
+	useEffect(() => {
+		if (!native || !graphInspection.run) return;
+		const summary = graphInspection.run;
+		setRuns(current => current.some(run => run.id === summary.id) ? current.map(run => run.id === summary.id ? summary : run) : [summary, ...current]);
+	}, [native, graphInspection.run]);
+
+	useEffect(() => {
+		if (!native || !runs.some(routineRunActive)) return;
+		const timer = setTimeout(() => void fetchRunsList(), 1500);
+		return () => clearTimeout(timer);
+	}, [native, runs, fetchRunsList]);
 
 	const stepRunsByStepId = useMemo(() => {
 		const m = new Map<string, RoutineStepRun>();
@@ -162,6 +161,7 @@ export function useRunOverlay(routineId: string | undefined): RunOverlayState {
 
 	const refresh = useCallback(async () => {
 		await fetchRunsList();
+		if (native) { graphInspection.refresh(); return; }
 		if (routineId && selectedRunIdRef.current) {
 			try {
 				const res = await routinesApi.steps(routineId, selectedRunIdRef.current);
@@ -170,15 +170,18 @@ export function useRunOverlay(routineId: string | undefined): RunOverlayState {
 				// no-op
 			}
 		}
-	}, [fetchRunsList, routineId]);
+	}, [fetchRunsList, routineId, native, graphInspection.refresh]);
 
 	return {
 		runs,
 		selectedRunId,
 		setSelectedRunId,
 		stepRunsByStepId,
-		refreshing,
+		refreshing: refreshing || native && graphInspection.state === "loading",
 		refresh,
+		graphTrace: native && graphInspection.trace?.id === selectedRunId ? graphInspection.trace : null,
+		traceState: native ? graphInspection.state : "idle",
+		traceError: native ? graphInspection.error : null,
 	};
 }
 

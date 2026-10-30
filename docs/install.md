@@ -110,6 +110,10 @@ The script:
    `packages/natives/native/index.js` and `index.d.ts`, which the build
    regenerates.
 
+   A cold build can change those tracked generated bindings. NeoPi's
+   `BUILD_INFO` reports that dirtiness; preflight can accept the verified addon
+   without labeling the dirty source tree as a clean match for `neopi.pin`.
+
    Evidence for a candidate is, in order: this tree's record for those exact
    bytes, a record in the other checkout that holds the file, or that other
    checkout's own native inputs. The last kind is reported as
@@ -133,8 +137,9 @@ The script:
 5. Registers the tree under `backends` in `~/.npi-deck/config.yml`, and sets
    `activeBackend` if it isn't set yet (see [config.yml](#configyml)).
 6. For the pinned commit (or with `--tsconfig`), writes the gitignored
-   `tsconfig.neopi.json`. `apps/server` extends it, so typechecking the server
-   needs this step first.
+   `tsconfig.neopi.json`. The server and Telegram bridge extend it to resolve
+   NeoPi sources and ambient asset declarations. Both use that tree's `tsgo`
+   compiler, so typechecking either needs this step first.
 
 `NPI_DECK_HOME` overrides `~/.npi-deck`. Re-running the script is safe. To
 check a tree against everything the deck uses:
@@ -150,10 +155,10 @@ deck loads. `neopi-setup` writes it; you rarely edit it by hand:
 
 ```yaml
 backends:
-  - id: 7290c5ab68       # 10-character short commit; neopi-setup uses it as the id
+  - id: d8c9c98b0f       # 10-character short commit; neopi-setup uses it as the id
     kind: source
-    path: /home/you/.npi-deck/neopi/7290c5ab683243072805db0aa6bdbdbb4988a887
-activeBackend: 7290c5ab68
+    path: /home/you/.npi-deck/neopi/d8c9c98b0f3097a981d03a6e2d4b8bb6b028ef90
+activeBackend: d8c9c98b0f
 ```
 
 - `kind: source` is the only kind the deck loads; `kind: gateway` is reserved

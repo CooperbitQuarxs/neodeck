@@ -7,6 +7,7 @@ import type {
 	ImageAttachment,
 	ModelInfo,
 	ModelRef,
+	ModelSelectorResult,
 	PendingPlanApprovalWire,
 	PlanModeContextWire,
 	ServerFrame,
@@ -56,6 +57,10 @@ export interface AgentBridge {
 	subscribeSubagents(sessionId: string, listener: (nodes: SubagentNode[]) => void): () => void;
 	readSubagentTranscript(sessionId: string, id: string, fromByte?: number): Promise<SubagentTranscriptResponse>;
 	abortSubagent(sessionId: string, id: string): Promise<void>;
+	/** Live runtime identities only. Does not resume sessions or discover definitions. */
+	agentInstances?(): import("@npi-deck/protocol").AgentInstance[];
+	/** Steer an existing, owned child. Never revives a disposed runtime. */
+	steerSubagent?(sessionId: string, id: string, text: string): Promise<void>;
 	/** Pin a session against the idle reaper while a client is subscribed. */
 	trackSubscriberAdded(sessionId: string, connectionId: string): void;
 	/** Drop a subscriber; once subscribers hit zero and idle window elapses, the reaper claims it. */
@@ -81,6 +86,8 @@ export interface AgentBridge {
 	 * Mixtures are those the session's workspace (else `cwd`, else the server's cwd) defines and can run.
 	 */
 	listModels(opts?: { sessionId?: string; cwd?: string }): Promise<ModelInfo[]>;
+	/** Native query engine only. Unsupported backends report a capability error. */
+	queryModels?(query: string, opts?: { sessionId?: string; cwd?: string }): Promise<ModelSelectorResult>;
 	/**
 	 * How `retry.fallbackChains` covers a live chat's active model, resolved by
 	 * NeoPi over the chat's own settings. Undefined when the chat is not live or
@@ -254,6 +261,8 @@ export interface SessionHandle {
 	compact(focus?: string): Promise<void>;
 	/** Swap the live agent session to a different model. Throws on unknown ref or missing auth. */
 	setModel(ref: ModelRef): Promise<void>;
+	/** Resolve an opaque native selector without losing its role or effort. */
+	setModelSelector?(selector: string): Promise<void>;
 	/**
 	 * Try to dispatch a leading slash command via the omp SDK's text-mode
 	 * dispatcher. Returns `"fallthrough"` when nothing matched — caller should

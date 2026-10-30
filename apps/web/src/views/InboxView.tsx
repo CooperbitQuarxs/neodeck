@@ -30,12 +30,13 @@ import {
 	Users,
 	X,
 } from "lucide-react";
-import type { BridgeInfo, InboxItem, InboxKind } from "@npi-deck/protocol";
+import type { BridgeInfo, InboxHistoryEvent, InboxItem, InboxKind } from "@npi-deck/protocol";
 
 import { ComposePane, KIND_LABEL, KIND_ORDER, KIND_WORD } from "@/components/inbox/ComposePane";
+import { InboxRoutingStrip } from "@/components/inbox/InboxRoutingStrip";
 import { Layout } from "@/components/Layout";
 import { MarkdownEdit } from "@/components/MarkdownEdit";
-import { Card, Construction, NeoBadge, NeoButton, Page, PageHeader, PlannedBadge, Segmented, type NeoTone } from "@/components/neo";
+import { Card, Construction, NeoBadge, NeoButton, NeoSelect, Page, PageHeader, PlannedBadge, Segmented, type NeoTone } from "@/components/neo";
 import { bridgesApi } from "@/lib/bridges-api";
 import { inboxApi } from "@/lib/inbox-api";
 import { useStore } from "@/lib/store";
@@ -172,14 +173,14 @@ export function InboxView() {
 			`task, POST /api/tasks and report the new task id.`,
 		].join("\n");
 		setPendingDraft({ text: draft });
-		navigate("/threads");
+		navigate("/legacy/threads");
 	}
 
 	async function makeCard(it: InboxItem): Promise<void> {
 		try {
 			const { task, inbox } = await inboxApi.promote(it.id);
 			replaceItem(inbox);
-			navigate(`/tasks?open=${encodeURIComponent(task.id)}`);
+			navigate(`/legacy/tasks?open=${encodeURIComponent(task.id)}`);
 		} catch (e) {
 			setError(String(e));
 		}
@@ -196,7 +197,7 @@ export function InboxView() {
 					<Page>
 						<PageHeader
 							title="Inbox"
-							description="Drop a thought in. Label it, or leave that to the office. What still needs you stays here; the rest settles away."
+							description="Drop a thought in and choose its kind. New tickets follow your GitHub route. What still needs you stays here."
 							actions={
 								<>
 									<Segmented<Scope>
@@ -215,10 +216,12 @@ export function InboxView() {
 							}
 						/>
 
+						<InboxRoutingStrip />
+
 						{scope === "shared" ? (
 							<Construction>
 								<strong className="text-ink">The shared inbox is not built yet.</strong> It arrives with accounts: one inbox the whole office drops slips
-								into, next to each person's private one. Until then every slip here is yours. See <a href="/people" className="text-accent underline-offset-2 hover:underline">People</a>.
+								into, next to each person's private one. Until then every slip here is yours. See <a href="/legacy/people" className="text-accent underline-offset-2 hover:underline">People</a>.
 							</Construction>
 						) : null}
 
@@ -370,11 +373,10 @@ function ReaderCard({
 			data-testid="inbox-reader"
 			title={
 				<span className="inline-flex items-center gap-2">
-					<select
+					<NeoSelect
 						value={item.kind}
 						onChange={(e) => onPatch({ kind: e.target.value as InboxKind })}
-						className="neo-input"
-						data-size="sm"
+						size="sm"
 						aria-label="Kind"
 					>
 						{KIND_ORDER.map((k) => (
@@ -382,7 +384,7 @@ function ReaderCard({
 								{KIND_WORD[k]}
 							</option>
 						))}
-					</select>
+					</NeoSelect>
 					{settled ? <NeoBadge>settled</NeoBadge> : <NeoBadge tone="accent">needs you</NeoBadge>}
 				</span>
 			}
@@ -427,6 +429,7 @@ function ReaderCard({
 				{item.source ? ` · from ${sourceWord(item.source)}` : ""}
 				{item.processedAt ? ` · settled ${new Date(item.processedAt).toLocaleString()}` : ""}
 			</div>
+			<FilingHistory key={item.id} item={item} />
 			<div className="mt-4 border-t border-[var(--neo-line-1)] pt-4">
 				<MarkdownEdit
 					value={item.body}
@@ -446,7 +449,7 @@ function HowItWorks({ telegram }: { telegram: BridgeInfo | undefined }) {
 			<Card index={2} title="How a slip moves" description="Pick a slip on the left to read it, or capture a new one.">
 				<ol className="space-y-2.5 text-[13px] leading-relaxed text-ink-2">
 					<li className="flex gap-2.5"><span className="neo-mono text-ink-4">1</span><span><span className="text-ink">Drop it in.</span> A title is enough; the body can wait.</span></li>
-					<li className="flex gap-2.5"><span className="neo-mono text-ink-4">2</span><span><span className="text-ink">It gets a label.</span> Capture, idea, ticket, decision… yours or the office's.</span></li>
+					<li className="flex gap-2.5"><span className="neo-mono text-ink-4">2</span><span><span className="text-ink">Choose its kind.</span> Capture, idea, ticket, decision… routing uses your explicit choice.</span></li>
 					<li className="flex gap-2.5"><span className="neo-mono text-ink-4">3</span><span><span className="text-ink">It settles.</span> Make a card and an agent picks it up; or mark it done and it leaves this list.</span></li>
 					<li className="flex gap-2.5"><span className="neo-mono text-ink-4">4</span><span><span className="text-ink">Something appears.</span> A card moves, a feature lands in nightly.</span></li>
 				</ol>
@@ -462,6 +465,27 @@ function HowItWorks({ telegram }: { telegram: BridgeInfo | undefined }) {
 			</Card>
 		</div>
 	);
+}
+
+function FilingHistory({ item }: { item: InboxItem }) {
+	const [events, setEvents] = useState<InboxHistoryEvent[]>([]);
+	const [error, setError] = useState("");
+	const [reload, setReload] = useState(0);
+	useEffect(() => {
+		let alive = true;
+		setError("");
+		void inboxApi.history(item.id).then(result => {
+			if (alive) setEvents(result.events);
+		}).catch(reason => { if (alive) setError(reason instanceof Error ? reason.message : String(reason)); });
+		return () => { alive = false; };
+	}, [item.id, item.processedAt, item.filing?.url, reload]);
+	const receipts = [...(item.filing ? [item.filing] : []), ...events.flatMap(event => event.receipt ? [event.receipt] : [])];
+	const links = receipts.filter((receipt, index) => receipts.findIndex(other => other.url === receipt.url) === index);
+	if (!links.length && !error) return null;
+	return <div className="mt-4 space-y-2 border-t border-[var(--neo-line-1)] pt-3 text-[12.5px]">
+		{links.length ? <div><p className="mb-1 text-ink-3">Confirmed filing</p><ul className="space-y-1">{links.map(receipt => <li key={receipt.url}><a href={receipt.url} target={receipt.kind === "issue" ? "_blank" : undefined} rel={receipt.kind === "issue" ? "noopener noreferrer" : undefined} className="break-all text-accent hover:underline">{receipt.label || receipt.ref}</a></li>)}</ul></div> : null}
+		{error ? <p role="alert" className="text-danger">Could not load filing history. {error} <NeoButton size="sm" onClick={() => setReload(value => value + 1)}>Retry history</NeoButton></p> : null}
+	</div>;
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────────────

@@ -97,6 +97,29 @@ chain replaces the deck's for this model. The deck's `default` chain stays in
 force for other models the chat switches to. Edit the active model's chain
 from the model picker's **Fallbacks** row, or in Settings → NeoPi.
 
+### Model configuration and picker visibility
+
+Open **Models** at `/models` for the connected NeoPi catalogue, global role
+assignments and validated custom `models.yml` definitions. The conversation's
+quick switcher selects a model; opening the Models workspace does not.
+Role selectors such as `@default` stay selectors rather than being replaced
+by whichever concrete model currently resolves them.
+
+Role edits and non-secret NeoPi settings include the value read by the
+browser. If another client changes that setting, the server rejects the
+stale save. Reload before trying again. Custom model documents retain their
+existing revision check and server-side validation. Project-scope role writes
+and effort-rule editing require the newer native Models configuration API;
+the pinned SDK does not expose them yet, and Deck leaves native rules intact.
+
+**Settings / Inference providers / Deck picker visibility** hides a provider
+from Deck model pickers in this browser. It does not disable inference,
+remove credentials or change NeoProxy's served-model exposure. These browser
+preferences persist across reloads. NeoProxy-backed accounts and provider
+catalogues remain preview data, separate from the connected NeoPi runtime's
+credential controls.
+
+
 ### Card agents
 
 Assigning a card starts its agent without an approval step. Queued assignments

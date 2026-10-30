@@ -6,14 +6,10 @@ import type { Routine, RoutineRun, RoutineStepRun, RoutineStepStatus } from "@np
 import { Layout } from "@/components/Layout";
 import { routinesApi } from "@/lib/routines-api";
 import { cn, formatDurationMs } from "@/lib/utils";
+import { GraphRunProvenance } from "@/components/routines/GraphRunProvenance";
+import { GRAPH_TRACE_MESSAGES, routineRunActive, useGraphRunTrace } from "@/components/routines/use-graph-run-trace";
 
-/**
- * /routines/:id/runs/:runId — detailed view of a single routine run.
- *
- * Polls every 1.5s while the run is in flight; switches to no-poll once
- * `endedAt` is populated. WS-based live updates would be cheaper but the
- * polling path is robust and ships today.
- */
+/** Direct lookup keeps historical runs reachable outside the recent-run window. */
 export function RunDetailView() {
 	const { id, runId } = useParams<{ id: string; runId: string }>();
 	const [routine, setRoutine] = useState<Routine | null>(null);
@@ -21,6 +17,11 @@ export function RunDetailView() {
 	const [steps, setSteps] = useState<RoutineStepRun[]>([]);
 	const [err, setErr] = useState<string | undefined>();
 	const [refreshing, setRefreshing] = useState(false);
+	const native = routine?.specVersion === 2 && routine.id === id;
+	const inspection = useGraphRunTrace(id, runId ?? null, { enabled: native });
+	const requestedRun = run && run.id === runId && run.routineId === id ? run : null;
+	const displayedRun = native ? inspection.run ?? requestedRun : requestedRun;
+	const refreshGeneration = useRef(0);
 
 	// T-72: deep-link target. The inspector links to
 	// `/routines/:id/runs/:runId#step-<stepId>` so a node-click in canvas mode
@@ -34,53 +35,56 @@ export function RunDetailView() {
 	const refresh = useCallback(async () => {
 		if (!id || !runId) return;
 		setRefreshing(true);
+		const generation = ++refreshGeneration.current;
 		try {
-			const [routineRes, runs, stepsRes] = await Promise.all([
+			const [routineRes, requestedRun] = await Promise.all([
 				routinesApi.get(id),
-				routinesApi.runs(id, 50),
-				routinesApi.steps(id, runId),
+				routinesApi.run(id, runId),
 			]);
+			if (generation !== refreshGeneration.current) return;
 			setRoutine(routineRes);
-			const matching = runs.runs.find((r) => r.id === runId) ?? null;
-			setRun(matching);
-			setSteps(stepsRes.steps);
+			setRun(requestedRun);
+			if (routineRes.specVersion === 2) {
+				setSteps([]);
+				inspection.refresh();
+			} else {
+				const stepsRes = await routinesApi.steps(id, runId);
+				if (generation !== refreshGeneration.current) return;
+				setSteps(stepsRes.steps);
+			}
 			setErr(undefined);
 		} catch (e) {
-			setErr(String(e));
+			if (generation === refreshGeneration.current) setErr(String(e));
 		} finally {
-			setRefreshing(false);
+			if (generation === refreshGeneration.current) setRefreshing(false);
 		}
-	}, [id, runId]);
+	}, [id, runId, inspection.refresh]);
 
 	useEffect(() => {
 		void refresh();
+		return () => { refreshGeneration.current++; };
 	}, [refresh]);
 
 	// Live updates: poll while the run hasn't ended.
 	useEffect(() => {
-		if (!run) return;
-		if (run.endedAt) return;
-		const handle = setInterval(() => void refresh(), 1500);
-		return () => clearInterval(handle);
-	}, [run, refresh]);
+		if (native || !run || !routineRunActive(run)) return;
+		const handle = setTimeout(() => void refresh(), 1500);
+		return () => clearTimeout(handle);
+	}, [native, run, refresh]);
 
 	if (!id || !runId) return <div className="p-6 text-ink-3">Missing id/runId.</div>;
 
-	const status: RoutineStepStatus | "running" = !run
-		? "pending"
-		: !run.endedAt
-			? "running"
-			: run.abortReason
-				? "aborted"
-				: run.exitCode === 0
-					? "success"
-					: "failed";
+	const status: RoutineStepStatus | "running" | "completed" = native && inspection.trace
+		? inspection.trace.status
+		: !displayedRun ? "pending"
+			: routineRunActive(displayedRun) ? "running"
+				: displayedRun.abortReason ? "aborted"
+					: native && displayedRun.exitCode === undefined && !displayedRun.error && !displayedRun.stepCountFailed ? "completed"
+						: displayedRun.exitCode === 0 ? "success" : "failed";
 
-	const totalCostUsd = run ? run.totalLlmCostMicros / 1_000_000 : 0;
-	const totalDurationMs =
-		run?.startedAt && run.endedAt
-			? new Date(run.endedAt).getTime() - new Date(run.startedAt).getTime()
-			: null;
+	const totalCostUsd = displayedRun ? displayedRun.totalLlmCostMicros / 1_000_000 : 0;
+	const totalDurationMs = displayedRun?.startedAt && displayedRun.endedAt
+		? Date.parse(displayedRun.endedAt) - Date.parse(displayedRun.startedAt) : null;
 
 	async function replay(): Promise<void> {
 		if (!id) return;
@@ -95,7 +99,7 @@ export function RunDetailView() {
 		<Layout
 			sidebar={
 				<div className="flex h-full min-h-0 flex-col p-3">
-					<Link to="/routines" className="meta mb-2 flex items-center gap-1 text-ink-3 hover:text-ink">
+					<Link to="/legacy/routines" className="meta mb-2 flex items-center gap-1 text-ink-3 hover:text-ink">
 						<ArrowLeft className="h-3 w-3" />
 						Back to routines
 					</Link>
@@ -127,10 +131,10 @@ export function RunDetailView() {
 							type="button"
 							onClick={() => void replay()}
 							className="btn-primary h-7 px-2 text-xs"
-							title="Re-run this routine"
+							title="Start a new manual run of the current routine"
 						>
 							<Play className="h-3.5 w-3.5" />
-							Re-run
+							Run manually
 						</button>
 					</div>
 
@@ -141,17 +145,18 @@ export function RunDetailView() {
 					) : null}
 
 					<div className="grid grid-cols-2 gap-3 border-b border-line px-3 py-2 text-xs md:grid-cols-4">
-						<MetaCell label="trigger" value={run?.trigger ?? "—"} />
+						<MetaCell label="trigger" value={displayedRun?.trigger ?? "Unknown"} />
 						<MetaCell
 							label="duration"
 							value={totalDurationMs !== null ? formatDurationMs(totalDurationMs) : "—"}
 						/>
-						<MetaCell label="steps" value={run ? `${run.stepCountTotal} (${run.stepCountFailed} failed)` : "—"} />
-						<MetaCell label="cost (est)" value={`$${totalCostUsd.toFixed(4)} · ${run?.totalLlmTokens ?? 0}tok`} />
+						<MetaCell label={native ? "executed nodes" : "steps"} value={native ? inspection.trace ? String(inspection.trace.usage?.stepsExecuted ?? inspection.trace.nodeRuns.filter(node => node.status !== "skipped").length) : "Not yet available" : displayedRun ? `${displayedRun.stepCountTotal} (${displayedRun.stepCountFailed} failed)` : "Unknown"} />
+						<MetaCell label="cost (est)" value={`$${totalCostUsd.toFixed(4)} · ${displayedRun?.totalLlmTokens ?? 0}tok`} />
 					</div>
 
 					<div className="flex-1 overflow-y-auto px-3 py-3">
-						{steps.length === 0 ? (
+						{native ? <div className="mb-3 text-xs text-ink-2">Historical inspection uses the executed graph snapshot, not the current editor. Run manually starts a new manual activation of the current routine. It does not replay this event or activate inbox-only sources.</div> : null}
+						{native ? inspection.trace ? <GraphRunProvenance trace={inspection.trace} nodeId={targetStepId ?? undefined} /> : <div className="space-y-2 text-sm text-ink-2" role={inspection.state === "error" ? "alert" : "status"}><p>{GRAPH_TRACE_MESSAGES[inspection.state]}</p>{inspection.error ? <p className="text-danger">{inspection.error}</p> : null}{displayedRun?.error ? <p className="text-danger">{displayedRun.error}</p> : null}</div> : steps.length === 0 ? (
 							<div className="text-sm text-ink-3">
 								{status === "running" ? "Waiting for first step…" : "No step records."}
 							</div>
@@ -175,7 +180,7 @@ export function RunDetailView() {
 	);
 }
 
-function StatusPill({ status }: { status: RoutineStepStatus | "running" }) {
+function StatusPill({ status }: { status: RoutineStepStatus | "running" | "completed" }) {
 	const cls =
 		status === "success"
 			? "bg-success/10 text-success border-success/30"

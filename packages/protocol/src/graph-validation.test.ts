@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
-import type { GraphNodeType, RoutineGraph } from "./graph";
+import type { GraphNodeType, GraphValue, RoutineGraph } from "./graph";
 import { isGraphValue, validateRoutineGraph } from "./graph-validation";
+import { graphBuiltinNodeTypes } from "./graph-builtins";
 
 const catalogue: GraphNodeType[] = [
 	{ type: "event.source", label: "Source", kind: "event", inputs: [], outputs: [{ id: "event", type: "object" }] },
@@ -79,4 +80,47 @@ test("JSON guard accepts shared immutable references but rejects serialization-l
 	const accessor = Object.defineProperty({}, "value", { get: () => { throw new Error("must not invoke getter"); }, enumerable: true });
 	const symbol = { [Symbol("hidden")]: 1 };
 	for (const invalid of [undefined, NaN, Infinity, 1n, () => 1, new Date(0), new Map(), cycle, sparse, hidden, accessor, symbol, { dropped: undefined }]) expect(isGraphValue(invalid)).toBe(false);
+});
+
+function iterationGraph(): RoutineGraph {
+	return { version: 2, nodes: [
+		{ id: "source", type: "event.source", config: { eventType: "manual" } },
+		{ id: "loop", type: "iteration.each", config: { path: ["result", "items"], maxIterations: 100, body: { version: 2, nodes: [{ id: "item", type: "iteration.input", config: { eventType: "iteration" } }], edges: [] } } },
+	], edges: [{ id: "items", from: { nodeId: "source", port: "event" }, to: { nodeId: "loop", port: "input" } }] };
+}
+const builtinCatalogue = [...catalogue, ...graphBuiltinNodeTypes];
+test("bounded iteration validates its body and rejects run-wide settings inside a pass", () => {
+	expect(validateRoutineGraph(iterationGraph(), builtinCatalogue)).toEqual({ valid: true });
+	for (const bound of [0, -1, 1.5, 101, "100", null]) {
+		const spec = iterationGraph(); spec.nodes[1]!.config.maxIterations = bound;
+		expect(validateRoutineGraph(spec, builtinCatalogue).errors?.some(error => error.keyword === "iterationBound")).toBe(true);
+	}
+	for (const body of [null, {}, { version: 2, nodes: [], edges: [] }, { version: 2, nodes: [{ id: "source", type: "event.source", config: { eventType: "manual" } }], edges: [] }, { version: 2, nodes: [{ id: "item", type: "iteration.input", config: { eventType: "iteration" } }], edges: [], budget: { max_steps_executed: 100 } }]) {
+		// These bodies are invalid on purpose to exercise runtime rejection.
+		const spec = iterationGraph(); spec.nodes[1]!.config.body = body as unknown as GraphValue;
+		expect(validateRoutineGraph(spec, builtinCatalogue).valid).toBe(false);
+	}
+});
+test("iteration body ports and back-edges are validated before execution", () => {
+	const spec = iterationGraph();
+	spec.nodes[1]!.config.body = { version: 2, nodes: [{ id: "item", type: "iteration.input", config: { eventType: "iteration" } }, { id: "math", type: "operation.arithmetic", config: { operator: "add" } }], edges: [{ id: "typed", from: { nodeId: "item", port: "item" }, to: { nodeId: "math", port: "left" } }, { id: "cycle", from: { nodeId: "math", port: "value" }, to: { nodeId: "math", port: "right" } }] };
+	const result = validateRoutineGraph(spec, builtinCatalogue);
+	expect(result.errors?.some(error => error.keyword === "portType" && error.path.includes("/body/"))).toBe(true);
+	expect(result.errors?.some(error => error.keyword === "cycle")).toBe(true);
+});
+test("iteration source is scoped and nesting has an exact four-level bound", () => {
+	const top: RoutineGraph = { version: 2, nodes: [{ id: "item", type: "iteration.input", config: { eventType: "iteration" } }], edges: [] };
+	expect(validateRoutineGraph(top, builtinCatalogue).valid).toBe(false);
+	const nested = (depth: number): RoutineGraph => {
+		const spec = iterationGraph();
+		if (depth > 1) {
+			const body = nested(depth - 1);
+			body.nodes[0] = { id: "source", type: "iteration.input", config: { eventType: "iteration" } };
+			body.edges[0]!.from.port = "item";
+			spec.nodes[1]!.config.body = body as never;
+		}
+		return spec;
+	};
+	expect(validateRoutineGraph(nested(4), builtinCatalogue).valid).toBe(true);
+	expect(validateRoutineGraph(nested(5), builtinCatalogue).errors?.some(error => error.keyword === "iterationDepth")).toBe(true);
 });

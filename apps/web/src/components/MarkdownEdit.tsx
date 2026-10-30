@@ -15,6 +15,10 @@ interface Props {
 	textareaClassName?: string;
 	/** Force edit mode on mount (used when value is empty so user knows it's editable). */
 	autoEdit?: boolean;
+	/** Focus the initial textarea. Explicitly reopening the editor still focuses it. */
+	autoFocus?: boolean;
+	/** Keep an empty textarea available after commit instead of showing a placeholder. */
+	keepEmptyEditing?: boolean;
 }
 
 /**
@@ -36,12 +40,15 @@ export function MarkdownEdit({
 	className,
 	textareaClassName,
 	autoEdit,
+	autoFocus = true,
+	keepEmptyEditing = false,
 }: Props) {
 	const [editing, setEditing] = useState(Boolean(autoEdit) || !value);
 	const [draft, setDraft] = useState(value);
 	const [uploadError, setUploadError] = useState<string | undefined>();
 	const [uploadingCount, setUploadingCount] = useState(0);
 	const taRef = useRef<HTMLTextAreaElement>(null);
+	const focusOnEdit = useRef(autoFocus);
 	// Track the latest draft via ref so async upload completions can splice
 	// against the current text rather than the value captured at paste-time.
 	const draftRef = useRef(value);
@@ -59,11 +66,13 @@ export function MarkdownEdit({
 		if (!editing) return;
 		const ta = taRef.current;
 		if (!ta) return;
-		ta.focus();
+		if (focusOnEdit.current) {
+			ta.focus();
+			// Move caret to end so a new note starts in flow.
+			ta.setSelectionRange(ta.value.length, ta.value.length);
+		}
 		ta.style.height = "auto";
 		ta.style.height = `${Math.max(ta.scrollHeight, 240)}px`;
-		// Move caret to end on first focus so a new note starts in flow.
-		ta.setSelectionRange(ta.value.length, ta.value.length);
 	}, [editing]);
 
 	function updateDraft(next: string): void {
@@ -72,12 +81,17 @@ export function MarkdownEdit({
 		onDraftChange?.(next);
 	}
 
+	function startEditing(): void {
+		focusOnEdit.current = true;
+		setEditing(true);
+	}
+
 	function commit(): void {
 		if (draft !== value) {
 			onChange(draft);
 			onCommit?.(draft);
 		}
-		setEditing(false);
+		setEditing(keepEmptyEditing && !draft);
 	}
 
 	function cancel(): void {
@@ -243,7 +257,7 @@ export function MarkdownEdit({
 		return (
 			<button
 				type="button"
-				onClick={() => setEditing(true)}
+				onClick={startEditing}
 				className={cn(
 					"block w-full cursor-text text-left font-mono text-2xs text-ink-4 hover:text-ink-3",
 					className,
@@ -257,7 +271,7 @@ export function MarkdownEdit({
 	return (
 		<button
 			type="button"
-			onClick={() => setEditing(true)}
+			onClick={startEditing}
 			title="Click to edit"
 			className={cn("group block w-full cursor-text text-left", className)}
 		>

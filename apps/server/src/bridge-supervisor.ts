@@ -43,6 +43,7 @@ interface Tracked {
 	logs: LogRing;
 	stopRequested: boolean;
 	lastError?: string;
+	generation: number;
 }
 
 export class BridgeSupervisor {
@@ -56,6 +57,7 @@ export class BridgeSupervisor {
 				crashCount: 0,
 				logs: new LogRing(200),
 				stopRequested: false,
+				generation: 0,
 			});
 		}
 	}
@@ -83,6 +85,7 @@ export class BridgeSupervisor {
 		t.lastError = undefined;
 		t.logs.clear();
 		t.status = "starting";
+		const generation = ++t.generation;
 
 		let proc: Subprocess;
 		try {
@@ -94,6 +97,9 @@ export class BridgeSupervisor {
 				stdout: "pipe",
 				stderr: "pipe",
 				onExit: (_subprocess, exitCode, signalCode, _error) => {
+					// Bun may deliver an old exit callback after restart has spawned
+					// its replacement. That callback must not discard the new handle.
+					if (generation !== t.generation) return;
 					t.proc = undefined;
 					t.exitCode = exitCode ?? undefined;
 					t.exitSignal = signalCode != null ? String(signalCode) : undefined;
@@ -132,17 +138,20 @@ export class BridgeSupervisor {
 			t.status = "stopped";
 			return this.toInfo(t);
 		}
+		const generation = t.generation;
+		const proc = t.proc;
 		t.stopRequested = true;
 		try {
-			await terminateOwned(t.proc);
+			await terminateOwned(proc);
 		} catch (err) {
 			log.warn(`bridge ${name} kill threw`, err);
 		}
 		try {
-			await t.proc.exited;
+			await proc.exited;
 		} catch {
 			// ignore — onExit already updated bookkeeping
 		}
+		if (generation !== t.generation) return this.toInfo(t);
 		// onExit may fire before or after `exited` resolves on Bun's Windows
 		// path. Force-converge state so the response reflects the actual
 		// post-stop reality rather than whatever the race produced.
@@ -230,7 +239,7 @@ export function buildDefaultBridgeSupervisor(): BridgeSupervisor {
 			name: "telegram",
 			label: "Telegram",
 			entry: telegramBridgeEntry(),
-			requiredEnv: ["TELEGRAM_BOT_TOKEN", "TELEGRAM_ALLOWED_USERS"],
+			requiredEnv: ["TELEGRAM_BOT_TOKEN"],
 		},
 	]);
 }

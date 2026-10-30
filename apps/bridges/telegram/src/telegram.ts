@@ -5,7 +5,7 @@ export interface TelegramUpdate {
 
 export interface TelegramMessage {
 	message_id: number;
-	chat: { id: number; type: string; is_forum?: boolean };
+	chat: { id: number; type: string; is_forum?: boolean; title?: string };
 	message_thread_id?: number;
 	is_topic_message?: boolean;
 	direct_messages_topic?: { topic_id: number };
@@ -61,9 +61,13 @@ export class TelegramApi {
 	private readonly apiBase: string;
 	private readonly fileBase: string;
 
-	constructor(private readonly botToken: string) {
-		this.apiBase = `https://api.telegram.org/bot${botToken}`;
-		this.fileBase = `https://api.telegram.org/file/bot${botToken}`;
+	constructor(private readonly botToken: string, origin = "https://api.telegram.org") {
+		const url = new URL(origin);
+		if (url.protocol !== "https:" && !(url.protocol === "http:" && ["127.0.0.1", "[::1]", "localhost"].includes(url.hostname))) {
+			throw new Error("Telegram API origin requires HTTPS or loopback HTTP.");
+		}
+		this.apiBase = `${url.origin}/bot${botToken}`;
+		this.fileBase = `${url.origin}/file/bot${botToken}`;
 	}
 
 	getMe(): Promise<{ id: number; username: string }> {

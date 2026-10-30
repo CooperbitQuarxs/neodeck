@@ -22,7 +22,7 @@ export function redactCredentialField(key: string, value: unknown): unknown {
 	return CREDENTIAL_KEY.test(key) ? "[redacted]" : value;
 }
 
-export function encodeTriggerPayload(payload: Record<string, unknown>): string {
+export function encodeTriggerPayload(payload: Record<string, unknown> | unknown[]): string {
 	const json = JSON.stringify(payload, redactCredentialField);
 	const bytes = Buffer.byteLength(json, "utf8");
 	if (bytes <= TRIGGER_PAYLOAD_MAX_BYTES) return json;

@@ -136,15 +136,30 @@ jobs:
       - name: prepare NeoPi backend (install, native addon, tsconfig)
         run: bun scripts/neopi-setup.ts --build-native
 
+      - name: test CI reporting helpers
+        run: bun test ./.github/scripts/check-reporting.test.ts
+
       - name: typecheck (all workspaces)
         id: typecheck
-        continue-on-error: ${{ github.event_name == 'push' && github.ref == 'refs/heads/nightly' }}
-        run: bun run typecheck
+        # Telegram's program includes the pinned SDK. macOS Node defaults to
+        # about 2 GiB, which is too small; workspace checks run serially.
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
+        run: bun .github/scripts/typecheck.ts
 
       - name: test (all workspaces)
         id: tests
+        # Keep independent test evidence even when the preceding gate failed.
+        if: ${{ !cancelled() }}
         continue-on-error: ${{ github.event_name == 'push' && github.ref == 'refs/heads/nightly' }}
-        run: bun test
+        shell: bash
+        run: |
+          set -euo pipefail
+          bun test 2>&1 | tee "$RUNNER_TEMP/tests.log"
+
+      - name: report test counts and failures
+        if: ${{ !cancelled() && (steps.tests.outcome == 'success' || steps.tests.outcome == 'failure') }}
+        run: bun .github/scripts/test-summary.ts "${{ runner.temp }}/tests.log" "${{ steps.tests.outcome }}"
 
       - name: web build
         shell: bash
@@ -153,8 +168,9 @@ jobs:
           bun run --cwd apps/web build
           test -d apps/web/dist
 
-      # Nightly checks are informational; a successful web build can publish
-      # even when typecheck/tests fail. Stable releases keep both checks as gates.
+      # Typecheck fails on deck-owned errors; pinned NeoPi diagnostics are reported.
+      # Nightly tests remain informational, with counts/names in each job summary.
+      # Stable releases require tests to pass as well as the production build.
       # macOS/Windows run independently; reuse the existing Ubuntu web build.
       - name: Package checkout sources and the existing web build
         if: runner.os == 'Linux' && needs.release_metadata.outputs.publish == 'true'
@@ -218,8 +234,9 @@ jobs:
             Ubuntu typecheck: **${{ steps.typecheck.outcome }}**.
             Ubuntu tests: **${{ steps.tests.outcome }}**.
             [CI run and platform results](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}).
-            Nightly prereleases publish after a successful build/package even
-            when checks fail; stable releases require the Ubuntu checks to pass.
+            Nightly prereleases require deck-owned typechecks and build/package
+            success. Test failures remain informational and appear in job summaries;
+            stable releases require the Ubuntu tests to pass.
 
             `neodeck-checkout.tar.gz` contains the tracked source tree and the web
             bundle from this run's Ubuntu CI build, not a standalone executable

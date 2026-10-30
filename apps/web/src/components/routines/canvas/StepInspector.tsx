@@ -163,7 +163,7 @@ function LastRunSection({
 	const dur = run.durationMs != null ? formatDur(run.durationMs) : "—";
 	const deepLink =
 		routineId && runId
-			? `/routines/${encodeURIComponent(routineId)}/runs/${encodeURIComponent(runId)}#step-${encodeURIComponent(run.stepId)}`
+			? `/legacy/routines/${encodeURIComponent(routineId)}/runs/${encodeURIComponent(runId)}#step-${encodeURIComponent(run.stepId)}`
 			: null;
 
 	return (

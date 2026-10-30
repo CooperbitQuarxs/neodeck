@@ -78,6 +78,11 @@ export const api = {
 			body: JSON.stringify({ model }),
 		});
 	},
+	setSessionSelector(id: string, selector: string): Promise<{ ok: true; sessionId: string }> {
+		return request(`/sessions/${encodeURIComponent(id)}`, {
+			method: "PATCH", body: JSON.stringify({ selector }),
+		});
+	},
 	/** How retry.fallbackChains covers the chat's active model; edits go through npiConfigApi. */
 	getSessionFallbackChain(id: string): Promise<SessionFallbackChainResponse> {
 		return request(`/sessions/${encodeURIComponent(id)}/fallback-chain`);

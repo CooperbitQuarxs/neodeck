@@ -22,7 +22,7 @@ import type {
 } from "@npi-deck/protocol";
 
 import { insertStep } from "../spec-yaml";
-import { CANVAS_DEFAULT_X, CANVAS_NODE_VERTICAL_GAP } from "./graph-types";
+import { CANVAS_DEFAULT_X, CANVAS_NODE_VERTICAL_GAP } from "./legacy-graph-types";
 
 /**
  * The Y coordinate the next inserted node should occupy. Mirrors the placement

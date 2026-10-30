@@ -13,7 +13,7 @@ import type { RoutineSpec } from "@npi-deck/protocol";
 import {
 	CANVAS_DEFAULT_X,
 	CANVAS_NODE_VERTICAL_GAP,
-} from "./graph-types";
+} from "./legacy-graph-types";
 import { importFromSpec } from "./graph-import";
 
 const baseTrigger: RoutineSpec["trigger"] = [{ manual: {} }];

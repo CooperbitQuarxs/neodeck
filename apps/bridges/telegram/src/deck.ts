@@ -67,6 +67,43 @@ export class DeckClient {
 		return this.request(`/api/models?sessionId=${encodeURIComponent(sessionId)}`, {});
 	}
 
+	/** One read-only observer for opted-in bindings. It never resumes a stopped session. */
+	watchAttention(sessionIds: () => string[], onFrame: (frame: ServerFrame) => void): () => void {
+		let socket: WebSocket | undefined;
+		let stopped = false;
+		const subscribed = new Set<string>();
+		const sync = () => {
+			if (socket?.readyState !== WebSocket.OPEN) return;
+			const wanted = new Set(sessionIds());
+			for (const id of subscribed) if (!wanted.has(id)) {
+				socket.send(JSON.stringify({ type: "unsubscribe", sessionId: id }));
+				subscribed.delete(id);
+			}
+			for (const id of wanted) if (!subscribed.has(id)) {
+				subscribed.add(id);
+				socket.send(JSON.stringify({ type: "subscribe", sessionId: id }));
+			}
+		};
+		const connect = () => {
+			if (stopped || socket || !sessionIds().length) return;
+			socket = new WebSocket(this.wsUrl);
+			socket.onopen = sync;
+			socket.onmessage = event => {
+				if (stopped) return;
+				let frame: ServerFrame;
+				try { frame = JSON.parse(String(event.data)); } catch { return; }
+				if (frame.type === "error" && frame.sessionId) subscribed.delete(frame.sessionId);
+				if (frame.type === "session_disposed") subscribed.delete(frame.sessionId);
+				if (frame.type === "ext_ui_dialog_open" || frame.type === "plan_proposed") onFrame(frame);
+			};
+			socket.onerror = () => socket?.close();
+			socket.onclose = () => { socket = undefined; subscribed.clear(); };
+		};
+		connect();
+		const timer = setInterval(() => { connect(); sync(); }, 3000);
+		return () => { stopped = true; clearInterval(timer); socket?.close(); };
+	}
+
 	promptSession(args: {
 		sessionId: string;
 		text: string;
@@ -130,13 +167,12 @@ export class DeckClient {
 					return;
 				}
 				if (frame.type === "plan_proposed" && frame.sessionId === args.sessionId) {
-					// Telegram has no approval card. Release the blocked tool call
-					// rather than leave the chat waiting for the WS idle timeout.
-					ws.send(JSON.stringify({
-						type: "plan_response", sessionId: args.sessionId, proposalId: frame.proposalId,
-						approved: false, feedback: "Telegram cannot review plans. Tell the user to review this plan in the deck web UI.",
-					}));
-					ws.send(JSON.stringify({ type: "set_plan_mode", sessionId: args.sessionId, enabled: false }));
+					finish(undefined, "Needs you: a plan is ready for review. Open this thread in NeoDeck to approve or revise it.");
+					return;
+				}
+				if (frame.type === "ext_ui_dialog_open" && frame.sessionId === args.sessionId) {
+					args.onText(`Needs you: ${frame.prompt || "your agent has a question"}. Open this thread in NeoDeck to respond.`);
+					armIdleTimer();
 					return;
 				}
 				if (frame.type === "subscribed" && frame.sessionId === args.sessionId && frame.snapshot.pendingPlanApproval) {

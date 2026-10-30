@@ -1,5 +1,5 @@
 /**
- * Webhook receiver for V1 routine triggers. Mounted at `/hooks/*` on the
+ * Webhook receiver for legacy and native routine triggers. Mounted at `/hooks/*` on the
  * main router. Looks up the routine by path slug, verifies the delivery's
  * signature, and fires the routine.
  *
@@ -41,6 +41,7 @@ import {
 import { getRoutine } from "./db/routines.ts";
 import { logger } from "./log.ts";
 import type { RoutinesRunner } from "./routines-runner.ts";
+import { graphWebhookPath, graphWebhookSource } from "./routines/graph-triggers.ts";
 
 const log = logger("routes:hooks");
 
@@ -116,6 +117,10 @@ export function buildHooksRouter(runner: RoutinesRunner): Hono {
 			log.info(`refused webhook ${path}: routine ${record.routine_id} is disabled`);
 			return c.json({ error: "routine disabled" }, 409);
 		}
+		const source = routine.specVersion === 2 ? graphWebhookSource(routine.graph) : undefined;
+		if (routine.specVersion === 2 && (!source || graphWebhookPath(routine.graph) !== path)) {
+			return c.json({ error: "hook not registered" }, 404);
+		}
 
 		const payload = parsePayload(raw, c.req.header("content-type") ?? "");
 		if (credential.kind === "bare") {
@@ -125,7 +130,7 @@ export function buildHooksRouter(runner: RoutinesRunner): Hono {
 		}
 		recordWebhookDelivery(record.routine_id, credential.kind === "bare" ? credential.secret : undefined);
 		// Fire async; webhook returns 202 immediately.
-		void runner.fire(record.routine_id, "webhook", payload).catch((err) => {
+		void runner.fire(record.routine_id, "webhook", payload, source ? { sourceNodeId: source.id } : {}).catch((err) => {
 			log.warn(`webhook fire failed for ${record.routine_id}`, err);
 		});
 		return c.json({ ok: true, accepted: true }, 202);

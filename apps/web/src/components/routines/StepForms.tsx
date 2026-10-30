@@ -610,7 +610,7 @@ export function DeckStepForm({ step, onChange, advanced = true, errors }: FormPr
 							<TextInput value={step.cwd ?? ""} onChange={(v) => onChange({ ...step, cwd: v === "" ? undefined : v })} placeholder="/path/to/repo" mono />
 						</Field>
 					</> : null}
-					<Help>Card text and properties are kept from the inbox item unless overridden in Advanced. <Link to="/inbox" className="text-accent underline">Edit them in Inbox.</Link></Help>
+					<Help>Card text and properties are kept from the inbox item unless overridden in Advanced. <Link to="/legacy/inbox" className="text-accent underline">Edit them in Inbox.</Link></Help>
 					<Checkbox
 						checked={step.mark_processed !== false}
 						onChange={(on) => {
@@ -723,7 +723,7 @@ export function McpStepForm({ step, onChange, errors }: FormProps<"mcp">) {
 			<Help>
 				Calls one tool on a server enabled for the routine's working directory, without a model. Arguments are
 				templated, then checked against the tool's input schema. Servers and their tools are listed on the{" "}
-				<Link to="/integrations" className="text-accent hover:underline">MCP servers</Link> page.
+				<Link to="/legacy/integrations" className="text-accent hover:underline">MCP servers</Link> page.
 			</Help>
 			<div className="grid grid-cols-2 gap-3">
 				<Field label="Server" error={errors?.server}>

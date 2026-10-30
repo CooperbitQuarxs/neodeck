@@ -1,3 +1,4 @@
+import type { AgentInstance } from "@npi-deck/protocol";
 import type { SubagentNode, SubagentTranscriptResponse } from "@npi-deck/protocol";
 import { feature } from "../backend/runtime.ts";
 import { workRegistry } from "../work-registry.ts";
@@ -71,6 +72,45 @@ export class SubagentTree {
 			.sort((a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id));
 	}
 
+	instances(sessionId: string): AgentInstance[] {
+		const records = new Map(this.snapshot().map(node => [node.id, node]));
+		// Advisors have native registry identities too, but are not task peers.
+		for (const ref of this.registry.list()) {
+			if (ref.kind !== "advisor" || !this.belongs(ref.id)) continue;
+			records.set(ref.id, { id: ref.id, parentId: ref.parentId!, name: ref.displayName,
+				status: ref.status, sessionFile: ref.sessionFile ?? undefined, createdAt: ref.createdAt });
+		}
+		return [...records.values()].map(node => {
+			const ref = this.registry.get(node.id);
+			const session = ref?.session;
+			const active = !!ref && ["running", "idle", "parked"].includes(ref.status);
+			const model = session?.model;
+			return {
+				id: node.id, templateId: null, templateName: ref?.history?.agent,
+				sessionId, threadId: sessionId, sessionFile: node.sessionFile,
+				parentInstanceId: node.parentId, label: node.name,
+				status: node.status === "aborted" ? "cancelled" : node.status === "failed" ? "failed"
+					: node.status === "completed" ? "done" : node.status === "running" ? "running" : "idle",
+				model: model ? `${model.provider}/${model.id}` : ref?.history?.resolvedModel,
+				thinking: session?.thinkingLevel, task: node.description ?? node.activity,
+				startedAt: new Date(node.createdAt).toISOString(),
+				endedAt: ref?.lifecycle?.terminalAt ? new Date(ref.lifecycle.terminalAt).toISOString() : undefined,
+				observes: ref?.kind === "advisor",
+				actions: { steer: !!session && active && ref?.kind === "sub", cancel: active && ref?.kind === "sub",
+					setThinking: false, setFast: false, enter: !!node.sessionFile },
+			};
+		});
+	}
+
+	async steer(id: string, text: string): Promise<void> {
+		this.owned(id);
+		const ref = this.registry.get(id);
+		if (!ref || !this.belongs(id)) throw new Error("Forbidden subagent");
+		if (ref.kind !== "sub" || !ref.session || !["running", "idle"].includes(ref.status)) {
+			throw new Error("Subagent no longer active");
+		}
+		await ref.session.steer(text);
+	}
 	subscribe(listener: (nodes: SubagentNode[]) => void): () => void {
 		this.listeners.add(listener);
 		listener(this.snapshot());

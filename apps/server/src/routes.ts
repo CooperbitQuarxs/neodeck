@@ -16,17 +16,20 @@ import { deriveLabel } from "./workspace-label.ts";
 import { McpAllowlistError, SessionClosedError, SessionInUseError, type AgentBridge } from "./bridge/types.ts";
 import { listSessionBackends, recordSessionBackend, sessionBackend } from "./backend/session-metadata.ts";
 
+import { FeatureUnavailableError } from "./backend/runtime.ts";
 const log = logger("routes");
 
 import { buildTasksRouter } from "./routes-tasks.ts";
 import { buildSettingsRouter } from "./routes-settings.ts";
 import { buildRoutinesRouter } from "./routes-routines.ts";
+import { buildGraphsRouter } from "./routes-graphs.ts";
 import { buildHooksRouter } from "./routes-hooks.ts";
 import { buildInboxRouter } from "./routes-inbox.ts";
 import { buildUtilityRouter } from "./routes-cron.ts";
 import { buildSlashCommandsRouter } from "./routes-slash-commands.ts";
 import { buildFsRouter } from "./routes-fs.ts";
 import { buildBridgesRouter } from "./routes-bridges.ts";
+import { buildTelegramRouter } from "./routes-telegram.ts";
 import { buildMarketplaceRouter } from "./routes-marketplace.ts";
 import { buildSkillsRouter } from "./routes-skills.ts";
 import { buildKbRouter } from "./routes-kb.ts";
@@ -36,12 +39,14 @@ import { buildAuthOAuthRouter } from "./routes-auth-oauth.ts";
 import { buildOnboardingRouter } from "./routes-onboarding.ts";
 import { buildSubagentsRouter } from "./routes-subagents.ts";
 import { buildAdvisorsRouter } from "./routes-advisors.ts";
+import { buildAgentsRouter } from "./routes-agents.ts";
 import { buildModelsConfigRouter } from "./routes-models-config.ts";
 import { buildNpiConfigRouter } from "./routes-npi-config.ts";
 import { buildIntegrationsRouter } from "./routes-integrations.ts";
 import { buildMcpServersRouter } from "./routes-mcp-servers.ts";
 import { buildMixturesRouter } from "./routes-mixtures.ts";
 import { buildFallbackChainRouter } from "./routes-fallback-chain.ts";
+import { buildGithubRouter } from "./routes-github.ts";
 import type { RoutinesRunner } from "./routines-runner.ts";
 import type { BridgeSupervisor } from "./bridge-supervisor.ts";
 import type { MarketplaceService } from "./marketplace-service.ts";
@@ -218,9 +223,9 @@ export function buildRouter(
 		const id = c.req.param("id");
 		const handle = bridge.getSession(id);
 		if (!handle) return c.json({ error: "session not found or not active" }, 404);
-		let body: { name?: string; model?: { provider?: unknown; id?: unknown } };
+		let body: { name?: string; selector?: unknown; model?: { provider?: unknown; id?: unknown } };
 		try {
-			body = (await c.req.json()) as { name?: string; model?: { provider?: unknown; id?: unknown } };
+			body = await c.req.json();
 		} catch {
 			return c.json({ error: "invalid json" }, 400);
 		}
@@ -228,7 +233,12 @@ export function buildRouter(
 			if (typeof body.name === "string") {
 				await handle.setName(body.name.trim());
 			}
-			if (body.model && typeof body.model === "object") {
+			if (body.selector !== undefined) {
+				if (typeof body.selector !== "string" || !body.selector.trim()) return c.json({ error: "selector must be a non-empty string" }, 400);
+				if (!handle.setModelSelector) return c.json({ error: "This backend cannot select native roles or effort." }, 501);
+				await handle.setModelSelector(body.selector);
+			}
+			if (body.selector === undefined && body.model && typeof body.model === "object") {
 				const provider = typeof body.model.provider === "string" ? body.model.provider : "";
 				const modelId = typeof body.model.id === "string" ? body.model.id : "";
 				if (!provider || !modelId) {
@@ -243,11 +253,25 @@ export function buildRouter(
 		}
 	});
 
+	app.get("/models/selector", async (c) => {
+		if (!bridge.queryModels) return c.json({ error: "Native model search is unavailable on this backend." }, 501);
+		try {
+			return c.json(await bridge.queryModels(c.req.query("q") ?? "", {
+				...(c.req.query("sessionId") ? { sessionId: c.req.query("sessionId") } : {}),
+				cwd: c.req.query("cwd") ?? config.defaultCwd,
+			}));
+		} catch (error) {
+			if (error instanceof FeatureUnavailableError) return c.json({ error: "Native model search requires a newer NeoPi backend with query_model_selector." }, 501);
+			return c.json({ error: error instanceof Error ? error.message : String(error) }, 400);
+		}
+	});
+
 	app.get("/models", async (c) => {
 		const sessionId = c.req.query("sessionId");
 		try {
-			const opts: { sessionId?: string } = {};
+			const opts: { sessionId?: string; cwd?: string } = { cwd: config.defaultCwd };
 			if (sessionId) opts.sessionId = sessionId;
+			if (c.req.query("cwd")) opts.cwd = c.req.query("cwd");
 			const models = await bridge.listModels(opts);
 			const active = models.find((m) => m.isCurrent);
 			const body: ListModelsResponse = {
@@ -271,6 +295,7 @@ export function buildRouter(
 	app.route("/", buildTasksRouter(opts.cardAgents));
 	app.route("/", buildUploadsRouter({ uploadsRoot: config.uploadsRoot }));
 	app.route("/", buildRoutinesRouter(runner));
+	app.route("/", buildGraphsRouter());
 	app.route("/", buildHooksRouter(runner));
 	app.route("/", buildInboxRouter());
 	app.route("/", buildUtilityRouter());
@@ -279,6 +304,7 @@ export function buildRouter(
 	app.route("/", buildSettingsRouter(bridge, config, opts));
 	app.route("/", buildStartersRouter());
 	app.route("/", buildBridgesRouter(supervisor));
+	app.route("/", buildTelegramRouter(bridge, supervisor));
 	app.route("/", buildMarketplaceRouter(marketplace));
 	app.route("/", buildSkillsRouter(skills));
 	app.route("/", buildKbRouter(kb, { resolveAgent: token => opts.cardAgents?.resolveToken(token) }));
@@ -286,12 +312,14 @@ export function buildRouter(
 	app.route("/onboarding", buildOnboardingRouter());
 	app.route("/subagents", buildSubagentsRouter(bridge));
 	app.route("/", buildAdvisorsRouter(bridge, config));
+	app.route("/", buildAgentsRouter(bridge));
 	app.route("/", buildModelsConfigRouter());
 	app.route("/", buildNpiConfigRouter(bridge, config));
 	app.route("/", buildMcpServersRouter(bridge, config));
 	app.route("/", buildIntegrationsRouter(config));
 	app.route("/", buildMixturesRouter(bridge, config));
 	app.route("/", buildFallbackChainRouter(bridge));
+	app.route("/", buildGithubRouter({ workspaces: [config.defaultCwd, ...config.extraWorkspaces] }));
 
 	return app;
 }

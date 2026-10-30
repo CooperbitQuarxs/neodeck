@@ -48,8 +48,42 @@ import type {
 
 import { KB_IGNORE_FILE, KbIgnore } from "./kb-ignore.ts";
 import { logger } from "./log.ts";
+import { spawnOwned, terminateOwned } from "./owned-process.ts";
 
 const log = logger("kb");
+
+async function historyGit(root: string, args: string[]): Promise<string> {
+	const proc = spawnOwned(["git", ...args], {
+		cwd: root, stdin: "ignore", stdout: "pipe", stderr: "pipe",
+		env: { GIT_TERMINAL_PROMPT: "0" },
+	});
+	let timedOut = false;
+	const timer = setTimeout(() => { timedOut = true; void terminateOwned(proc); }, 5000);
+	const readOutput = async (stream: ReadableStream<Uint8Array>): Promise<string> => {
+		const reader = stream.getReader();
+		const decoder = new TextDecoder();
+		let bytes = 0;
+		let text = "";
+		try {
+			for (;;) {
+				const { done, value } = await reader.read();
+				if (done) return text + decoder.decode();
+				bytes += value.byteLength;
+				if (bytes > 1024 * 1024) throw new Error("Git history output exceeds 1 MiB");
+				text += decoder.decode(value, { stream: true });
+			}
+		} finally { reader.releaseLock(); }
+	};
+	try {
+		const [stdout, stderr, code] = await Promise.all([readOutput(proc.stdout), readOutput(proc.stderr), proc.exited]);
+		if (timedOut) throw new Error("Git history timed out");
+		if (code !== 0) throw new Error(`Git history failed: ${stderr.trim()}`);
+		return stdout;
+	} finally {
+		clearTimeout(timer);
+		if (proc.exitCode === null) await terminateOwned(proc);
+	}
+}
 
 // Top-level (anywhere in the tree) directory names to skip. Mirrors the
 // canonical set in my-org-new/scripts/orphan-census.py — vendor-noise
@@ -402,6 +436,24 @@ export class KbService {
 		};
 		if (frontmatterError) resp.frontmatterError = frontmatterError;
 		return resp;
+	}
+
+	/** Git records authorship without inventing agent activity for untracked notes. */
+	async getHistory(subpath: string) {
+		const file = await this.getFile(subpath);
+		if (!file) return undefined;
+		try {
+			await historyGit(this.root, ["rev-parse", "--show-toplevel"]);
+		} catch {
+			return { available: false, entries: [] };
+		}
+		const stdout = await historyGit(this.root, ["--literal-pathspecs", "log", "--follow", "-n", "40", "--format=%H%x00%aI%x00%an%x00%s%x00", "--", file.path]);
+		const fields = stdout.split("\0");
+		const entries = [];
+		for (let i = 0; i + 3 < fields.length; i += 4) {
+			entries.push({ id: fields[i]!.trim(), at: fields[i + 1]!, actor: fields[i + 2]!, kind: "committed" as const, text: fields[i + 3]! });
+		}
+		return { available: true, entries };
 	}
 
 	/**
