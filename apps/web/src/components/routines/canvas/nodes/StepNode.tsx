@@ -14,7 +14,7 @@ import { memo } from "react";
 
 import type { RoutineStep, RoutineStepRun } from "@npi-deck/protocol";
 
-import type { StepNode as StepNodeType } from "../graph-types";
+import type { StepNode as StepNodeType } from "../legacy-graph-types";
 import { actionLabel, STEP_ICON, stepIconTone, stepTitle } from "../../step-form-render";
 import { cardBodyParts } from "../../spec-yaml";
 

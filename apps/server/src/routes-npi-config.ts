@@ -265,7 +265,7 @@ function modelRoles(settings: Settings, registry: Registry): Pick<NpiModelRolesR
 
 export function buildNpiConfigRouter(bridge: AgentBridge, config: Config): Hono {
 	const app = new Hono();
-	const load = () => sdk().Settings.loadReadOnly({ cwd: config.defaultCwd, agentDir: sdk().getAgentDir() });
+	const load = (cwd = config.defaultCwd) => sdk().Settings.loadReadOnly({ cwd, agentDir: sdk().getAgentDir() });
 
 	app.get("/npi-config", async c => {
 		try {
@@ -289,11 +289,12 @@ export function buildNpiConfigRouter(bridge: AgentBridge, config: Config): Hono 
 		if (!hasFeature("model-roles") || !hasFeature("npi-config"))
 			return c.json({ error: "This NeoPi backend does not expose its model-role catalog; edit modelRoles under Settings → NeoPi." }, 501);
 		try {
-			const settings = await load();
+			const cwd = path.resolve(c.req.query("cwd") || config.defaultCwd);
+			const settings = await load(cwd);
 			const setting = lookup("modelRoles");
 			if (!setting) return c.json({ error: "This NeoPi backend does not register modelRoles." }, 501);
 			const body: NpiModelRolesResponse = {
-				cwd: config.defaultCwd,
+				cwd,
 				configPath: globalConfigFile(),
 				setting: describe(setting, settings, settings.getGlobalSettings()),
 				...modelRoles(settings, await getDeckModelRegistry()),
@@ -323,6 +324,12 @@ export function buildNpiConfigRouter(bridge: AgentBridge, config: Config): Hono 
 				// fails first instead, leaving the user's file where it is.
 				await load();
 				const settings = await sdk().Settings.loadIsolated({ cwd: config.defaultCwd, agentDir: sdk().getAgentDir() });
+				if (Object.hasOwn(body, "expectedValue")) {
+					if (setting.isCredential) throw new RequestError("Expected-value checks cannot include secret settings.", 400);
+					const current = describe(setting, settings, settings.getGlobalSettings());
+					if (!sameValue(current.value, body.expectedValue))
+						throw new RequestError(`${setting.id} changed since this page loaded. Reload before saving.`, 409);
+				}
 				try {
 					if (body.unset === true) setting.unset(settings);
 					else setting.set(settings, requestValue(setting, body, settings.getGlobalSettings()));

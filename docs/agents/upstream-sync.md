@@ -80,7 +80,7 @@ Useful CI-equivalent checks (informational for nightly):
 ```sh
 bun install --frozen-lockfile
 bun run typecheck && bun test
-bun --cwd apps/web run build
+bun run --cwd apps/web build
 ```
 
 When useful, exercise conflicted boundaries and changed runtime behavior using

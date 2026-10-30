@@ -13,7 +13,7 @@ import {
 } from "@xyflow/react";
 import { memo } from "react";
 
-import type { SequentialEdge as SequentialEdgeType } from "../graph-types";
+import type { SequentialEdge as SequentialEdgeType } from "../legacy-graph-types";
 
 export const SequentialEdge = memo(function SequentialEdge({
 	id,

@@ -12,6 +12,7 @@ import { buildHooksRouter, REPLAY_WINDOW_SECS } from "./routes-hooks.ts";
 import { buildRoutinesRouter } from "./routes-routines.ts";
 import { RoutinesRunner } from "./routines-runner.ts";
 import { createShellFixture } from "./routines/shell-fixture.ts";
+import { removeTestPath } from "./test-cleanup.ts";
 
 const SECRET = "hook-secret";
 const BODY = JSON.stringify({ key: "value" });
@@ -22,7 +23,7 @@ afterEach(async () => {
 	await runner?.dispose();
 	await stopOwnedProcesses();
 	closeDb();
-	if (home) fs.rmSync(home, { recursive: true, force: true });
+	if (home) removeTestPath(home);
 	home = ""; runner = undefined;
 });
 

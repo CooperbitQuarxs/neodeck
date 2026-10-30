@@ -26,6 +26,10 @@
  * An addon is reused only when its recorded (or, for an unrecorded addon inside another
  * checkout, that checkout's) native-input fingerprint equals this tree's; a mismatch needs
  * a matching --native-dir or --build-native, even when the release version is the same.
+ *
+ * Cold native builds regenerate tracked native bindings. Keep those outputs and any
+ * existing source edits: BUILD_INFO reports their actual tracked dirty status, so a
+ * prepared tree at neopi.pin is not necessarily a clean pinned build.
  */
 import {
 	copyFileSync,
@@ -309,6 +313,8 @@ if (!verified) {
 		if (stale) unlinkSync(stale);
 		const builtSince = Date.now();
 		run(buildCmd, tree);
+		// Keep regenerated bindings: restoring tracked files could discard source edits or
+		// pair the addon with bindings other than the ones its build just generated.
 		const file = builtAddon(builtSince);
 		const bytes = readFileSync(file);
 		if (!containsNativeVersion(bytes, packageVersion)) die(`build:native wrote ${file}, which lacks release ${packageVersion} stamp or legacy sentinel`);

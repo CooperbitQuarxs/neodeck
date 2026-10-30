@@ -19,7 +19,7 @@ import { describe, expect, test } from "bun:test";
 import type { RoutineSpec, RoutineStep } from "@npi-deck/protocol";
 
 import { applyAddNodeAtBottom, computeNextNodeY } from "./graph-add";
-import { CANVAS_DEFAULT_X, CANVAS_NODE_VERTICAL_GAP } from "./graph-types";
+import { CANVAS_DEFAULT_X, CANVAS_NODE_VERTICAL_GAP } from "./legacy-graph-types";
 
 function wait(id: string, secs = 1): RoutineStep {
 	return { id, type: "wait", duration_secs: secs };

@@ -1,645 +1,182 @@
-/**
- * Canvas editor for a routine.
- *
- * - Renders the routine's `steps` as nodes, with explicit `layout.edges` when
- *   present and inferred sequential + dependency edges when not
- *   (`graph-import`). Dragging a node persists `layout.nodes` on drag-end.
- * - The trigger is on the canvas too: one start node above the root steps,
- *   wired to each of them. Selecting it edits the triggers in the inspector.
- * - Selecting a step opens the inspector (a flex sibling at >= 1100px, a
- *   drawer below). Esc / X / Delete all close it; renames cascade through
- *   `layout.nodes` + `layout.edges` via `replaceStep`.
- * - Validation lives at the node and at the field: `fieldErrors` from the
- *   parent is stamped onto node data, so a node shows its first problem and
- *   the inspector shows every problem at the field it belongs to. Graph
- *   compile errors (cycles, dangling edges) get the same treatment plus a
- *   small pill when they cannot be pinned on a node.
- *
- * Theming approach: React Flow ships with light-mode CSS that uses CSS custom
- * properties (`--xy-background-color`, `--xy-edge-stroke`, etc). We import its
- * stylesheet once globally and override the variables on the `.routine-canvas`
- * wrapper so the canvas inherits whichever deck theme is active.
- */
-
-import {
-	ReactFlowProvider,
-	useEdgesState,
-	useNodesState,
-	useReactFlow,
-	type Connection,
-	type EdgeChange,
-	type NodeChange,
-	type NodePositionChange,
-	type OnSelectionChangeParams,
-} from "@xyflow/react";
-import { CircleAlert } from "lucide-react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Handle, Position, ReactFlowProvider, useEdgesState, useNodesState, useReactFlow, useUpdateNodeInternals, type Connection, type EdgeChange, type NodeChange, type NodeProps } from "@xyflow/react";
+import { Plus, Trash2, Workflow } from "lucide-react";
+import type { GraphNodeType, GraphPort, GraphRunRecord, RoutineGraph, ValidationError } from "@npi-deck/protocol";
 import { GraphCanvasSurface } from "@/components/graph/GraphCanvasSurface";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { StudioPanel } from "@/neo/pages/studio/StudioPanel";
+import { GraphRunProvenance } from "../GraphRunProvenance";
+import { GraphConfigForm } from "./GraphConfigForm";
+import { connectGraph, removeGraphEdges, type GraphConnection } from "./graph-connect";
+import { newNodeConfig } from "./graph-config";
+import { graphNodePosition, removeGraphNodes, type RoutineCanvasNode, type RoutineCanvasEdge } from "./graph-types";
 
-import type {
-	RoutineDeckAction,
-	RoutineLayout,
-	RoutineRun,
-	RoutineSpec,
-	RoutineStep,
-	RoutineStepRun,
-	RoutineTrigger,
-} from "@npi-deck/protocol";
-
-import type { RoutineFieldErrors } from "../routine-validation";
-import { removeStep, replaceStep, scaffoldStep } from "../spec-yaml";
-
-import { AddStepPalette } from "./AddStepPalette";
-import { SequentialEdge } from "./edges/SequentialEdge";
-import { applyAddNodeAtBottom } from "./graph-add";
-import type { CompileError } from "./graph-compile";
-import { applyEdgeConnection, applyEdgeRemoval } from "./graph-connect";
-import { importFromSpec } from "./graph-import";
-import {
-	CANVAS_DEFAULT_X,
-	type SequentialEdge as SequentialEdgeType,
-	type StepNode as StepNodeType,
-} from "./graph-types";
-import { StepNode } from "./nodes/StepNode";
-import { TRIGGER_NODE_ID, TriggerNodeView, type TriggerNode } from "./nodes/TriggerNode";
-import { StepInspector } from "./StepInspector";
-import { TriggerInspector } from "./TriggerInspector";
-
-/** A request from the parent to select something on the canvas; `seq` makes repeats distinct. */
-export interface CanvasSelectRequest {
-	target: string | "trigger";
-	seq: number;
+export interface RoutineCanvasProps {
+	graph: RoutineGraph;
+	catalogue: readonly GraphNodeType[];
+	onChange: (graph: RoutineGraph) => void;
+	errors?: ValidationError[];
+	trace?: GraphRunRecord | null;
+	readOnly?: boolean;
+	onConfigInvalidChange?: (invalid: boolean) => void;
+	inspectorHidden?: boolean;
+	onInspect?: () => void;
 }
+const DELETE_KEYS = ["Delete", "Backspace"];
+const FIT_VIEW_OPTIONS = { padding: 0.15, minZoom: 0.3, maxZoom: 1.1 };
+const PORT_COLOURS: Record<string, string> = { true: "rgb(var(--success))", false: "rgb(var(--danger))" };
+const NO_ERRORS: ValidationError[] = [];
 
-interface RoutineCanvasProps {
-	/** The routine spec being edited. */
-	spec: RoutineSpec;
-	/** Called whenever the canvas commits a change to the spec. */
-	onChange: (next: RoutineSpec) => void;
-	/** Called when the trigger inspector edits the trigger list. */
-	onChangeTriggers?: (next: RoutineTrigger[]) => void;
-	/**
-	 * Compile errors from the parent's `compileGraph(spec)` memo. The canvas
-	 * marks offending nodes and shows a pill for the count; the parent gates
-	 * the Save button on this list being empty.
-	 */
-	compileErrors?: ReadonlyArray<CompileError>;
-	/** Schema validation regrouped by field; see `fieldErrorsForSpec`. */
-	fieldErrors?: RoutineFieldErrors;
-	/** Parent-driven selection (e.g. "show me the first problem"). */
-	selectRequest?: CanvasSelectRequest | null;
-	/**
-	 * Per-step run record for the currently-displayed run. The canvas
-	 * stamps `stepRun` onto each node's `data.stepRun` so StepNode renders
-	 * the status ring + telemetry. Empty/absent for routines that haven't run.
-	 */
-	stepRunsByStepId?: ReadonlyMap<string, RoutineStepRun>;
-	/** Recent runs for the last-run picker, rendered when >= 1 run exists. */
-	runs?: ReadonlyArray<RoutineRun>;
-	/** Currently-selected run id; mirror of the picker's value. */
-	selectedRunId?: string | null;
-	/** Picker change handler. */
-	onSelectRun?: (runId: string | null) => void;
-	/** Optional deep-link target for the inspector's last-run section. */
-	routineId?: string;
-	advanced?: boolean;
-	allowAdd?: boolean;
-	allowDelete?: boolean;
-	allowConnect?: boolean;
+const RoutineNode = memo(function RoutineNode({ id, data, selected }: NodeProps<RoutineCanvasNode>) {
+	const updateNodeInternals = useUpdateNodeInternals();
+	useEffect(() => { updateNodeInternals(id); }, [id, data.inputPorts, data.outputPorts, updateNodeInternals]);
+	const rows = Math.max(data.inputPorts.length, data.outputPorts.length, 1);
+	return <div className={`relative w-[250px] rounded-[var(--r-card)] border bg-paper-2 shadow-sm ${selected ? "border-[var(--neo-accent-a)] ring-1 ring-[var(--neo-accent-a)]" : data.errors.length ? "border-danger" : "border-line"}`} style={{ minHeight: 76 + rows * 29 }}>
+		<header className="border-b border-line px-3 py-2.5">
+			<div className="flex items-center gap-2 text-[13px] font-medium text-ink"><Workflow size={13} className="shrink-0 text-ink-3" /><span className="min-w-0 break-words">{data.definition?.label ?? data.node.type}</span></div>
+			{data.definition ? <div className="mt-0.5 text-[11px] text-ink-3">{data.definition.kind === "event" ? "Event source" : data.definition.kind === "action" ? "Action" : data.definition.kind === "gate" ? "Gate" : "Operation"}</div> : <div className="text-[11px] text-warning">Registration unavailable</div>}
+		</header>
+		<div className="grid grid-cols-2 gap-x-4 px-3 py-2">
+			<div>{data.inputPorts.map(port => <Port key={port.id} port={port} direction="target" typed={!!data.definition && !data.historical} readOnly={data.readOnly} />)}</div>
+			<div>{data.outputPorts.map(port => <Port key={port.id} port={port} direction="source" typed={!!data.definition && !data.historical} readOnly={data.readOnly} />)}</div>
+		</div>
+		{data.run ? <div className={`border-t border-line px-3 py-1.5 text-[11px] ${data.run.status === "failed" || data.run.status === "aborted" ? "text-danger" : "text-ink-3"}`}>{data.run.status === "skipped" ? "Inactive branch" : data.run.status}{data.run.error ? `: ${data.run.error}` : ""}</div> : null}
+		{data.errors[0] ? <div className="border-t border-danger/20 px-3 py-1.5 text-[11px] text-danger">{data.errors[0].message}</div> : null}
+	</div>;
+});
+function Port({ port, direction, typed, readOnly }: { port: GraphPort; direction: "source" | "target"; typed: boolean; readOnly: boolean }) {
+	return <div className={`relative flex h-[29px] items-center gap-1 text-[11px] ${direction === "source" ? "justify-end text-right" : ""}`}>
+		<Handle id={port.id} type={direction} position={direction === "source" ? Position.Right : Position.Left} isConnectable={!readOnly} title={`${port.label ?? port.id}${typed ? `, ${port.type}${direction === "target" ? port.required === false ? ", optional" : ", required" : ""}${port.multiple ? ", multiple" : ""}` : ", stored port"}`} style={{ position: "absolute", top: "50%", [direction === "source" ? "right" : "left"]: -18, background: PORT_COLOURS[port.id] ?? "var(--neo-accent-a)", width: 10, height: 10 }} />
+		<span className="min-w-0 break-words leading-tight" style={{ color: PORT_COLOURS[port.id] }}>{port.label ?? port.id}</span>
+		{typed ? <span className="text-[9px] text-ink-3">{port.type}{port.multiple ? " ×" : ""}{direction === "target" && port.required === false ? "?" : ""}</span> : null}
+	</div>;
 }
+const NODE_TYPES = { routine: RoutineNode };
 
-type CanvasNode = StepNodeType | TriggerNode;
-
-const NODE_TYPES = { step: StepNode, trigger: TriggerNodeView };
-const EDGE_TYPES = { sequential: SequentialEdge };
-
-const WIDE_VIEWPORT_QUERY = "(min-width: 1100px)";
-/** Vertical distance between the trigger pill and the first step. */
-const TRIGGER_GAP = 96;
-
-function useMediaQuery(query: string): boolean {
-	const [matches, setMatches] = useState(
-		() => typeof window !== "undefined" && window.matchMedia(query).matches,
-	);
-	useEffect(() => {
-		if (typeof window === "undefined" || !window.matchMedia) return;
-		const mql = window.matchMedia(query);
-		const onChange = (e: MediaQueryListEvent) => setMatches(e.matches);
-		mql.addEventListener("change", onChange);
-		return () => mql.removeEventListener("change", onChange);
-	}, [query]);
-	return matches;
+export function RoutineCanvas(props: RoutineCanvasProps) {
+	return <ReactFlowProvider><RoutineCanvasInner {...props} /></ReactFlowProvider>;
 }
-
-// Keep fitView from zooming out below a legible scale on tall, narrow
-// graphs (linear pipelines stack vertically and the canvas is wider than the
-// graph). The user can scroll vertically if the graph overflows the viewport.
-const FIT_VIEW_OPTIONS = { padding: 0.2, minZoom: 0.7, maxZoom: 1.25 } as const;
-
-export function RoutineCanvas(props: RoutineCanvasProps): JSX.Element {
-	return (
-		<ReactFlowProvider>
-			<RoutineCanvasInner {...props} />
-		</ReactFlowProvider>
-	);
-}
-
-function RoutineCanvasInner({
-	spec,
-	onChange,
-	onChangeTriggers,
-	compileErrors,
-	fieldErrors,
-	selectRequest,
-	stepRunsByStepId,
-	runs,
-	selectedRunId,
-	onSelectRun,
-	routineId,
-	advanced = false,
-	allowAdd = true,
-	allowDelete = true,
-	allowConnect = true,
-}: RoutineCanvasProps): JSX.Element {
-	// Re-derive the React Flow graph whenever the spec's steps or layout change.
-	const imported = useMemo(
-		() => importFromSpec(spec),
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-		[spec.steps, spec.layout],
-	);
-
-	// Flatten compile errors into a `step id -> first message` map.
-	const errorByStepId = useMemo(() => {
-		const m = new Map<string, string>();
-		for (const err of compileErrors ?? []) {
-			for (const id of err.nodeIds) {
-				if (!m.has(id)) m.set(id, err.message);
-			}
-		}
-		return m;
-	}, [compileErrors]);
-
-	// Canvas-local "if-flavored" tracker. The `if` palette entry scaffolds a
-	// transform step; the node renders with two labeled handles when EITHER
-	// (a) it has at least one outgoing branch edge already, OR (b) the user
-	// just added it via the palette and hasn't wired anything yet.
-	const [ifNodeIds, setIfNodeIds] = useState<ReadonlySet<string>>(() => new Set());
+function RoutineCanvasInner({ graph, catalogue, onChange, errors = NO_ERRORS, trace, readOnly = false, onConfigInvalidChange, inspectorHidden, onInspect }: RoutineCanvasProps) {
+	const flow = useReactFlow<RoutineCanvasNode, RoutineCanvasEdge>();
+	const revealNode = useCallback((id: string) => {
+		const node = flow.getNode(id);
+		if (node) void flow.setCenter(node.position.x + (node.measured?.width ?? 250) / 2,
+			node.position.y + (node.measured?.height ?? 140) / 2, { zoom: Math.max(0.8, flow.getZoom()) });
+	}, [flow]);
+	const canvasRoot = useRef<HTMLDivElement>(null);
 	useEffect(() => {
-		if (ifNodeIds.size === 0) return;
-		const validIds = new Set(spec.steps.map((s) => s.id));
-		let mutated = false;
-		const next = new Set<string>();
-		for (const id of ifNodeIds) {
-			if (validIds.has(id)) next.add(id);
-			else mutated = true;
-		}
-		if (mutated) setIfNodeIds(next);
-	}, [spec.steps, ifNodeIds]);
-
-	const isIfNode = useMemo(() => {
-		const fromEdges = new Set<string>();
-		for (const e of spec.layout?.edges ?? []) {
-			if (e.kind === "true" || e.kind === "false") fromEdges.add(e.from);
-		}
-		return (id: string): boolean => fromEdges.has(id) || ifNodeIds.has(id);
-	}, [spec.layout?.edges, ifNodeIds]);
-
-	const [nodes, setNodes, onNodesChange] = useNodesState<CanvasNode>([]);
-	const [edges, setEdges, onEdgesChange] = useEdgesState<SequentialEdgeType>(imported.edges);
-	const rf = useReactFlow();
-
-	// Canvas-owned selection state. React Flow's internal node.selected flag
-	// is the rendering source of truth; this is the AUTHORITATIVE id we use
-	// to look up the selected step in `spec.steps` for the inspector.
-	const [selectedStepId, setSelectedStepId] = useState<string | null>(null);
-	const [triggerSelected, setTriggerSelected] = useState(false);
-
-	const specRef = useRef(spec);
-	useEffect(() => {
-		specRef.current = spec;
-	}, [spec]);
-	const selectedStepIdRef = useRef(selectedStepId);
-	useEffect(() => {
-		selectedStepIdRef.current = selectedStepId;
-	}, [selectedStepId]);
-	const triggerSelectedRef = useRef(triggerSelected);
-	useEffect(() => {
-		triggerSelectedRef.current = triggerSelected;
-	}, [triggerSelected]);
-
-	const triggerProblem = fieldErrors?.top.trigger ?? (spec.trigger.length === 0 ? "Choose how this routine starts." : undefined);
-
-	// On spec change, error change, if-flag change, or run-overlay change:
-	// reapply selection and stamp `compileError`, `fieldErrors`, `isIfNode`,
-	// `stepRun` onto each node's data, then prepend the trigger node.
-	useEffect(() => {
-		const selId = selectedStepIdRef.current;
-		const stepNodes: StepNodeType[] = imported.nodes.map((n) => {
-			const data = {
-				...n.data,
-				compileError: errorByStepId.get(n.id),
-				fieldErrors: fieldErrors?.steps.get(n.id),
-				isIfNode: isIfNode(n.id),
-				stepRun: stepRunsByStepId?.get(n.id),
-				advanced,
-			};
-			return { ...n, data, selected: selId === n.id, deletable: allowDelete };
-		});
-		const roots = rootNodes(imported.nodes, imported.edges);
-		const anchor = roots[0] ?? imported.nodes[0];
-		const triggerNode: TriggerNode = {
-			id: TRIGGER_NODE_ID,
-			type: "trigger",
-			position: anchor
-				? { x: anchor.position.x + 14, y: anchor.position.y - TRIGGER_GAP }
-				: { x: CANVAS_DEFAULT_X + 14, y: -TRIGGER_GAP },
-			data: { triggers: spec.trigger, problem: triggerProblem },
-			selected: triggerSelectedRef.current,
-			draggable: false,
-			deletable: false,
-			connectable: false,
-		};
-		setNodes([triggerNode, ...stepNodes]);
-		const triggerEdges: SequentialEdgeType[] = roots.map((root) => ({
-			id: `${TRIGGER_NODE_ID}->${root.id}`,
-			source: TRIGGER_NODE_ID,
-			target: root.id,
-			type: "sequential",
-			deletable: false,
-			selectable: false,
-			data: { kind: "success", inferred: false },
-		}));
-		setEdges([...triggerEdges, ...imported.edges]);
-	}, [imported, errorByStepId, fieldErrors, isIfNode, stepRunsByStepId, setNodes, setEdges, advanced, allowDelete, spec.trigger, triggerProblem]);
-
-	const handleNodesChange = useCallback(
-		(changes: NodeChange<CanvasNode>[]) => {
-			onNodesChange(changes);
-			const committed = changes.filter(
-				(c): c is NodePositionChange =>
-					c.type === "position" && c.dragging === false && !!c.position,
-			);
-			if (committed.length === 0) return;
-			const currentSpec = specRef.current;
-			const next = applyPositionCommits(currentSpec, committed);
-			if (next !== currentSpec) onChange(next);
-		},
-		[onNodesChange, onChange],
-	);
-
-	// Edge authoring. Connect = add explicit edge to `layout.edges`, lifting
-	// inferred sequentials on first author so the visual graph doesn't
-	// collapse. Removal mirrors back to `layout.edges`. A connection from a
-	// labeled handle (`true` / `false`) persists the edge kind.
-	const handleConnect = useCallback(
-		(conn: Connection) => {
-			const { source, target, sourceHandle } = conn;
-			if (!source || !target || source === TRIGGER_NODE_ID || target === TRIGGER_NODE_ID) return;
-			const currentSpec = specRef.current;
-			const kind =
-				sourceHandle === "true" || sourceHandle === "false"
-					? sourceHandle
-					: undefined;
-			const next = applyEdgeConnection(currentSpec, source, target, kind);
-			if (next !== currentSpec) onChange(next);
-		},
-		[onChange],
-	);
-
-	const handleEdgesChange = useCallback(
-		(changes: EdgeChange<SequentialEdgeType>[]) => {
-			onEdgesChange(changes);
-			const removals = changes.filter((c) => c.type === "remove");
-			if (removals.length === 0) return;
-			let nextSpec = specRef.current;
-			for (const change of removals) {
-				const edge = edges.find((e) => e.id === change.id);
-				if (!edge || edge.source === TRIGGER_NODE_ID) continue;
-				const kind = edge.data?.kind ?? "success";
-				nextSpec = applyEdgeRemoval(nextSpec, edge.source, edge.target, kind);
-			}
-			if (nextSpec !== specRef.current) onChange(nextSpec);
-		},
-		[onEdgesChange, edges, onChange],
-	);
-
-	// Keep canvas-local selection in lockstep with React Flow's view of
-	// what's selected. Exactly one selected step → step inspector; the
-	// trigger alone → trigger inspector; zero or many → nothing.
-	const handleSelectionChange = useCallback(
-		(params: OnSelectionChangeParams) => {
-			const ids = params.nodes
-				.map((n) => (n.type === "step" ? n.id : undefined))
-				.filter((id): id is string => typeof id === "string");
-			const trigger = params.nodes.some((n) => n.type === "trigger");
-			setSelectedStepId(ids.length === 1 && !trigger ? ids[0]! : null);
-			setTriggerSelected(trigger && ids.length === 0);
-		},
-		[],
-	);
-
-	const selectOnly = useCallback(
-		(target: string | "trigger" | null) => {
-			const stepId = target && target !== "trigger" ? target : null;
-			setSelectedStepId(stepId);
-			setTriggerSelected(target === "trigger");
-			setNodes((prev) =>
-				prev.map((n) => {
-					const selected = target === "trigger" ? n.type === "trigger" : n.id === stepId;
-					return n.selected === selected ? n : { ...n, selected };
-				}),
-			);
-		},
-		[setNodes],
-	);
-
-	// Parent-driven selection: "show me the first problem".
-	const lastSelectSeq = useRef<number | null>(null);
-	useEffect(() => {
-		if (!selectRequest || selectRequest.seq === lastSelectSeq.current) return;
-		lastSelectSeq.current = selectRequest.seq;
-		selectOnly(selectRequest.target);
-	}, [selectRequest, selectOnly]);
-
-	// Palette → scaffold + insert + stamp a bottom-anchored layout position,
-	// then auto-select the new node so the inspector opens on it.
-	const handleAddStep = useCallback(
-		(
-			type: RoutineStep["type"],
-			presetAction?: RoutineDeckAction,
-			presetKind?: "if",
-		) => {
-			const currentSpec = specRef.current;
-			const existingIds = currentSpec.steps.map((s) => s.id);
-			const newStep = scaffoldStep(type, existingIds, presetAction, presetKind);
-			const next = applyAddNodeAtBottom(currentSpec, newStep);
-			onChange(next);
-			setSelectedStepId(newStep.id);
-			setTriggerSelected(false);
-			if (presetKind === "if") {
-				setIfNodeIds((prev) => {
-					const next = new Set(prev);
-					next.add(newStep.id);
-					return next;
-				});
-			}
-		},
-		[onChange],
-	);
-
-	// Inspector edit: rebuild the spec via replaceStep, which already cascades
-	// id renames through `layout.nodes` + `layout.edges`. If the id changed,
-	// keep the selection pointing at the NEW id so the inspector stays open.
-	const handleInspectorChange = useCallback(
-		(nextStep: RoutineStep) => {
-			const currentSpec = specRef.current;
-			const idx = currentSpec.steps.findIndex(
-				(s) => s.id === selectedStepIdRef.current,
-			);
-			if (idx < 0) return;
-			const nextSpec = replaceStep(currentSpec, idx, nextStep);
-			onChange(nextSpec);
-			if (currentSpec.steps[idx]!.id !== nextStep.id) {
-				setSelectedStepId(nextStep.id);
-			}
-		},
-		[onChange],
-	);
-
-	const handleInspectorClose = useCallback(() => selectOnly(null), [selectOnly]);
-
-	const handleInspectorDelete = useCallback(() => {
-		const currentSpec = specRef.current;
-		const idx = currentSpec.steps.findIndex(
-			(s) => s.id === selectedStepIdRef.current,
-		);
-		if (idx < 0) return;
-		onChange(removeStep(currentSpec, idx));
-		setSelectedStepId(null);
-	}, [onChange]);
-
-	const selectedStep = useMemo(() => {
-		if (!selectedStepId) return null;
-		return spec.steps.find((s) => s.id === selectedStepId) ?? null;
-	}, [spec.steps, selectedStepId]);
-
-	const empty = imported.nodes.length === 0;
-	const existingIds = useMemo(() => spec.steps.map((s) => s.id), [spec.steps]);
-
-	// At viewport >= 1100px the inspector becomes a flex sibling of the
-	// canvas, so the React Flow viewport shrinks when it opens and grows back
-	// when it closes. Re-fit on each transition so the graph stays centered.
-	const isWide = useMediaQuery(WIDE_VIEWPORT_QUERY);
-	const inspectorOpen = selectedStep !== null || (triggerSelected && onChangeTriggers !== undefined);
-	const inlineInspectorOpen = inspectorOpen && isWide;
-	const drawerInspectorOpen = inspectorOpen && !isWide;
-	useEffect(() => {
-		if (!isWide) return;
-		// Two rAFs: the first lets the flex reflow land, the second lets React
-		// Flow's internal ResizeObserver pick up the new dimensions.
-		let inner = 0;
-		const outer = requestAnimationFrame(() => {
-			inner = requestAnimationFrame(() => {
-				rf.fitView({ ...FIT_VIEW_OPTIONS, duration: 200 });
+		const element = canvasRoot.current;
+		if (!element) return;
+		let frame = 0;
+		const observer = new ResizeObserver(() => {
+			cancelAnimationFrame(frame);
+			frame = requestAnimationFrame(() => {
+				const selected = flow.getNodes().find(node => node.selected);
+				if (selected) revealNode(selected.id); else void flow.fitView(FIT_VIEW_OPTIONS);
 			});
 		});
-		return () => {
-			cancelAnimationFrame(outer);
-			cancelAnimationFrame(inner);
+		observer.observe(element);
+		return () => { observer.disconnect(); cancelAnimationFrame(frame); };
+	}, [flow, revealNode]);
+	useEffect(() => {
+		const frame = requestAnimationFrame(() => { void flow.fitView(FIT_VIEW_OPTIONS); });
+		return () => cancelAnimationFrame(frame);
+	}, [graph.nodes.length, trace?.id, flow]);
+	const [selectedId, setSelectedId] = useState<string | null>(null);
+	useEffect(() => {
+		if (!selectedId) return;
+		const frame = requestAnimationFrame(() => revealNode(selectedId));
+		return () => cancelAnimationFrame(frame);
+	}, [selectedId, trace?.id, revealNode]);
+	const [paletteOpen, setPaletteOpen] = useState(graph.nodes.length === 0);
+	const [query, setQuery] = useState("");
+	const [connectionIssue, setConnectionIssue] = useState<ValidationError[]>([]);
+	const reportConfigInvalid = useCallback((invalid: boolean) => onConfigInvalidChange?.(invalid), [onConfigInvalidChange]);
+	const selectedNode = graph.nodes.find(node => node.id === selectedId);
+	const definitions = useMemo(() => new Map(catalogue.map(definition => [definition.type, definition])), [catalogue]);
+	const imported = useMemo<RoutineCanvasNode[]>(() => graph.nodes.map((node, index) => {
+		const definition = definitions.get(node.type);
+		const storedPorts = (direction: "input" | "output"): GraphPort[] => [...new Set([
+			...graph.edges.filter(edge => direction === "input" ? edge.to.nodeId === node.id : edge.from.nodeId === node.id).map(edge => direction === "input" ? edge.to.port : edge.from.port),
+			...(trace?.nodeRuns.filter(run => run.nodeId === node.id).flatMap(run => direction === "input" ? run.inputPorts : run.outputs.map(output => output.port)) ?? []),
+		])].map(id => ({ id, type: "object" }));
+		return {
+			id: node.id, type: "routine", position: graphNodePosition(graph, node.id, index), selected: selectedId === node.id,
+			data: { node, definition, inputPorts: trace ? storedPorts("input") : definition?.inputs ?? storedPorts("input"), outputPorts: trace ? storedPorts("output") : definition?.outputs ?? storedPorts("output"), errors: errors.filter(error => error.path === `/nodes/${index}` || error.path.startsWith(`/nodes/${index}/`)), run: trace?.nodeRuns.find(run => run.nodeId === node.id), readOnly, historical: !!trace },
 		};
-	}, [inlineInspectorOpen, isWide, rf]);
+	}), [graph, definitions, errors, selectedId, trace, readOnly]);
+	const [nodes, setNodes, onFlowNodesChange] = useNodesState<RoutineCanvasNode>(imported);
+	useEffect(() => { setNodes(imported); }, [imported, setNodes]);
+	useEffect(() => { if (selectedId && !graph.nodes.some(node => node.id === selectedId)) setSelectedId(null); }, [graph.nodes, selectedId]);
+	const edges = useMemo<RoutineCanvasEdge[]>(() => graph.edges.map(edge => ({ id: edge.id, source: edge.from.nodeId, sourceHandle: edge.from.port, target: edge.to.nodeId, targetHandle: edge.to.port, label: edge.from.port, style: { stroke: PORT_COLOURS[edge.from.port] ?? "rgb(var(--ink-3))" }, labelStyle: { fill: PORT_COLOURS[edge.from.port] ?? "rgb(var(--ink-2))", fontSize: 11 }, labelBgStyle: { fill: "var(--neo-panel)" } })), [graph.edges]);
+	const [flowEdges, setFlowEdges, onFlowEdgesChange] = useEdgesState<RoutineCanvasEdge>(edges);
+	useEffect(() => { setFlowEdges(edges); }, [edges, setFlowEdges]);
 
-	const inspector = selectedStep ? (
-		<StepInspector
-			step={selectedStep}
-			existingIds={existingIds}
-			errors={fieldErrors?.steps.get(selectedStep.id)}
-			onChange={handleInspectorChange}
-			onClose={handleInspectorClose}
-			onDelete={handleInspectorDelete}
-			mode={isWide ? "inline" : "drawer"}
-			advanced={advanced}
-			allowDelete={allowDelete}
-			isIfNode={isIfNode(selectedStep.id)}
-			stepRun={stepRunsByStepId?.get(selectedStep.id)}
-			routineId={routineId}
-			selectedRunId={selectedRunId ?? null}
-		/>
-	) : triggerSelected && onChangeTriggers ? (
-		<TriggerInspector
-			triggers={spec.trigger}
-			onChange={onChangeTriggers}
-			onClose={handleInspectorClose}
-			mode={isWide ? "inline" : "drawer"}
-			error={fieldErrors?.top.trigger}
-		/>
-	) : null;
-
-	const firstCompileTarget = compileErrors?.[0]?.nodeIds[0];
-
-	return (
-		<div className="routine-canvas relative flex h-full w-full">
-			<div className="relative h-full flex-1 min-w-0">
-				<GraphCanvasSurface
-					nodes={nodes}
-					edges={edges}
-					onNodesChange={handleNodesChange}
-					onEdgesChange={handleEdgesChange}
-					onSelectionChange={handleSelectionChange}
-					onConnect={handleConnect}
-					nodeTypes={NODE_TYPES}
-					edgeTypes={EDGE_TYPES}
-					fitView
-					fitViewOptions={FIT_VIEW_OPTIONS}
-					nodesDraggable
-					nodesConnectable={allowConnect}
-					elementsSelectable
-				/>
-				{allowAdd ? <AddStepPalette onAdd={handleAddStep} advanced={advanced} /> : null}
-				{runs && runs.length > 0 && onSelectRun ? (
-					<RunOverlayPicker
-						runs={runs}
-						selectedRunId={selectedRunId ?? null}
-						onSelect={onSelectRun}
-					/>
-				) : null}
-				{compileErrors && compileErrors.length > 0 ? (
-					<button
-						type="button"
-						className="neo-canvas-pill"
-						data-tone="bad"
-						title={compileErrors.map((e) => e.message).join("\n")}
-						onClick={() => firstCompileTarget && selectOnly(firstCompileTarget)}
-					>
-						<CircleAlert size={13} />
-						{compileErrors.length === 1 ? compileErrors[0]!.message : `${compileErrors.length} problems in the graph`}
-					</button>
-				) : null}
-				{empty ? (
-					<div className="pointer-events-none absolute inset-x-0 top-[calc(50%+48px)] flex justify-center">
-						<div className="neo-empty max-w-[320px] rounded-[var(--r-card)] border border-dashed border-[var(--neo-line-2)] bg-[color-mix(in_srgb,var(--neo-panel)_85%,transparent)] py-6">
-							<div className="neo-empty-title">What should this routine do?</div>
-							<div className="neo-empty-hint">Choose <span className="text-ink">Add action</span> to put the first step on the canvas.</div>
-						</div>
-					</div>
-				) : null}
-			</div>
-			{inlineInspectorOpen ? inspector : null}
-			{drawerInspectorOpen ? (
-				<>
-					<div
-						onClick={handleInspectorClose}
-						aria-hidden="true"
-						className="neo-scrim fixed inset-0 z-20"
-					/>
-					{inspector}
-				</>
-			) : null}
-		</div>
-	);
-}
-
-/** Steps with no incoming edge: where the trigger connects. */
-function rootNodes(nodes: ReadonlyArray<StepNodeType>, edges: ReadonlyArray<SequentialEdgeType>): StepNodeType[] {
-	const targets = new Set(edges.map((e) => e.target));
-	const roots = nodes.filter((n) => !targets.has(n.id));
-	return roots.sort((a, b) => a.position.y - b.position.y || a.position.x - b.position.x);
-}
-
-/**
- * Merge committed drag positions into the spec's `layout.nodes`, preserving
- * existing layout edges and per-node metadata (e.g. `collapsed`). Positions are
- * rounded to integers so YAML diffs stay clean.
- *
- * Steps that were dragged but not yet in `layout.nodes` get a fresh entry.
- * Orphan `layout.nodes` entries (no matching step id) are pruned so a save
- * does not preserve dead positions for deleted steps. Changes for ids that
- * are not steps (the trigger node) are ignored.
- *
- * Returns the original spec reference when nothing meaningful changed.
- */
-export function applyPositionCommits(
-	spec: RoutineSpec,
-	commits: ReadonlyArray<NodePositionChange>,
-): RoutineSpec {
-	const validSteps = new Set(spec.steps.map((s) => s.id));
-	const prev = spec.layout?.nodes ?? {};
-	const next: Record<string, { x: number; y: number; collapsed?: boolean }> = {};
-
-	// Carry over existing entries (keyed by step id), pruning orphans.
-	for (const [id, entry] of Object.entries(prev)) {
-		if (!validSteps.has(id)) continue;
-		next[id] = { ...entry };
+	function handleNodesChange(changes: NodeChange<RoutineCanvasNode>[]) {
+		onFlowNodesChange(changes);
+		if (readOnly) return;
+		const removed = new Set(changes.filter(change => change.type === "remove").map(change => change.id));
+		let next = removeGraphNodes(graph, removed);
+		for (const change of changes) if (change.type === "position" && change.position && change.dragging === false) next = { ...next, layout: { ...next.layout, nodes: { ...next.layout?.nodes, [change.id]: { ...next.layout?.nodes?.[change.id], x: change.position.x, y: change.position.y } } } };
+		if (next !== graph) onChange(next);
 	}
-
-	let mutated = false;
-	for (const change of commits) {
-		if (!validSteps.has(change.id)) continue;
-		const pos = change.position;
-		if (!pos) continue;
-		const x = Math.round(pos.x);
-		const y = Math.round(pos.y);
-		const existing = next[change.id];
-		if (existing && existing.x === x && existing.y === y) continue;
-		next[change.id] = existing ? { ...existing, x, y } : { x, y };
-		mutated = true;
+	function handleEdgesChange(changes: EdgeChange<RoutineCanvasEdge>[]) {
+		onFlowEdgesChange(changes);
+		if (readOnly) return;
+		const removed = new Set(changes.filter(change => change.type === "remove").map(change => change.id));
+		const next = removeGraphEdges(graph, removed); if (next !== graph) onChange(next);
 	}
-
-	if (!mutated) return spec;
-
-	const layout: RoutineLayout = {
-		version: 1,
-		nodes: next,
-		...(spec.layout?.edges?.length ? { edges: spec.layout.edges } : {}),
-	};
-	return { ...spec, layout };
-}
-
-/**
- * Floating last-run picker. Top-right of the viewport so it doesn't fight
- * the AddStepPalette (top-left). A `<select>` keeps the surface tiny and
- * keyboard-native without pulling in a popover library.
- */
-function RunOverlayPicker({
-	runs,
-	selectedRunId,
-	onSelect,
-}: {
-	runs: ReadonlyArray<RoutineRun>;
-	selectedRunId: string | null;
-	onSelect: (id: string | null) => void;
-}): JSX.Element {
-	return (
-		<div className="pointer-events-auto absolute right-3 top-3 z-20 flex items-center gap-2">
-			<span className="text-[12px] text-ink-3">Showing run</span>
-			<select
-				value={selectedRunId ?? ""}
-				onChange={(e) => onSelect(e.target.value || null)}
-				className="neo-input max-w-[220px] truncate"
-				data-size="sm"
-				data-mono="true"
-				aria-label="Select run to overlay"
+	function connect(connection: Connection) {
+		if (readOnly) return;
+		const result = connectGraph(graph, catalogue, connection, `edge-${crypto.randomUUID()}`);
+		setConnectionIssue(result.errors); if (!result.errors.length) onChange(result.graph);
+	}
+	function candidateConnectionId(): string {
+		let id = "pending-connection";
+		while (graph.edges.some(edge => edge.id === id)) id += "-";
+		return id;
+	}
+	function valid(connection: GraphConnection): boolean {
+		return !readOnly && connectGraph(graph, catalogue, connection, candidateConnectionId()).errors.length === 0;
+	}
+	function add(definition: GraphNodeType) {
+		const id = `${definition.type.replace(/[^a-zA-Z0-9_-]/g, "-")}-${crypto.randomUUID().slice(0, 8)}`;
+		onChange({ ...graph, nodes: [...graph.nodes, { id, type: definition.type, config: newNodeConfig(definition, catalogue) }], layout: { ...graph.layout, nodes: { ...graph.layout?.nodes, [id]: graphNodePosition(graph, id, graph.nodes.length) } } });
+		setSelectedId(id); setPaletteOpen(false); onInspect?.();
+	}
+	const available = catalogue.filter(definition => definition.type !== "iteration.input" && `${definition.label} ${definition.kind} ${definition.type}`.toLowerCase().includes(query.toLowerCase()));
+	return <div className="routine-canvas flex h-full min-h-[360px] flex-1 flex-col overflow-hidden">
+		{!readOnly ? <div className="shrink-0 border-b border-line bg-paper-2 px-3 py-2">
+			<div className="flex flex-wrap items-center gap-3"><button type="button" className="neo-btn" data-size="sm" data-variant="secondary" aria-expanded={paletteOpen} onClick={() => setPaletteOpen(value => !value)}><Plus size={13} />Add node</button><p className="text-[12px] text-ink-3">Connect named outputs to inputs. Select a node to configure it.</p></div>
+			{paletteOpen ? <section aria-label="Node library" className="mt-3 space-y-2"><input className="neo-input w-full" aria-label="Search registered nodes" placeholder="Find an event, gate, operation or action" value={query} onChange={event => setQuery(event.target.value)} /><div className="flex max-h-[220px] flex-wrap gap-2 overflow-y-auto">{available.map(definition => <button key={definition.type} type="button" className="neo-btn !h-auto !items-start !py-2 text-left" data-size="sm" data-variant="ghost" aria-label={`Add ${definition.label}`} onClick={() => add(definition)}><Plus size={12} className="mt-0.5 shrink-0" /><span>{definition.label}<span className="block text-[10px] font-normal text-ink-3">{definition.kind === "event" ? "Event source" : labelKind(definition.kind)}</span></span></button>)}{!available.length ? <p className="py-2 text-[12px] text-ink-3">No registered nodes match.</p> : null}</div></section> : null}
+		</div> : <div className="shrink-0 border-b border-line bg-paper-2 px-3 py-2 text-[12px] text-ink-2">{trace ? "Historical graph. Wiring and configuration are read-only." : "The node library must load before editing."}</div>}
+		{connectionIssue.length ? <ul role="alert" className="shrink-0 bg-[var(--neo-bad-soft)] px-3 py-2 text-[12px] text-danger">{connectionIssue.map((error, index) => <li key={index}><code>{error.path}</code> {error.message}</li>)}</ul> : null}
+		<div ref={canvasRoot} className="relative min-h-0 flex-1">
+			<GraphCanvasSurface<RoutineCanvasNode, RoutineCanvasEdge>
+				nodes={nodes} edges={flowEdges} nodeTypes={NODE_TYPES}
+				onNodesChange={handleNodesChange} onEdgesChange={handleEdgesChange}
+				onConnect={connect} isValidConnection={valid}
+				onConnectStart={() => setConnectionIssue([])}
+				onConnectEnd={(_, state) => {
+					if (readOnly || state.isValid || !state.fromHandle || !state.toHandle) return;
+					const from = state.fromHandle.type === "source" ? state.fromHandle : state.toHandle;
+					const to = state.fromHandle.type === "source" ? state.toHandle : state.fromHandle;
+					const result = connectGraph(graph, catalogue, { source: from.nodeId, sourceHandle: from.id, target: to.nodeId, targetHandle: to.id }, candidateConnectionId());
+					setConnectionIssue(result.errors);
+				}}
+				nodesDraggable={!readOnly} nodesConnectable={!readOnly}
+				deleteKeyCode={readOnly ? null : DELETE_KEYS}
+				onNodeClick={(_, node) => { setSelectedId(node.id); onInspect?.(); }}
+				onPaneClick={() => setSelectedId(null)}
+				fitView fitViewOptions={FIT_VIEW_OPTIONS}
 			>
-				{runs.map((r) => (
-					<option key={r.id} value={r.id}>
-						{formatRunLabel(r)}
-					</option>
-				))}
-			</select>
+				{!nodes.length ? <div className="pointer-events-none absolute inset-0 z-10 grid place-items-center"><div className="max-w-[300px] px-4 text-center"><h3 className="text-[15px] font-medium text-ink">Start with an event source</h3><p className="mt-1 text-[13px] text-ink-3">Add registered nodes, then wire the values each one receives.</p></div></div> : null}
+			</GraphCanvasSurface>
 		</div>
-	);
+		{selectedNode && !inspectorHidden ? <StudioPanel title={definitions.get(selectedNode.type)?.label ?? selectedNode.type} subtitle={readOnly ? "Configuration executed in this run" : "Configure the selected node"} icon={<Workflow size={15} />} onClose={() => setSelectedId(null)} footer={!readOnly ? <button type="button" className="neo-btn text-danger" data-size="sm" data-variant="ghost" onClick={() => { onChange(removeGraphNodes(graph, new Set([selectedNode.id]))); setSelectedId(null); }}><Trash2 size={13} />Remove node</button> : undefined}>
+			{readOnly ? <details><summary className="cursor-pointer text-[12px] text-ink-2">Executed configuration</summary><pre className="mt-2 overflow-auto whitespace-pre-wrap break-words font-mono text-[11px] text-ink-2">{JSON.stringify(selectedNode.config, null, 2)}</pre></details> : <GraphConfigForm key={selectedNode.id} graph={graph} node={selectedNode} catalogue={catalogue} definition={definitions.get(selectedNode.type)} onChange={config => onChange({ ...graph, nodes: graph.nodes.map(node => node.id === selectedNode.id ? { ...node, config } : node) })} errors={errors.filter(error => error.path === `/nodes/${graph.nodes.indexOf(selectedNode)}` || error.path.startsWith(`/nodes/${graph.nodes.indexOf(selectedNode)}/`))} onIssuesChange={reportConfigInvalid} />}
+			{!readOnly && selectedNode.type === "event.source" ? <p className="text-[12px] text-ink-3">Use manual as the event type for the Run button. Inbox sources receive new cards instead, and do not activate on a manual run.</p> : null}
+			{trace ? <GraphRunProvenance trace={trace} nodeId={selectedNode.id} /> : null}
+		</StudioPanel> : null}
+	</div>;
 }
-
-function formatRunLabel(run: RoutineRun): string {
-	const status = !run.endedAt
-		? "running"
-		: run.abortReason
-			? "stopped"
-			: run.exitCode === 0
-				? "ok"
-				: "failed";
-	const date = new Date(run.startedAt);
-	const pad = (n: number): string => n.toString().padStart(2, "0");
-	const stamp = `${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
-	return `${stamp} · ${status}`;
-}
+function labelKind(kind: string): string { return kind[0]!.toUpperCase() + kind.slice(1); }

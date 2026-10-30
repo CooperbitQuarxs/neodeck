@@ -1,5 +1,5 @@
 import { afterAll, afterEach, expect, test } from "bun:test";
-import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir, userInfo } from "node:os";
 import * as path from "node:path";
 import YAML from "yaml";
@@ -11,6 +11,7 @@ import type { MarketplaceService } from "./marketplace-service.ts";
 import { buildSkillsRouter } from "./routes-skills.ts";
 import { SkillsService } from "./skills-service.ts";
 import { watchSkillRoots } from "./skills-watcher.ts";
+import { removeTestPath, withTestDirectorySymlink } from "./test-cleanup.ts";
 
 import { privateBackendTest } from "./backend/private-test.ts";
 
@@ -34,14 +35,14 @@ const skillsRoot = path.join(agentDir, "skills");
 const project = path.join(root, "project");
 const outside = path.join(root, "outside");
 mkdirSync(project, { recursive: true });
-afterAll(() => rmSync(root, { recursive: true, force: true }));
+afterAll(() => removeTestPath(root));
 
 /** Skill dirs and links a test created under the shared agent dir; removed after each test. */
 const created = new Set<string>();
 afterEach(() => {
-	for (const entry of created) rmSync(entry, { recursive: true, force: true });
+	for (const entry of created) removeTestPath(entry);
 	created.clear();
-	rmSync(outside, { recursive: true, force: true });
+	removeTestPath(outside);
 });
 
 const config = { defaultCwd: project } as Config;
@@ -191,18 +192,12 @@ test("a SKILL.md symlinked out of its directory is read-only", async () => {
 
 test("a skills root symlinked outside the agent dir refuses new skills", async () => {
 	mkdirSync(skillsRoot, { recursive: true });
-	const parked = path.join(root, "parked-skills");
-	renameSync(skillsRoot, parked);
 	mkdirSync(outside, { recursive: true });
-	symlinkSync(outside, skillsRoot);
-	try {
+	await withTestDirectorySymlink(skillsRoot, outside, async () => {
 		const response = await send("POST", "/skills", { name: "escapes", description: "d", body: "b" });
 		expect(response.status).toBe(409);
 		expect(existsSync(path.join(outside, "escapes"))).toBe(false);
-	} finally {
-		rmSync(skillsRoot);
-		renameSync(parked, skillsRoot);
-	}
+	});
 });
 
 test("project skills and other providers' skills stay read-only", async () => {

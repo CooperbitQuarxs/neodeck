@@ -65,5 +65,8 @@ export function readonlyCardCommand(command: string[], cwd: string, runtime: str
 	if (process.platform !== "linux") return command;
 	const bwrap = Bun.which("bwrap");
 	if (!bwrap) throw new Error("Linux readonly defense requires bubblewrap; refusing to run without it");
-	return [bwrap, "--unshare-user", "--unshare-pid", "--unshare-ipc", "--unshare-uts", "--die-with-parent", "--new-session", "--ro-bind", "/", "/", "--proc", "/proc", "--dev", "/dev", "--tmpfs", "/run", "--tmpfs", "/tmp", "--dir", runtime, "--bind", runtime, runtime, "--dir", cwd, "--ro-bind", cwd, cwd, "--chdir", cwd, "--", ...command];
+	// Bubblewrap creates mount destinations without following symlinked parents.
+	const runtimePath = realpathSync.native(runtime);
+	const worktreePath = realpathSync.native(cwd);
+	return [bwrap, "--unshare-user", "--unshare-pid", "--unshare-ipc", "--unshare-uts", "--die-with-parent", "--new-session", "--ro-bind", "/", "/", "--proc", "/proc", "--dev", "/dev", "--tmpfs", "/run", "--tmpfs", "/tmp", "--dir", runtimePath, "--bind", runtimePath, runtimePath, "--dir", worktreePath, "--ro-bind", worktreePath, worktreePath, "--chdir", worktreePath, "--", ...command];
 }

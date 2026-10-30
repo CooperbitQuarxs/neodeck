@@ -55,48 +55,48 @@ export const NAV: readonly NavGroup[] = [
 	{
 		heading: "Work",
 		items: [
-			{ to: "/", label: "Home", icon: Home, hotkey: "h", end: true },
-			{ to: "/inbox", label: "Inbox", icon: Inbox, hotkey: "i" },
-			{ to: "/tasks", label: "Board", icon: KanbanSquare, hotkey: "b" },
-			{ to: "/threads", label: "Threads", icon: MessagesSquare, hotkey: "t", aliases: ["/chat"] },
+			{ to: "/legacy", label: "Home", icon: Home, hotkey: "h", end: true },
+			{ to: "/legacy/inbox", label: "Inbox", icon: Inbox, hotkey: "i" },
+			{ to: "/legacy/tasks", label: "Board", icon: KanbanSquare, hotkey: "b" },
+			{ to: "/legacy/threads", label: "Threads", icon: MessagesSquare, hotkey: "t", aliases: ["/legacy/chat"] },
 		],
 	},
 	{
 		heading: "Automate",
 		items: [
-			{ to: "/routines", label: "Routines", icon: Clock, hotkey: "r" },
-			{ to: "/flows", label: "Flows", icon: Workflow, hotkey: "f", planned: true },
+			{ to: "/legacy/routines", label: "Routines", icon: Clock, hotkey: "r" },
+			{ to: "/legacy/flows", label: "Flows", icon: Workflow, hotkey: "f", planned: true },
 		],
 	},
 	{
 		heading: "Agents",
 		items: [
-			{ to: "/advisors", label: "Advisors", icon: Eye, hotkey: "a" },
-			{ to: "/mixtures", label: "Mixtures", icon: Network, hotkey: "x" },
+			{ to: "/legacy/advisors", label: "Advisors", icon: Eye, hotkey: "a" },
+			{ to: "/legacy/mixtures", label: "Mixtures", icon: Network, hotkey: "x" },
 		],
 	},
 	{
 		heading: "Library",
 		items: [
-			{ to: "/kb", label: "Knowledge", icon: BookOpen, hotkey: "k" },
-			{ to: "/skills", label: "Skills", icon: Sparkles, hotkey: "s" },
-			{ to: "/marketplace", label: "Marketplace", icon: Store, hotkey: "m" },
+			{ to: "/legacy/kb", label: "Knowledge", icon: BookOpen, hotkey: "k" },
+			{ to: "/legacy/skills", label: "Skills", icon: Sparkles, hotkey: "s" },
+			{ to: "/legacy/marketplace", label: "Marketplace", icon: Store, hotkey: "m" },
 		],
 	},
 	{
 		heading: "Connect",
 		items: [
-			{ to: "/neopi", label: "NeoPi", icon: Zap, hotkey: "n" },
-			{ to: "/github", label: "GitHub", icon: GitBranch, hotkey: "g", planned: true },
-			{ to: "/telegram", label: "Telegram", icon: Send, hotkey: "e" },
-			{ to: "/integrations", label: "MCP servers", icon: Plug, hotkey: "c" },
+			{ to: "/legacy/neopi", label: "NeoPi", icon: Zap, hotkey: "n" },
+			{ to: "/legacy/github", label: "GitHub", icon: GitBranch, hotkey: "g", planned: true },
+			{ to: "/legacy/telegram", label: "Telegram", icon: Send, hotkey: "e" },
+			{ to: "/legacy/integrations", label: "MCP servers", icon: Plug, hotkey: "c" },
 		],
 	},
 	{
 		heading: "Office",
 		items: [
-			{ to: "/people", label: "People", icon: Users, hotkey: "p", planned: true },
-			{ to: "/settings", label: "Settings", icon: Settings, hotkey: "," },
+			{ to: "/legacy/people", label: "People", icon: Users, hotkey: "p", planned: true },
+			{ to: "/legacy/settings", label: "Settings", icon: Settings, hotkey: "," },
 		],
 	},
 ];

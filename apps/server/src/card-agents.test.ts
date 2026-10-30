@@ -99,8 +99,17 @@ if (!fixtureRoot) {
  const endpoint = `http://127.0.0.1:${server.port}`; runner.setApiOrigin(endpoint);
  const post = async (route: string, body: unknown = {}): Promise<Response> => fetch(endpoint + route, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
  const create = async (title: string, properties?: Record<string, unknown>, cwd?: string): Promise<Task> => { const response = await post("/tasks", { title, properties, cwd }); expect(response.status).toBe(201); return response.json() as Promise<Task>; };
- async function waitFor<T>(read: () => T | undefined | false, message: string): Promise<T> {
-  const until = Date.now() + 40_000; while (Date.now() < until) { const value = read(); if (value) return value; await Bun.sleep(25); } throw new Error(`Timeout: ${message}; ${JSON.stringify(requests.at(-1)?.messages?.at(-1))}`);
+ async function waitFor<T>(read: () => T | undefined | false, message: string, cards: Task[] = []): Promise<T> {
+  const until = Date.now() + 40_000;
+  while (Date.now() < until) {
+   const value = read(); if (value) return value;
+   for (const card of cards) {
+    const run = getTask(card.id)?.run;
+    if (run && !["queued", "running"].includes(run.status)) throw new Error(`Card ${card.title} ${run.status} before ${message}: ${run.error ?? run.outcome}`);
+   }
+   await Bun.sleep(25);
+  }
+  throw new Error(`Timeout: ${message}; ${JSON.stringify(requests.at(-1)?.messages?.at(-1))}`);
  }
  const finish = (task: Task) => waitFor(() => { const current = getTask(task.id)!; return current.run && !["queued", "running"].includes(current.run.status) ? current : undefined; }, `card ${task.id} completion`);
  afterAll(async () => { for (const gate of tokenGates.values()) gate.release(); await runner.dispose(); if (capabilityRunner !== runner) await capabilityRunner.dispose(); server.stop(true); provider.stop(true); closeDb(); git("worktree", "remove", "--force", linked); });
@@ -116,6 +125,7 @@ if (!fixtureRoot) {
   const writable = await create("WRITE linked", { worktree: linked }); await post(`/tasks/${writable.id}/assign`); const complete = await finish(writable);
   expect(complete.run?.error).toBeUndefined(); expect(complete.run?.status).toBe("completed"); expect(realpathSync.native(complete.run!.cwd!)).toBe(realpathSync.native(linked)); expect(complete.run?.ownedWorktree).toBe(false); expect(readFileSync(path.join(linked, "result.txt"), "utf8")).toBe("Actual agent-created result");
   const readonly = await create("DENIAL", { "read-only": true, worktree: linked }); await post(`/tasks/${readonly.id}/assign`); const research = await finish(readonly);
+  expect(research.run?.error).toBeUndefined();
   expect(research.run?.status).toBe("completed"); expect(existsSync(linked)).toBe(true); expect(existsSync(path.join(linked, "forbidden.txt"))).toBe(false); expect(readFileSync(path.join(linked, "source.txt"))).toEqual(linkedSource);
   for (const name of forbiddenNames.filter(name => /read|grep|glob/.test(name))) expect(denied.get(`call_${name}`)).not.toContain("Original fixture source");
   expect(denied.get("call_card_read")).toContain("Original fixture source");
@@ -141,12 +151,12 @@ if (!fixtureRoot) {
  test("global N concurrency queues extra assignments, supports cancellation and never exceeds N", async () => {
   held = false; const cards = await Promise.all(Array.from({ length: 5 }, (_, index) => create(`HOLD ${index}`, { "read-only": true })));
   await Promise.all(cards.map(card => post(`/tasks/${card.id}/assign`)));
-  await waitFor(() => held, "fixture provider entry"); expect(cards.filter(card => getTask(card.id)?.run?.status === "running")).toHaveLength(2); expect(cards.filter(card => getTask(card.id)?.run?.status === "queued")).toHaveLength(3);
+  await waitFor(() => held, "fixture provider entry", cards); expect(cards.filter(card => getTask(card.id)?.run?.status === "running")).toHaveLength(2); expect(cards.filter(card => getTask(card.id)?.run?.status === "queued")).toHaveLength(3);
   const cancelled = await post(`/tasks/${cards[4]!.id}/cancel`); expect((await cancelled.json() as { status: string }).status).toBe("cancelled");
   expect(getTask(cards[4]!.id)?.stateId).toBe("s_blocked");
   let peak = 0; while (cards.some(card => ["queued", "running"].includes(getTask(card.id)?.run?.status ?? ""))) { peak = Math.max(peak, cards.filter(card => getTask(card.id)?.run?.status === "running").length); expect(peak).toBeLessThanOrEqual(2); await Bun.sleep(25); }
   expect(peak).toBe(2); for (const card of cards.slice(0, 4)) expect(getTask(card.id)?.run?.status).toBe("completed");
-  const running = await create("HOLD cancellation", { "read-only": true }); held = false; await post(`/tasks/${running.id}/assign`); await waitFor(() => held, "running cancellation entry"); await post(`/tasks/${running.id}/cancel`);
+  const running = await create("HOLD cancellation", { "read-only": true }); held = false; await post(`/tasks/${running.id}/assign`); await waitFor(() => held, "running cancellation entry", [running]); await post(`/tasks/${running.id}/cancel`);
   expect(getTask(running.id)?.run?.status).toBe("cancelled"); expect(existsSync(getTask(running.id)!.run!.cwd!)).toBe(false); expect(unfinishedCardRuns()).toEqual([]);
  }, 80_000);
 
@@ -214,8 +224,8 @@ if (!fixtureRoot) {
    const gate = tokenGate(title);
    const card = task ?? await create(title, { worktree: linked, "read-only": readOnly }, project);
    const run = owner.assign(card.id);
-   const observed = await waitFor(() => observations.find(entry => entry.agentId === run.id), `native bearer for ${title}`);
-   await waitFor(() => gate.reached, `native KB result for ${title}`);
+   const observed = await waitFor(() => observations.find(entry => entry.agentId === run.id), `native bearer for ${title}`, [card]);
+   await waitFor(() => gate.reached, `native KB result for ${title}`, [card]);
    expect(observed.status).toBe(200);
    expect(observed.agentId).toBe(run.id); expect(observed.readOnly).toBe(readOnly); expect(observed.projectCwd).toBe(project);
    expect(observed.token).not.toBe(run.id);

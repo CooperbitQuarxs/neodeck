@@ -25,8 +25,8 @@ export function conversationKey(message: TelegramMessage): string {
 }
 
 /** Authorization precedes invocation, attachment downloads and session access. */
-export function invokedText(message: TelegramMessage, config: TelegramBridgeConfig, bot: BotIdentity): string | undefined {
-	if (!message.from || message.from.is_bot || !config.allowedUserIds.has(String(message.from.id))) return undefined;
+export function invokedText(message: TelegramMessage, config: TelegramBridgeConfig, bot: BotIdentity, paired = false): string | undefined {
+	if (!message.from || message.from.is_bot || !(paired || config.allowedUserIds.has(String(message.from.id)))) return undefined;
 	const text = (message.text ?? message.caption ?? "").trim();
 	if (message.chat.type === "private") {
 		if (/^\/[a-z][a-z0-9_]*@/i.test(text) && !parseCommand(text, bot.username)) return undefined;

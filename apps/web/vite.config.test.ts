@@ -24,6 +24,9 @@ beforeAll(() => {
 		port: 0,
 		fetch(req, srv) {
 			const allowed = isLoopbackRequest(req, { peerAddress: srv.requestIP(req)?.address });
+			if (allowed && new URL(req.url).pathname === "/uploads/fixture.png") {
+				return new Response(new Uint8Array([137, 80, 78, 71]), { headers: { "content-type": "image/png" } });
+			}
 			return Response.json({ relayed: req.headers.get(PROXY_PEER_HEADER) }, { status: allowed ? 200 : 403 });
 		},
 	});
@@ -64,6 +67,18 @@ const modes = {
 		return { port: (server.httpServer.address() as AddressInfo).port, close: () => server.close() };
 	},
 };
+
+for (const [mode, start] of Object.entries(modes)) {
+	test(`vite ${mode} serves uploaded image bytes instead of the SPA document`, async () => {
+		const proxy = await start();
+		try {
+			const response = await fetch(`http://127.0.0.1:${proxy.port}/uploads/fixture.png`);
+			expect(response.status).toBe(200);
+			expect(response.headers.get("content-type")).toBe("image/png");
+			expect(new Uint8Array(await response.arrayBuffer())).toEqual(new Uint8Array([137, 80, 78, 71]));
+		} finally { await proxy.close(); }
+	});
+}
 
 describe.skipIf(!remoteAddress)("web proxy relays the real client to the loopback gate (#79)", () => {
 	for (const [mode, start] of Object.entries(modes)) {

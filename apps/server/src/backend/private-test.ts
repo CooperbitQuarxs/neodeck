@@ -4,6 +4,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { isolateFixtureHome } from "../fixture-home.ts";
 import { spawnOwnedSync } from "../owned-process.ts";
+import { removeTestPath } from "../test-cleanup.ts";
 import { resolveBackendSelection } from "./runtime.ts";
 
 /** Resolve only in the parent. The real SDK is first imported by the private child. */
@@ -49,7 +50,8 @@ export function runPrivateBackendTest(file: string, extraEnv: Record<string, str
 			throw new Error(`${path.basename(file)} child did not execute passing behavioral tests`);
 		}
 	} finally {
-		fs.rmSync(root, { recursive: true, force: true });
+		// spawnOwnedSync has joined the worker and drained both output streams.
+		removeTestPath(root);
 	}
 }
 

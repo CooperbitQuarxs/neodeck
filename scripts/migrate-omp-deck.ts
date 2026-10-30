@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 /** One-time, non-destructive migration of omp-deck's local state. Dry-run by default. */
-import { Database } from "bun:sqlite";
+import { Database, type SQLQueryBindings, type Statement } from "bun:sqlite";
 import { closeSync, constants, cpSync, existsSync, linkSync, lstatSync, mkdirSync, mkdtempSync, openSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
@@ -56,17 +56,26 @@ function quote(name: string): string { return `"${name.replaceAll('"', '""')}"`;
 
 function rewriteDatabase(file: string, source: Source, target: string): number {
 	const db = new Database(file);
+	const statements = new Map<string, Statement>();
+	function query<Result, Params extends SQLQueryBindings[]>(sql: string): Statement<Result, Params> {
+		let statement = statements.get(sql);
+		if (!statement) {
+			statement = db.prepare(sql);
+			statements.set(sql, statement);
+		}
+		return statement as Statement<Result, Params>;
+	}
 	let changed = 0;
 	try {
-		const tables = db.query<{ name: string }, []>("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'").all();
+		const tables = query<{ name: string }, []>("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'").all();
 		db.exec("BEGIN IMMEDIATE");
 		for (const { name } of tables) {
-			const columns = db.query<{ name: string; type: string; pk: number }, []>(`PRAGMA table_info(${quote(name)})`).all();
+			const columns = query<{ name: string; type: string; pk: number }, []>(`PRAGMA table_info(${quote(name)})`).all();
 			const text = columns.filter((col) => /TEXT|CHAR|CLOB|^$/i.test(col.type));
 			if (!text.length) continue;
 			const pk = columns.filter((col) => col.pk).sort((a, b) => a.pk - b.pk);
 			if (!pk.length) throw new Error(`No primary key on ${name}; refusing ambiguous row rewrite`);
-			const rows = db.query<Record<string, unknown>, []>(`SELECT * FROM ${quote(name)}`).all();
+			const rows = query<Record<string, unknown>, []>(`SELECT * FROM ${quote(name)}`).all();
 			for (const row of rows) {
 				const edits = text.flatMap((col) => {
 					const old = row[col.name];
@@ -76,15 +85,22 @@ function rewriteDatabase(file: string, source: Source, target: string): number {
 				});
 				if (!edits.length) continue;
 				const sql = `UPDATE ${quote(name)} SET ${edits.map(([key]) => `${quote(key)} = ?`).join(", ")} WHERE ${pk.map((col) => `${quote(col.name)} = ?`).join(" AND ")}`;
-				db.query(sql).run(...edits.map(([, value]) => value), ...pk.map((col) => row[col.name]));
+				query(sql).run(...[...edits.map(([, value]) => value), ...pk.map((col) => row[col.name])] as SQLQueryBindings[]);
 				changed += edits.length;
 			}
 		}
 		db.exec("COMMIT");
+		// Publication links only the main file, not staging-name WAL/SHM files.
+		// Normalize the private snapshot so readonly consumers need no sidecars.
+		const mode = query<{ journal_mode: string }, []>("PRAGMA journal_mode=DELETE").get();
+		if (mode?.journal_mode !== "delete") throw new Error(`Could not normalize staged SQLite database: ${file}`);
 	} catch (error) {
 		if (db.inTransaction) db.exec("ROLLBACK");
 		throw error;
-	} finally { db.close(); }
+	} finally {
+		for (const statement of statements.values()) statement.finalize();
+		db.close(true);
+	}
 	return changed;
 }
 
@@ -140,7 +156,7 @@ function physical(file: string): string {
 }
 
 /** Lexical containment only; callers resolve symlinks with `physical` where required. */
-export function within(inner: string, outer: string, paths: path.PlatformPath = path): boolean {
+export function within(inner: string, outer: string, paths: Pick<typeof path, "relative" | "isAbsolute" | "sep"> = path): boolean {
 	const relative = paths.relative(outer, inner);
 	return relative === "" || (!paths.isAbsolute(relative) && relative !== ".." && !relative.startsWith(`..${paths.sep}`));
 }

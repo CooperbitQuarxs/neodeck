@@ -1,4 +1,5 @@
 import * as path from "node:path";
+import { createHash } from "node:crypto";
 
 import { loadConfig, parseInt10 } from "../../../server/src/config.ts";
 import { getDataDir, loadManagedEnvIntoProcess } from "../../../server/src/env-store.ts";
@@ -19,6 +20,8 @@ export interface TelegramBridgeConfig {
 	dbPath: string;
 	pollTimeoutSeconds: number;
 	editIntervalMs: number;
+	apiOrigin?: string;
+	configFingerprint?: string;
 }
 
 export function loadTelegramBridgeConfig(): TelegramBridgeConfig {
@@ -28,9 +31,6 @@ export function loadTelegramBridgeConfig(): TelegramBridgeConfig {
 	if (!botToken) throw new Error("TELEGRAM_BOT_TOKEN is required");
 
 	const allowedUserIds = parseAllowedUsers(process.env.TELEGRAM_ALLOWED_USERS);
-	if (allowedUserIds.size === 0) {
-		throw new Error("TELEGRAM_ALLOWED_USERS must contain at least one numeric Telegram user id");
-	}
 
 	const deckApiBase = normalizeBaseUrl(process.env.NPI_DECK_API_BASE?.trim() || `http://127.0.0.1:${deck.port}`);
 	const deckWsUrl = toWsUrl(deckApiBase);
@@ -52,7 +52,14 @@ export function loadTelegramBridgeConfig(): TelegramBridgeConfig {
 		dbPath,
 		pollTimeoutSeconds: clamp(parseInt10(process.env.TELEGRAM_POLL_TIMEOUT_SECONDS, 30), 1, 50),
 		editIntervalMs: clamp(parseInt10(process.env.TELEGRAM_EDIT_INTERVAL_MS, 700), 250, 5000),
+		apiOrigin: process.env.TELEGRAM_API_ORIGIN,
+		configFingerprint: telegramConfigFingerprint(),
 	};
+}
+
+export function telegramConfigFingerprint(): string {
+	const keys = ["TELEGRAM_BOT_TOKEN", "TELEGRAM_ALLOWED_USERS", "TELEGRAM_GROUP_ALLOWED_CHATS", "TELEGRAM_REQUIRE_MENTION"];
+	return createHash("sha256").update(JSON.stringify(keys.map(key => process.env[key] ?? ""))).digest("hex");
 }
 
 function parseAllowedUsers(raw: string | undefined): Set<string> {

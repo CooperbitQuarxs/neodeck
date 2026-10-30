@@ -168,6 +168,118 @@ On first boot against an empty `tasks` table the deck seeds a single
 "Welcome to npi-deck" backlog task — see `apps/server/src/db/index.ts`
 `seedWelcomeTaskIfEmpty`.
 
+### One-shot routine conversion
+
+`GET /api/routine-migrations` inventories raw database columns and YAML, not
+the normalized routine reader. `POST /api/routine-migrations/:id` explicitly
+converts one supported original in place. Neither listing, server startup nor
+conversion invokes an action. Active or queued routine work blocks the API
+operation. A blocked original remains enabled or disabled exactly as it was.
+
+Before the first changed row, conversion serializes the complete SQLite
+database, including committed WAL pages, into `routine-migration-backups`
+beside the configured database. The directory is owner-only and snapshots
+are mode 0600. A temporary file, file fsync, rename and directory fsync publish
+the snapshot before any definition changes. Backups contain credentials and
+must not be attached to issues, ordinary reports or exports.
+
+The `routine_graph_conversions` journal saves the raw row, converted graph,
+source digest and backup path in the same transaction as the definition.
+Routine ids, enabled state, timestamps, schedules, state, credential
+registrations and historical relationships are not rewritten. A converted
+row has `spec_version=2`, `graph_json` populated and `spec_yaml=NULL`. Execution
+never consults the original backup. Repeating conversion after restart is a
+no-op for a native row.
+
+Reports identify each original by digest and exact field path without
+including its value. Supported fields have a native configuration or
+unchanged metadata mapping. Informational state declarations and visual
+legacy edges remain in the protected original. Those visual edges do not
+become executable connections. Semantic export does not reproduce YAML
+comments, anchors, formatting or key order, which the report names as a
+syntax loss. The raw snapshot retains them exactly.
+
+Conversion supports V1 `run`, `write`, `http`, `deck`, `mcp`, `transform`,
+`wait` and `set_state` actions. The production registry validates every
+mapped `step.*` node against the existing action schema. Unknown fields
+remain blockers. No YAML is read by native execution.
+
+Converted V1 graphs use `execution.mode = "routine-v1"`. Their `completed`
+connections continue after a skipped condition or a deliberately continued
+failure. The separate `result` port contains only an actual successful
+action value. Completion retains that result and the original upstream
+input envelopes. Failed and skipped steps never manufacture result values.
+The native trace keeps skipped status, failed status, each retry attempt,
+stdout, stderr and errors. Diagnostics project the original `steps.<id>`
+context, including failure details.
+
+`when` uses the same bounded expression evaluator and truthiness as V1.
+Evaluation errors skip the step, and an empty expression is not evaluated.
+Exact-value gates remain available for graph routing, but they cannot replace
+this expression/error-skip/continue contract. Retry `times` counts total
+attempts, with the original linear or exponential delay, delay cap and
+`after_retry` behavior. Cancellation interrupts retry delay and active work.
+The native routine-v1 budget mode counts dispatched attempts, including
+failures and retries, not sources or skipped conditions. It checks the
+original strict-greater-than caps after each attempt. A duration cap bounds
+the active attempt's remaining timeout, preserving timeout precedence over
+budget and cancellation causes. All usage fields retain their actual reported
+values. Ordinary native graphs keep their existing node-count budgets.
+Run history counts final dispatched steps, failed final steps and final
+stdout like the original V1 runtime.
+
+Manual declarations, including arbitrary `params_schema` values, survive in
+the source's `manualTriggers` array. They remain informational because the
+original manual API does not enforce schemas. Event declarations survive in
+`eventTriggers` on one generic `event` source. Explicit event admission
+remains available; conversion does not invent subscriptions or evaluate
+filters that the original runtime never consumed. Duplicate declarations
+share one source so they cannot execute a step twice.
+
+Webhook sources use `config.webhook.path` and the existing signed-delivery
+admission. Conversion never creates, moves or rotates a credential.
+Orphaned or divergent registrations and multiple webhook declarations stay
+blocked. Native saves, explicit rotation, refusal of bare secrets and status
+reads use the existing credential-management rules.
+
+V0 `bash` and `script` rows convert to `process.v0`, with
+`execution.mode = "routine-v0"`. The original process helper supplies the
+exact argv, whitespace splitting, lack of interpolation, cwd fallback,
+output clipping and ten-minute runtime limit. Original stdout, stderr and
+exit codes remain in run history. `prompt` stays blocked because it starts
+an agent.
+
+Disabled routines still admit explicit manual runs. The shared `set_state`
+handler refreshes active state only after persistence succeeds, and queued
+expression clocks start at execution admission.
+
+Agent steps, malformed or divergent source data, duplicate ids and ambiguous
+write cwd overrides remain blocked. The bundled census can now convert;
+the daily briefing still needs native agent support from neopi#11.
+MCP schemas and configuration can migrate, but live MCP equivalence is not
+established by these tests.
+
+`GET /api/routine-migrations/:id/:sourceDigest/export` returns the original's
+semantic YAML for one-shot round trips, only while its native definition is
+unchanged. V0 export contains its original single-action request fields,
+`version: 0` and raw concurrency/budget/timezone/tag columns in `metadata`;
+V1 export contains the original semantic spec. Neither is an authoring
+source. `POST
+/api/routine-migrations/:id/:sourceDigest/restore` restores that definition,
+refusing later native or metadata edits. State and history remain as they
+are; restoration never claims to undo external actions. For a complete
+point-in-time rollback, stop the server, preserve the current database and
+its WAL/SHM files separately, replace the database with the protected snapshot
+and remove the old WAL/SHM files before restarting. A full rollback also
+rewinds unrelated database changes since the snapshot.
+
+This is not the completed #163 cutover. V0/V1 readers and YAML authoring,
+templates, the old builder/compiler and legacy runtime dispatch still serve
+unconverted callers and rows. They must be removed only after that dependency
+count reaches zero. Studio TOML documents in `studio_graphs` are a distinct
+model; conversion here targets the executable `/api/routines` native graph,
+not a lossy copy into Studio.
+
 ## Native routine graphs
 
 `packages/protocol/src/graph.ts` owns the shared V2 contracts. A `RoutineGraph`
@@ -228,6 +340,40 @@ Trace nesting is bounded at 256 levels during serialization, independently of
 the JavaScript engine's stack behavior. Other JSON serialization failures use
 the same terminal-history path without discarding execution aggregates.
 History error excerpts are capped at 8,192 characters, including the diagnostic.
+
+Studio's Flows section opens native routines in the existing canvas. New flows
+start as V2 JSON. Palette entries, typed handles and configuration fields consume
+the production registry, with shared connection validation during authoring and
+server configuration validation before saving or running. Incomplete local drafts
+can be wired progressively; saved executable graphs must pass full validation.
+Source view deliberately exposes the same native JSON, not generated YAML.
+Existing legacy routines retain their editor until explicit migration.
+
+The Runs panel and node inspector read the selected run's `trace.graph`, never
+the current draft. Expandable result and input trees retain output occurrences,
+consuming ports and iteration addresses. Successful executions with no emissions,
+inactive branches, failed nodes and aborted nodes remain distinct. Connection
+associations reconstructed from a snapshot are marked as derived; unavailable
+associations are not guessed. `GET /api/routines/:id/runs/:runId` retrieves a run
+directly, including older runs outside the recent-summary limit. Both run and
+trace endpoints verify routine ownership. Full traces finalize at completion;
+running, missing-completed and failed-fetch states are shown separately.
+
+`POST /api/routines/:id/preview` returns a transient `GraphRunRecord` from the
+production executor with `dryRun: true`. Its body is a `GraphActivation` selecting
+an actual source and a sample event, or `{}` for a manual event with a generated
+identity. Each preview has a transient operation identity unless the caller
+supplies one. It does not create a run row, update schedules, claim inbox
+deliveries, reserve effects or dispatch actions. Response serialization shares persisted
+traces' credential redaction, size and depth bounds. Preview caps the copied
+graph at 120 seconds and 10,000 executed nodes, or its lower configured limits.
+The trace includes those effective controls and remains in the current editor
+session, not durable history. The existing `/run` endpoint still admits a manual
+event and returns HTTP 202; it does not let a caller turn a manual run into an
+inbox delivery. Enabled inbox sources run when a new capture is committed.
+
+Studio's TOML graph documents remain a separate `/api/graphs` store. Editing a
+native flow does not translate or merge those documents.
 
 ### Inbox intake
 

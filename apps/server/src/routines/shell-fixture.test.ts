@@ -9,8 +9,10 @@ import { createIsolatedTest } from "../test-isolation.ts";
 import { RoutineTestFixtures } from "./test-fixture.ts";
 import { createShellFixture, shellFixtureCommand } from "./shell-fixture.ts";
 import type { ShellFixtureConfig } from "./shell-fixture.ts";
+import { resolveBackendSelection } from "../backend/runtime.ts";
 
-const isolatedTest = createIsolatedTest(import.meta.path);
+const nativeBackend = resolveBackendSelection();
+const isolatedTest = createIsolatedTest(import.meta.path, nativeBackend ? { NPI_DECK_BACKEND: nativeBackend.path } : {});
 
 // Model libuv's default CRT argv serialization, not cmd's separate quote parser.
 // cmd sees the backslashes before quotes literally, so adding a cmd outer quote
