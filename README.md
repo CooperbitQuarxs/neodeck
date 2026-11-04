@@ -7,10 +7,10 @@ En la arquitectura prevista hay tres servicios: **NeoCore**, daemon de agentes a
 La intención es servir Deck en Utopia Planitia para el equipo y, más adelante, conectarlo con NeoCore para trabajo compartido. Las cuentas, claves de API y el despliegue de oficina aún requieren configuración por la responsable. NeoProxy apunta a ofrecer roles como modelos virtuales administrados centralmente y permitir elegir modelos explícitos donde estén disponibles; esa configuración de oficina está pendiente.
 
 - [Guía de NeoDeck para el equipo](docs/guia-neodeck-es-UY.md)
-- [Panorama general del ecosistema](https://github.com/CooperbitQuarxs/neopi/blob/main/docs/panorama-general.md)
+- [Panorama general del ecosistema](https://github.com/CooperbitQuarxs/neopi/blob/neopi/docs/panorama-general.md)
 - [Instalación](docs/install.md) · [Configuración](docs/configuration.md) · [Despliegue y seguridad](docs/deployment.md) · [Arquitectura](docs/architecture.md)
 - [NeoPi](https://github.com/CooperbitQuarxs/neopi) · [NeoCode](https://github.com/CooperbitQuarxs/neocode) · [NeoProxy](https://github.com/CooperbitQuarxs/NeoProxy)
 
 ## Origen y licencia
 
-Este repositorio de Cooperbit es el espejo para el equipo. El desarrollo del fork está en [PsychedelicShayna/neodeck](https://github.com/PsychedelicShayna/neodeck), con sus [pull requests](https://github.com/PsychedelicShayna/neodeck/pulls?q=is%3Apr) e [issues](https://github.com/PsychedelicShayna/neodeck/issues?q=is%3Aissue). NeoDeck deriva de [bjb2/omp-deck](https://github.com/bjb2/omp-deck), de Bryan Bartley. El código está bajo licencia [MIT](LICENSE); se conservan los avisos de autoría heredados y de PsychedelicShayna.
+Este repositorio de Cooperbit es el espejo para el equipo. El desarrollo del fork está en [PsychedelicShayna/neodeck](https://github.com/PsychedelicShayna/neodeck), con sus [pull requests](https://github.com/PsychedelicShayna/neodeck/pulls?q=is%3Apr) e [issues](https://github.com/PsychedelicShayna/neodeck/issues?q=is%3Aissue). El upstream activo es [Shreyans13/omp-deck](https://github.com/Shreyans13/omp-deck); el origen histórico es [bjb2/omp-deck](https://github.com/bjb2/omp-deck), de Bryan Bartley. El código está bajo licencia [MIT](LICENSE); se conservan los avisos de autoría heredados y de PsychedelicShayna.

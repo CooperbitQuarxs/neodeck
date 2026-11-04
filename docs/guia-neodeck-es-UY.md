@@ -8,7 +8,7 @@ El código actual incluye selección y creación de sesiones, apertura de conver
 
 La intención es servir Deck en Utopia Planitia como cockpit del equipo. Eso todavía requiere despliegue y configuración de cuentas, acceso y claves por la responsable. En el futuro, Deck se conectaría a NeoCore para hacer visible y controlar trabajo compartido; NeoCore todavía no está implementado. No des por hecho que el servicio de oficina, el acceso compartido o esa conexión ya funcionan.
 
-El diseño distingue tres servicios: NeoCore (futuro daemon de agentes), NeoProxy (gateway de inferencia) y NeoDeck (cockpit web). Los dos clientes instalables son NeoPi (motor más terminal) y NeoCode (interfaz gráfica). NeoPi puede ejecutarse localmente sin un daemon separado. A futuro, las interfaces podrían conectarse a agentes alojados localmente o en un daemon local o remoto; eso no es requisito de uso actual. El [panorama general](https://github.com/CooperbitQuarxs/neopi/blob/main/docs/panorama-general.md) explica el conjunto.
+El diseño distingue tres servicios: NeoCore (futuro daemon de agentes), NeoProxy (gateway de inferencia) y NeoDeck (cockpit web). Los dos clientes instalables son NeoPi (motor más terminal) y NeoCode (interfaz gráfica). NeoPi puede ejecutarse localmente sin un daemon separado. A futuro, las interfaces podrían conectarse a agentes alojados localmente o en un daemon local o remoto; eso no es requisito de uso actual. El [panorama general](https://github.com/CooperbitQuarxs/neopi/blob/neopi/docs/panorama-general.md) explica el conjunto.
 
 ## Una primera tarea
 
@@ -23,4 +23,4 @@ NeoProxy puede centralizar el acceso a proveedores. En la configuración de ofic
 
 Antes de habilitar acceso de equipo, revisá las instrucciones de [despliegue y endurecimiento](deployment.md), definí autenticación y permisos, transporte seguro, protección de datos y manejo de secretos. El acceso remoto previsto usa HTTPS o WebSocket seguro; el mecanismo de autenticación entre servicios todavía no está aprobado. Una clave de inferencia no debe tratarse como autorización general para controlar el trabajo de otros.
 
-Referencias: [arquitectura](architecture.md), [comandos](slash-commands.md), [rutinas](routines-v1-tutorial.md), [cambios](../CHANGELOG.md) y [desarrollo del fork](https://github.com/PsychedelicShayna/neodeck). NeoDeck deriva de [bjb2/omp-deck](https://github.com/bjb2/omp-deck) y conserva su [licencia MIT](../LICENSE).
+Referencias: [arquitectura](architecture.md), [comandos](slash-commands.md), [rutinas](routines-v1-tutorial.md), [cambios](../CHANGELOG.md) y [desarrollo del fork](https://github.com/PsychedelicShayna/neodeck). El upstream activo es [Shreyans13/omp-deck](https://github.com/Shreyans13/omp-deck); el origen histórico es [bjb2/omp-deck](https://github.com/bjb2/omp-deck), de Bryan Bartley. Se conserva la [licencia MIT](../LICENSE).
