@@ -1,49 +1,16 @@
-# NeoDeck
+# NeoDeck: cockpit web para el equipo
 
-> Copia privada en Cooperbit del proyecto **NeoDeck** de PsychedelicShayna.
+NeoDeck ofrece una interfaz web para trabajar con agentes NeoPi y organizar el trabajo alrededor de sus sesiones. Se accede desde un navegador a un servicio; no es otra aplicación de escritorio para instalar en cada puesto. El repositorio ya contiene código: dejó de ser un marcador de posición. El despliegue compartido de oficina todavía debe prepararse.
 
-## Dónde está el trabajo (léelo primero)
+En la arquitectura prevista hay tres servicios: **NeoCore**, daemon de agentes aún no implementado; **NeoProxy**, gateway de inferencia; y **NeoDeck**, cockpit web. Los dos clientes instalables son **NeoPi**, motor de agentes con interfaz de terminal, y **NeoCode**, interfaz gráfica. NeoPi puede ejecutarse localmente sin un daemon separado. Conectar interfaces a agentes alojados localmente o en un daemon local o remoto es una dirección futura, no una dependencia obligatoria actual. No se supone que los tres servicios ya estén desplegados o conectados.
 
-El desarrollo activo **no** está aquí. Está en el repositorio público:
+La intención es servir Deck en Utopia Planitia para el equipo y, más adelante, conectarlo con NeoCore para trabajo compartido. Las cuentas, claves de API y el despliegue de oficina aún requieren configuración por la responsable. NeoProxy apunta a ofrecer roles como modelos virtuales administrados centralmente y permitir elegir modelos explícitos donde estén disponibles; esa configuración de oficina está pendiente.
 
-**[https://github.com/PsychedelicShayna/neodeck](https://github.com/PsychedelicShayna/neodeck)**
+- [Guía de NeoDeck para el equipo](docs/guia-neodeck-es-UY.md)
+- [Panorama general del ecosistema](https://github.com/CooperbitQuarxs/neopi/blob/main/docs/panorama-general.md)
+- [Instalación](docs/install.md) · [Configuración](docs/configuration.md) · [Despliegue y seguridad](docs/deployment.md) · [Arquitectura](docs/architecture.md)
+- [NeoPi](https://github.com/CooperbitQuarxs/neopi) · [NeoCode](https://github.com/CooperbitQuarxs/neocode) · [NeoProxy](https://github.com/CooperbitQuarxs/NeoProxy)
 
-Ahí conviene mirar:
+## Origen y licencia
 
-- [Todos los pull requests](https://github.com/PsychedelicShayna/neodeck/pulls?q=is%3Apr) (abiertos y cerrados)
-- [Todos los issues](https://github.com/PsychedelicShayna/neodeck/issues?q=is%3Aissue) (abiertos y cerrados)
-
-Ese es el árbol de desarrollo. PsychedelicShayna trabaja ahí y, cuando una versión de los tres proyectos (NeoPi, NeoCode, NeoDeck) le parezca **suficientemente lista para el equipo**, la publicará en estos repos privados de Cooperbit.
-
-## Qué es este repositorio
-
-Espejo / destino de **versiones para el equipo**, no el día a día del desarrollo.
-
-- Hoy: **marcador de posición** (aún sin el código integrado).
-- Después de cada publicación que ella considere lista: el código usable por Cooperbit vive **aquí**.
-- Issues en Cooperbit: más adelante se podrán abrir **aquí** sobre lo ya publicado / en release para el equipo. El tracker de desarrollo y el ruido de WIP siguen en el repo público.
-
-## Pendiente en este lado (Cooperbit)
-
-Solo puesta en marcha del destino privado — no significa que el proyecto esté parado:
-
-- Integrar el código desde el repo público
-- Traducción al español de textos orientados al equipo
-- Ficha del proyecto (descripción, enlaces, identidad Neo*)
-- Primera publicación (PR o push) a la rama por defecto
-- Protección de ramas y otras políticas del repositorio
-- Automatización del espejo (línea estable / releases)
-- CI / releases en la org, si aplica
-- Uso del issue tracker de este repo para el equipo (cuando haya algo publicado)
-
-## Licencia
-
-El código está bajo licencia **MIT** (ver [LICENSE](./LICENSE)). Se conservan los avisos de copyright del código heredado y de PsychedelicShayna.
-
-## Contacto
-
-Mientras no haya código ni issues activos aquí, el foco y las preguntas de desarrollo van al **repo público** enlazado arriba.
-
----
-
-*CooperbitQuarxs/neodeck · origen de trabajo: https://github.com/PsychedelicShayna/neodeck*
+Este repositorio de Cooperbit es el espejo para el equipo. El desarrollo del fork está en [PsychedelicShayna/neodeck](https://github.com/PsychedelicShayna/neodeck), con sus [pull requests](https://github.com/PsychedelicShayna/neodeck/pulls?q=is%3Apr) e [issues](https://github.com/PsychedelicShayna/neodeck/issues?q=is%3Aissue). NeoDeck deriva de [bjb2/omp-deck](https://github.com/bjb2/omp-deck), de Bryan Bartley. El código está bajo licencia [MIT](LICENSE); se conservan los avisos de autoría heredados y de PsychedelicShayna.
